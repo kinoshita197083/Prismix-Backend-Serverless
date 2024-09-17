@@ -22,10 +22,10 @@ provider:
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
   logs:
     restApi:
-      accessLogging: false
-      executionLogging: false
-      level: OFF
-      fullExecutionData: false
+      accessLogging: true
+      executionLogging: true
+      level: ERROR # or INFO
+      fullExecutionData: true
   apiGateway:
     shouldStartNameWithService: true
 
