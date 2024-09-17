@@ -8,6 +8,19 @@ provider:
   name: aws
   runtime: nodejs20.x
 
+plugins:
+  - serverless-offline
+
+# custom:
+#   serverless-offline:
+#     httpPort: 3000  # Change this to modify the API port
+#     lambdaPort: 3002  # Change this to modify the Lambda emulation port
+
 functions:
-  hello:
-    handler: handler.hello
+  handler:
+    handler: src/handlers/example.hello
+    events:
+      - http:
+          path: /
+          method: get
+
