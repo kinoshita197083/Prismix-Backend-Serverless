@@ -97,4 +97,4 @@ resources:
     S3BucketName:
       Description: S3 Bucket Name
       Value: 
-        Ref: ImageBucket
+        Ref: PrismixImageBucket
