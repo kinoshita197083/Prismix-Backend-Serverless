@@ -7,20 +7,94 @@ service: prismix-serverless
 provider:
   name: aws
   runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  memorySize: ${self:custom.memorySize.${self:provider.stage}}
+  environment:
+    ENVIRONMENT: ${self:provider.stage}
+  tracing:
+    apiGateway: true
+    lambda: true
+  iam:
+    role:
+      managedPolicies:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
 
-plugins:
-  - serverless-offline
-
-# custom:
-#   serverless-offline:
-#     httpPort: 3000  # Change this to modify the API port
-#     lambdaPort: 3002  # Change this to modify the Lambda emulation port
+custom:
+  memorySize:
+    prod: 256
+    dev: 128
 
 functions:
-  handler:
-    handler: src/handlers/example.hello
+  main:
+    handler: index.handler
     events:
       - http:
           path: /
-          method: get
+          method: ANY
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: 
+              Ref: ApiGatewayAuthorizer
 
+resources:
+  Resources:
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:provider.stage}-UserPool
+        AutoVerifiedAttributes:
+          - email
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireNumbers: true
+            RequireSymbols: true
+            RequireUppercase: true
+
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:provider.stage}-UserPoolClient
+        UserPoolId: 
+          Ref: CognitoUserPool
+        GenerateSecret: false
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+
+    PrismixImageBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.stage}-prismix-image-bucket-${aws:accountId}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: CognitoAuthorizer
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId: 
+          Ref: ApiGatewayRestApi
+        ProviderARNs:
+          - Fn::GetAtt: [CognitoUserPool, Arn]
+
+  Outputs:
+    UserPoolId:
+      Description: Cognito User Pool ID
+      Value: 
+        Ref: CognitoUserPool
+    UserPoolClientId:
+      Description: Cognito User Pool Client ID
+      Value: 
+        Ref: CognitoUserPoolClient
+    S3BucketName:
+      Description: S3 Bucket Name
+      Value: 
+        Ref: ImageBucket
