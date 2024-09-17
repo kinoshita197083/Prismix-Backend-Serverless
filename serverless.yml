@@ -111,7 +111,7 @@ resources:
     ApiGatewayAccount:
       Type: AWS::ApiGateway::Account
       Properties:
-        CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+        CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
 
   Outputs:
     UserPoolId:
