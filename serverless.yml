@@ -20,6 +20,7 @@ provider:
       managedPolicies:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+  lambdaHashingVersion: 20201221
 
 custom:
   memorySize:
@@ -33,10 +34,10 @@ functions:
       - http:
           path: /
           method: ANY
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId: 
-              Ref: ApiGatewayAuthorizer
+          # authorizer:
+          #   type: COGNITO_USER_POOLS
+          #   authorizerId: 
+          #     Ref: ApiGatewayAuthorizer
 
 resources:
   Resources:

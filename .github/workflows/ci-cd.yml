@@ -63,8 +63,20 @@ jobs:
       run: npm install -g serverless
       
       # Deploy to Serverless
+    # - name: Serverless Deploy
+    #   run: serverless deploy --stage ${GITHUB_REF##*/}
+    #   env:
+    #     SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+    #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
     - name: Serverless Deploy
-      run: serverless deploy --stage ${GITHUB_REF##*/}
+      run: |
+        serverless deploy --stage ${GITHUB_REF##*/} --verbose
+        if [ $? -ne 0 ]; then
+          echo "Deployment failed. Fetching CloudFormation events:"
+          aws cloudformation describe-stack-events --stack-name prismix-serverless-${GITHUB_REF##*/} --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table
+        fi
       env:
         SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
