@@ -1,0 +1,13 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: prismix
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: prismix
+service: prismix-serverless
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+
+functions:
+  hello:
+    handler: handler.hello

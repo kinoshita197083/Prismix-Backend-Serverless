@@ -1,0 +1,134 @@
+{
+  "/Users/frankychen/Desktop/prismix_serverless": {
+    "versionSfCore": null,
+    "versionFramework": "4.3.3",
+    "isWithinCompose": false,
+    "isCompose": false,
+    "composeOrgName": null,
+    "composeResolverProviders": {
+      "default-aws-credential-resolver": "<REDACTED>"
+    },
+    "composeServiceName": null,
+    "servicePath": "/Users/frankychen/Desktop/prismix_serverless",
+    "serviceConfigFileName": "serverless.yml",
+    "service": {
+      "service": "prismix-serverless",
+      "frameworkVersion": "4.3.3",
+      "provider": {
+        "name": "aws",
+        "runtime": "nodejs14.x",
+        "stage": "dev",
+        "region": "us-east-1",
+        "versionFunctions": true
+      },
+      "functions": {
+        "hello": {
+          "handler": "handler.hello"
+        }
+      }
+    },
+    "serviceRawFile": "service: prismix-serverless\n\nframeworkVersion: '4.3.3'\n\nprovider:\n  name: aws\n  runtime: nodejs14.x\n\nfunctions:\n  hello:\n    handler: handler.hello\n",
+    "command": [
+      "create"
+    ],
+    "options": {
+      "template": "aws-nodejs",
+      "path": "/Users/frankychen/Desktop/prismix_serverless"
+    },
+    "error": {
+      "message": "The \"create\" command was deprecated in v4. To create a new project, run the \"serverless\" command instead.",
+      "code": "UNRECOGNIZED_CLI_COMMAND"
+    },
+    "params": {},
+    "machineId": "0c305f4b2507715523b2096f1d1ec8dd",
+    "stage": "dev",
+    "accessKeyV2": "<REDACTED>",
+    "accessKeyV1": "<REDACTED>",
+    "orgId": "2bdc9576-23d8-4e4e-8df2-1ecdbd49a70b",
+    "orgName": "prismix",
+    "userId": "Pb2JxhfnC1SSbd4YXt",
+    "dashboard": {
+      "isEnabledForService": false,
+      "requiredAuthentication": false,
+      "orgFeaturesInUse": null,
+      "orgObservabilityIntegrations": null,
+      "serviceAppId": null,
+      "serviceProvider": null,
+      "instanceParameters": null
+    },
+    "userName": "prismix",
+    "subscription": null,
+    "userEmail": "uyiiiiiy@yahoo.com.hk",
+    "serviceProviderAwsRegion": "us-east-1",
+    "serviceProviderAwsCredentials": "<REDACTED>",
+    "serviceProviderAwsAccountId": "980352750282",
+    "projectType": "traditional",
+    "versionSf": "4.3.3",
+    "serviceProviderAwsCfStackName": "prismix-serverless-dev",
+    "serviceUniqueId": null,
+    "serviceProviderAwsCfStackId": "arn:aws:cloudformation:ap-southeast-2:980352750282:stack/amplify-amplify75f673478ae84-staging-120208/bea865e0-2e07-11ee-ac90-0238b414aac8",
+    "serviceProviderAwsCfStackCreated": "2023-07-29T12:02:09.415Z",
+    "serviceProviderAwsCfStackUpdated": null,
+    "serviceProviderAwsCfStackStatus": "CREATE_COMPLETE",
+    "serviceProviderAwsCfStackOutputs": [
+      {
+        "OutputKey": "AuthRoleName",
+        "OutputValue": "amplify-amplify75f673478ae84-staging-120208-authRole"
+      },
+      {
+        "OutputKey": "UnauthRoleArn",
+        "OutputValue": "arn:aws:iam::980352750282:role/amplify-amplify75f673478ae84-staging-120208-unauthRole"
+      },
+      {
+        "OutputKey": "AuthRoleArn",
+        "OutputValue": "arn:aws:iam::980352750282:role/amplify-amplify75f673478ae84-staging-120208-authRole"
+      },
+      {
+        "OutputKey": "Region",
+        "OutputValue": "ap-southeast-2",
+        "Description": "CloudFormation provider root stack Region",
+        "ExportName": "amplify-amplify75f673478ae84-staging-120208-Region"
+      },
+      {
+        "OutputKey": "DeploymentBucketName",
+        "OutputValue": "amplify-amplify75f673478ae84-staging-120208-deployment",
+        "Description": "CloudFormation provider root stack deployment bucket name",
+        "ExportName": "amplify-amplify75f673478ae84-staging-120208-DeploymentBucketName"
+      },
+      {
+        "OutputKey": "UnauthRoleName",
+        "OutputValue": "amplify-amplify75f673478ae84-staging-120208-unauthRole"
+      },
+      {
+        "OutputKey": "StackName",
+        "OutputValue": "amplify-amplify75f673478ae84-staging-120208",
+        "Description": "CloudFormation provider root stack ID",
+        "ExportName": "amplify-amplify75f673478ae84-staging-120208-StackName"
+      },
+      {
+        "OutputKey": "StackId",
+        "OutputValue": "arn:aws:cloudformation:ap-southeast-2:980352750282:stack/amplify-amplify75f673478ae84-staging-120208/bea865e0-2e07-11ee-ac90-0238b414aac8",
+        "Description": "CloudFormation provider root stack name",
+        "ExportName": "amplify-amplify75f673478ae84-staging-120208-StackId"
+      }
+    ]
+  },
+  "unknown": {
+    "versionSfCore": null,
+    "versionFramework": "4.3.3",
+    "isWithinCompose": false,
+    "composeOrgName": null,
+    "composeServiceName": null,
+    "command": [],
+    "options": {
+      "version": true
+    },
+    "error": null,
+    "machineId": "0c305f4b2507715523b2096f1d1ec8dd",
+    "serviceProviderAwsCfStackId": null,
+    "serviceProviderAwsCfStackCreated": null,
+    "serviceProviderAwsCfStackUpdated": null,
+    "serviceProviderAwsCfStackStatus": null,
+    "serviceProviderAwsCfStackOutputs": null
+  }
+}
