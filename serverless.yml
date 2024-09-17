@@ -20,7 +20,14 @@ provider:
       managedPolicies:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-  lambdaHashingVersion: 20201221
+  logs:
+    restApi:
+      accessLogging: false
+      executionLogging: false
+      level: OFF
+      fullExecutionData: false
+  apiGateway:
+    shouldStartNameWithService: true
 
 custom:
   memorySize:
@@ -34,10 +41,10 @@ functions:
       - http:
           path: /
           method: ANY
-          # authorizer:
-          #   type: COGNITO_USER_POOLS
-          #   authorizerId: 
-          #     Ref: ApiGatewayAuthorizer
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: 
+              Ref: ApiGatewayAuthorizer
 
 resources:
   Resources:
@@ -86,7 +93,7 @@ resources:
         ProviderARNs:
           - Fn::GetAtt: [CognitoUserPool, Arn]
 
-    ApiGatewayCloudWatchRole:
+    CloudWatchRole:
       Type: AWS::IAM::Role
       Properties:
         AssumeRolePolicyDocument:
@@ -99,7 +106,7 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-        RoleName: serverlessApiGatewayCloudWatchRole-${self:service}-${self:provider.stage}
+        RoleName: ${self:service}-${self:provider.stage}-CloudWatchRole
 
     ApiGatewayAccount:
       Type: AWS::ApiGateway::Account
