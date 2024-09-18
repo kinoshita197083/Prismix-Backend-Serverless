@@ -123,21 +123,6 @@ resources:
       Properties:
         QueueName: ${self:provider.stage}-my-queue
 
-    CloudWatchRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - apigateway.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-        RoleName: ${self:service}-${self:provider.stage}-serverlessApiGatewayCloudWatchRole
-
   Outputs:
     UserPoolId:
       Description: Cognito User Pool ID

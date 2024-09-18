@@ -38,10 +38,6 @@ jobs:
         node-version: '20.x'
     - run: npm ci
 
-    # Install the dependencies
-    - name: Install dependencies
-      run: npm install
-
     # Install Serverless
     - name: Install Serverless Framework
       run: npm install -g serverless
