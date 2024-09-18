@@ -17,15 +17,24 @@ provider:
     lambda: true
   iam:
     role:
+      name: ${self:service}-${self:provider.stage}-ApiGatewayLoggingAndExecutionRole
       managedPolicies:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-  logs:
-    restApi:
-      accessLogging: true
-      executionLogging: true
-      level: ERROR # or INFO
-      fullExecutionData: true
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: arn:aws:logs:${self:provider.region}:*:log-group:/aws/api-gateway/${self:service}*
+  # logs:
+  #   restApi:
+  #     accessLogging: true
+  #     executionLogging: true
+  #     level: ERROR # or INFO
+  #     fullExecutionData: true
   apiGateway:
     shouldStartNameWithService: true
 
@@ -45,6 +54,7 @@ functions:
             type: COGNITO_USER_POOLS
             authorizerId: 
               Ref: ApiGatewayAuthorizer
+          cors: true
   # New function
   # processImage:
   #   handler: src/processImage.handler
