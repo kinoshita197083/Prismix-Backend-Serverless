@@ -21,18 +21,21 @@ provider:
   iam:
     role: BaseCloudWatchRole
   logs:
-    restApi:
-      accessLogging: true
-      executionLogging: true
-      level: INFO
-      fullExecutionData: true
+    restApi: false
+      # accessLogging: true
+      # executionLogging: true
+      # level: INFO
+      # fullExecutionData: true
   apiGateway:
     shouldStartNameWithService: true
+    cloudWatchRoleArn: IamRoleApiGatewayCloudWatchLogs
 
 custom:
   memorySize:
     prod: 256
     dev: 128
+  bucketName: ${self:service}-${self:provider.stage}-bucket
+  queueName: ${self:service}-${self:provider.stage}-queue
 
 functions:
   main:
@@ -147,7 +150,7 @@ resources:
     PrismixImageBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:provider.stage}-prismix-image-bucket
+        BucketName: ${self:custom.bucketName}
         BucketEncryption:
           ServerSideEncryptionConfiguration:
             - ServerSideEncryptionByDefault:
@@ -167,10 +170,11 @@ resources:
     MySQSQueue:
       Type: AWS::SQS::Queue
       Properties:
-        QueueName: ${self:provider.stage}-my-queue
+        QueueName: ${self:custom.queueName}
 
     ApiGatewayAccount:
       Type: AWS::ApiGateway::Account
+      DependsOn: IamRoleApiGatewayCloudWatchLogs
       Properties:
         CloudWatchRoleArn: 
           Fn::GetAtt: [IamRoleApiGatewayCloudWatchLogs, Arn]
