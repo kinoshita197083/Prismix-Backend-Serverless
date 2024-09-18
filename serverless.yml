@@ -4,6 +4,9 @@ org: prismix
 app: prismix
 service: prismix-serverless
 
+plugins:
+  - serverless-offline
+
 provider:
   name: aws
   runtime: nodejs20.x
@@ -16,19 +19,7 @@ provider:
     apiGateway: true
     lambda: true
   iam:
-    role:
-      name: ${self:service}-${self:provider.stage}-DefaultExecutionRole
-      managedPolicies:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-      statements:
-        - Effect: Allow
-          Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+    role: BaseCloudWatchRole
   logs:
     restApi:
       accessLogging: true
@@ -67,31 +58,67 @@ functions:
             authorizerId: 
               Ref: ApiGatewayAuthorizer
     environment:
-      BUCKET_NAME: ${self:resources.Resources.PrismixImageBucket.Properties.BucketName}
+      BUCKET_NAME: ${self:provider.stage}-prismix-image-bucket
       SQS_QUEUE_URL: 
         Ref: MySQSQueue
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - s3:PutObject
-          - s3:GetObject
-        Resource: 
-          - Fn::Join:
-            - ""
-            - - "arn:aws:s3:::"
-              - Ref: PrismixImageBucket
-              - "/*"
-      - Effect: Allow
-        Action:
-          - sqs:SendMessage
-          - sqs:ReceiveMessage
-          - sqs:DeleteMessage
-          - sqs:GetQueueAttributes
-        Resource:
-          Fn::GetAtt: [MySQSQueue, Arn]
+    role: ProcessImageFunctionRole
 
 resources:
   Resources:
+
+    # Basic IAM Role - used by Lambda functions
+    BaseCloudWatchRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+    # S3 & SQS access IAM Role - used by Lambda functions
+    ProcessImageFunctionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: s3-sqs-access-policy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetObject
+                  Resource: 
+                    - Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - ${self:provider.stage}-prismix-image-bucket
+                        - "/*"
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                    - sqs:ReceiveMessage
+                    - sqs:DeleteMessage
+                    - sqs:GetQueueAttributes
+                  Resource:
+                    Fn::GetAtt: [MySQSQueue, Arn]
+
     CognitoUserPool:
       Type: AWS::Cognito::UserPool
       Properties:
@@ -120,7 +147,7 @@ resources:
     PrismixImageBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:provider.stage}-prismix-image-bucket-${aws:accountId}
+        BucketName: ${self:provider.stage}-prismix-image-bucket
         BucketEncryption:
           ServerSideEncryptionConfiguration:
             - ServerSideEncryptionByDefault:
@@ -159,7 +186,6 @@ resources:
                 Service:
                   - apigateway.amazonaws.com
               Action: sts:AssumeRole
-        Path: "/"
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
 
