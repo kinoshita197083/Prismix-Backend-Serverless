@@ -21,11 +21,12 @@ provider:
   iam:
     role: BaseCloudWatchRole
   logs:
-    restApi: false
+    # restApi:
       # accessLogging: true
       # executionLogging: true
       # level: INFO
       # fullExecutionData: true
+    restApi: false
   apiGateway:
     shouldStartNameWithService: true
     cloudWatchRoleArn: IamRoleApiGatewayCloudWatchLogs
