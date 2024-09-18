@@ -17,7 +17,7 @@ provider:
     lambda: true
   iam:
     role:
-      name: ${self:service}-${self:provider.stage}-ApiGatewayLoggingAndExecutionRole
+      name: ${self:service}-${self:provider.stage}-DefaultExecutionRole
       managedPolicies:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
@@ -28,13 +28,13 @@ provider:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
-          Resource: arn:aws:logs:${self:provider.region}:*:log-group:/aws/api-gateway/${self:service}*
-  # logs:
-  #   restApi:
-  #     accessLogging: true
-  #     executionLogging: true
-  #     level: ERROR # or INFO
-  #     fullExecutionData: true
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+  logs:
+    restApi:
+      accessLogging: true
+      executionLogging: true
+      level: INFO
+      fullExecutionData: true
   apiGateway:
     shouldStartNameWithService: true
 
@@ -55,31 +55,40 @@ functions:
             authorizerId: 
               Ref: ApiGatewayAuthorizer
           cors: true
-  # New function
-  # processImage:
-  #   handler: src/processImage.handler
-  #   events:
-  #     - http:
-  #         path: /process-image
-  #         method: POST
-  #         authorizer:
-  #           type: COGNITO_USER_POOLS
-  #           authorizerId: 
-  #             Ref: ApiGatewayAuthorizer
-  #   environment:
-  #     BUCKET_NAME: ${self:resources.Resources.PrismixImageBucket.Properties.BucketName}
 
-  # Another new function
-  # getUserProfile:
-  #   handler: src/getUserProfile.handler
-  #   events:
-  #     - http:
-  #         path: /user-profile
-  #         method: GET
-  #         authorizer:
-  #           type: COGNITO_USER_POOLS
-  #           authorizerId: 
-  #             Ref: ApiGatewayAuthorizer
+  processImage:
+    handler: src/handlers/processImage.handler
+    events:
+      - http:
+          path: /process-image
+          method: POST
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: 
+              Ref: ApiGatewayAuthorizer
+    environment:
+      BUCKET_NAME: ${self:resources.Resources.PrismixImageBucket.Properties.BucketName}
+      SQS_QUEUE_URL: 
+        Ref: MySQSQueue
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+          - s3:GetObject
+        Resource: 
+          - Fn::Join:
+            - ""
+            - - "arn:aws:s3:::"
+              - Ref: PrismixImageBucket
+              - "/*"
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+        Resource:
+          Fn::GetAtt: [MySQSQueue, Arn]
 
 resources:
   Resources:
@@ -132,6 +141,27 @@ resources:
       Type: AWS::SQS::Queue
       Properties:
         QueueName: ${self:provider.stage}-my-queue
+
+    ApiGatewayAccount:
+      Type: AWS::ApiGateway::Account
+      Properties:
+        CloudWatchRoleArn: 
+          Fn::GetAtt: [IamRoleApiGatewayCloudWatchLogs, Arn]
+
+    IamRoleApiGatewayCloudWatchLogs:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - apigateway.amazonaws.com
+              Action: sts:AssumeRole
+        Path: "/"
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
 
   Outputs:
     UserPoolId:
