@@ -42,53 +42,11 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    # Configure AWS Credentials
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-
-    # Setup API Gateway Account
-    - name: Setup API Gateway Account
-      run: |
-        ROLE_NAME="${{ github.event.repository.name }}-${GITHUB_REF##*/}-CloudWatchRole"
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        
-        # Create IAM role if it doesn't exist
-        if ! aws iam get-role --role-name $ROLE_NAME 2>/dev/null; then
-          echo "Creating API Gateway CloudWatch Role..."
-          aws iam create-role --role-name $ROLE_NAME \
-            --assume-role-policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [{
-                "Effect": "Allow",
-                "Principal": {
-                  "Service": "apigateway.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-              }]
-            }'
-          aws iam attach-role-policy --role-name $ROLE_NAME \
-            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-          echo "Waiting for role to propagate..."
-          sleep 15
-        else
-          echo "API Gateway CloudWatch Role already exists."
-        fi
-        
-        # Set up API Gateway account
-        ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/$ROLE_NAME"
-        aws apigateway update-account --patch-operations op='replace',path='/cloudwatchRoleArn',value="$ROLE_ARN"
-        
-        echo "API Gateway account updated with CloudWatch role."
-
     # Install Serverless
     - name: Install Serverless Framework
       run: npm install -g serverless
       
-      # Deploy to Serverless
+    # Deploy to Serverless
     # - name: Serverless Deploy
     #   run: serverless deploy --stage ${GITHUB_REF##*/}
     #   env:
@@ -96,6 +54,7 @@ jobs:
     #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
     #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+    # Deploy to Serverless with logging to Github Actions
     - name: Serverless Deploy
       run: |
         serverless deploy --stage ${GITHUB_REF##*/} --verbose

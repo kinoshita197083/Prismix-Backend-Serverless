@@ -45,6 +45,31 @@ functions:
             type: COGNITO_USER_POOLS
             authorizerId: 
               Ref: ApiGatewayAuthorizer
+  # New function
+  # processImage:
+  #   handler: src/processImage.handler
+  #   events:
+  #     - http:
+  #         path: /process-image
+  #         method: POST
+  #         authorizer:
+  #           type: COGNITO_USER_POOLS
+  #           authorizerId: 
+  #             Ref: ApiGatewayAuthorizer
+  #   environment:
+  #     BUCKET_NAME: ${self:resources.Resources.PrismixImageBucket.Properties.BucketName}
+
+  # Another new function
+  # getUserProfile:
+  #   handler: src/getUserProfile.handler
+  #   events:
+  #     - http:
+  #         path: /user-profile
+  #         method: GET
+  #         authorizer:
+  #           type: COGNITO_USER_POOLS
+  #           authorizerId: 
+  #             Ref: ApiGatewayAuthorizer
 
 resources:
   Resources:
@@ -93,6 +118,11 @@ resources:
         ProviderARNs:
           - Fn::GetAtt: [CognitoUserPool, Arn]
 
+    MySQSQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:provider.stage}-my-queue
+
     CloudWatchRole:
       Type: AWS::IAM::Role
       Properties:
@@ -110,6 +140,7 @@ resources:
 
     ApiGatewayAccount:
       Type: AWS::ApiGateway::Account
+      DependsOn: CloudWatchRole
       Properties:
         CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
 
