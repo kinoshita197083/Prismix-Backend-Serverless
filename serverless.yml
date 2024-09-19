@@ -27,7 +27,10 @@ provider:
     restApi: false
   apiGateway:
     shouldStartNameWithService: true
-    cloudWatchRoleArn: IamRoleApiGatewayCloudWatchLogs
+    cloudWatchRoleArn:
+      Fn::GetAtt:
+        - IamRoleApiGatewayCloudWatchLogs
+        - Arn
   tracing:
     apiGateway: true
     lambda: true
@@ -46,7 +49,6 @@ custom:
 functions:
   main:
     handler: index.handler
-    environment: ${self:custom.environment}
     events:
       - http:
           path: /
@@ -61,9 +63,9 @@ functions:
     handler: src/handlers/processImage.handler
     events:
       - s3:
-        bucket: ${self:custom.bucketName}
-        event: s3:ObjectCreated:*
-        existing: true
+          bucket: ${self:custom.bucketName}
+          event: s3:ObjectCreated:*
+          existing: true
     environment:
       BUCKET_NAME: ${self:custom.bucketName}
       SQS_QUEUE_URL: 
