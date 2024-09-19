@@ -1,3 +1,4 @@
+# Service Definition
 # "org" ensures this Service is used with the correct Serverless Framework Access Key.
 org: prismix
 # "app" enables Serverless Framework Dashboard features and sharing them with other Services.
@@ -15,9 +16,6 @@ provider:
   memorySize: ${self:custom.memorySize.${self:provider.stage}}
   environment:
     ENVIRONMENT: ${self:provider.stage}
-  tracing:
-    apiGateway: true
-    lambda: true
   iam:
     role: BaseCloudWatchRole
   logs:
@@ -30,17 +28,25 @@ provider:
   apiGateway:
     shouldStartNameWithService: true
     cloudWatchRoleArn: IamRoleApiGatewayCloudWatchLogs
+  tracing:
+    apiGateway: true
+    lambda: true
+  stackTags:
+    CLOUDFORMATION_DEBUG_LOG: true
 
+# re-usable variables
 custom:
   memorySize:
     prod: 256
     dev: 128
   bucketName: ${self:service}-${self:provider.stage}-bucket
   queueName: ${self:service}-${self:provider.stage}-queue
+  environment: ${file(.env.${self:provider.stage})}
 
 functions:
   main:
     handler: index.handler
+    environment: ${self:custom.environment}
     events:
       - http:
           path: /
@@ -54,15 +60,12 @@ functions:
   processImage:
     handler: src/handlers/processImage.handler
     events:
-      - http:
-          path: /process-image
-          method: POST
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId: 
-              Ref: ApiGatewayAuthorizer
+      - s3:
+        bucket: ${self:custom.bucketName}
+        event: s3:ObjectCreated:*
+        existing: true
     environment:
-      BUCKET_NAME: ${self:provider.stage}-prismix-image-bucket
+      BUCKET_NAME: ${self:custom.bucketName}
       SQS_QUEUE_URL: 
         Ref: MySQSQueue
     role: ProcessImageFunctionRole
@@ -84,6 +87,7 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
 
     # S3 & SQS access IAM Role - used by Lambda functions
     ProcessImageFunctionRole:
@@ -106,20 +110,16 @@ resources:
               Statement:
                 - Effect: Allow
                   Action:
-                    - s3:PutObject
                     - s3:GetObject
                   Resource: 
                     - Fn::Join:
                       - ""
                       - - "arn:aws:s3:::"
-                        - ${self:provider.stage}-prismix-image-bucket
+                        - ${self:custom.bucketName}
                         - "/*"
                 - Effect: Allow
                   Action:
                     - sqs:SendMessage
-                    - sqs:ReceiveMessage
-                    - sqs:DeleteMessage
-                    - sqs:GetQueueAttributes
                   Resource:
                     Fn::GetAtt: [MySQSQueue, Arn]
 
