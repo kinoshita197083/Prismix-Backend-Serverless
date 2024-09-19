@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "dev": "serverless offline"
+    "dev": "serverless offline",
+    "build": "serverless package"
   },
   "keywords": [],
   "author": "",

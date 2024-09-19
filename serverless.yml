@@ -27,10 +27,6 @@ provider:
     restApi: false
   apiGateway:
     shouldStartNameWithService: true
-    cloudWatchRoleArn:
-      Fn::GetAtt:
-        - IamRoleApiGatewayCloudWatchLogs
-        - Arn
   tracing:
     apiGateway: true
     lambda: true
