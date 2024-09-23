@@ -22,7 +22,7 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    # environment: dev-prod # environment name of the repo
+    environment: dev-prod # environment name of the repo
 
     steps:
     # Checkout the code
