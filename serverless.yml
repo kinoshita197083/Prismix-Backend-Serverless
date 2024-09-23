@@ -6,7 +6,8 @@ app: prismix
 service: prismix-serverless
 
 plugins:
-  - serverless-offline
+  - serverless-offline # for local development and testing
+  - serverless-dotenv-plugin # for loading .env files
 
 provider:
   name: aws
@@ -40,11 +41,13 @@ custom:
     dev: 128
   bucketName: ${self:service}-${self:provider.stage}-bucket
   queueName: ${self:service}-${self:provider.stage}-queue
-  environment: ${file(.env.${self:provider.stage})}
+  # environment: ${file(.env.${self:provider.stage})}
+  dotenv:
+    path: .env.${self:provider.stage}
 
 functions:
   main:
-    handler: index.handler
+    handler: src/handlers/example.hello
     events:
       - http:
           path: /
