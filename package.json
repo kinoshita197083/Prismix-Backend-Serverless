@@ -9,7 +9,11 @@
     "build": "serverless package",
     "start": "nodemon --exec serverless offline start",
     "info": "sls info",
-    "deployments": "serverless deploy list"
+    "deployments": "serverless deploy list",
+    "prisma:generate:dev": "node -r dotenv/config ./node_modules/.bin/prisma generate dotenv_config_path=.env.dev",
+    "prisma:db:push:dev": "npx dotenv -e .env.dev -- prisma db push",
+    "build:schema:dev": "npx dotenv -e .env.dev prisma validate",
+    "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio"
   },
   "keywords": [],
   "author": "",

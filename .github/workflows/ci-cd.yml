@@ -42,6 +42,28 @@ jobs:
     - name: Install dependencies
       run: npm install
 
+    # Set DATABASE_URL based on branch update
+    - name: Set DATABASE_URL based on branch
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL_DEV }}" >> $GITHUB_ENV
+          echo "DIRECT_URL=${{ secrets.DIRECT_URL_DEV }}" >> $GITHUB_ENV
+        elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
+          echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
+        else
+          echo "Unsupported branch for deployment"
+          exit 1
+        fi
+
+    # Generate Prisma Client
+    - name: Generate Prisma Client
+      run: npx prisma generate
+
+    # Run migrations
+    - name: Run migrations
+      run: npx prisma migrate
+
     # Install Serverless
     - name: Install Serverless Framework
       run: npm install -g serverless
