@@ -5,14 +5,29 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "dev": "serverless offline"
+    "dev": "serverless offline",
+    "build": "serverless package",
+    "start": "nodemon --exec serverless offline start",
+    "info": "sls info",
+    "deployments": "serverless deploy list",
+    "prisma:generate:dev": "node -r dotenv/config ./node_modules/.bin/prisma generate dotenv_config_path=.env.dev",
+    "prisma:db:push:dev": "npx dotenv -e .env.dev -- prisma db push",
+    "build:schema:dev": "npx dotenv -e .env.dev prisma validate",
+    "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "jest": "^29.7.0",
+    "nodemon": "^3.1.7",
+    "prisma": "^5.19.1",
     "serverless": "^3.39.0",
+    "serverless-dotenv-plugin": "^6.0.0",
     "serverless-offline": "^13.8.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1",
+    "aws-sdk": "^2.1691.0"
   }
 }
