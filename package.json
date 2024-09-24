@@ -8,7 +8,8 @@
     "dev": "serverless offline",
     "build": "serverless package",
     "start": "nodemon --exec serverless offline start",
-    "info": "sls info"
+    "info": "sls info",
+    "deployments": "serverless deploy list"
   },
   "keywords": [],
   "author": "",

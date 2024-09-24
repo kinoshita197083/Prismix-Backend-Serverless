@@ -141,6 +141,7 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
         Policies:
           - PolicyName: s3-sqs-access-policy
             PolicyDocument:
@@ -175,6 +176,7 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
 
     # SQS & DynamoDB access Role - used by worker functions
     WorkerFunctionRole:
@@ -190,6 +192,7 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
         Policies:
           - PolicyName: dynamodb-sqs-access-policy
             PolicyDocument:
@@ -249,6 +252,7 @@ resources:
               Action: sts:AssumeRole
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
         Policies:
           - PolicyName: dlq-dynamodb-access-policy
             PolicyDocument:
@@ -366,22 +370,41 @@ resources:
         TableName: ${self:service}-${self:provider.stage}-Projects
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: ProjectId
+          - AttributeName: projectId
             AttributeType: S
-          - AttributeName: UserId
+          - AttributeName: createdAt
+            AttributeType: S
+          - AttributeName: updatedAt
+            AttributeType: S
+          - AttributeName: userId
             AttributeType: S
         KeySchema:
-          - AttributeName: ProjectId
+          - AttributeName: projectId
             KeyType: HASH
+          - AttributeName: createdAt
+            KeyType: RANGE
+        # LSI - Additional sort key
+        LocalSecondaryIndexes:
+        - IndexName: ProjectUpdatedAtIndex
+          KeySchema:
+            - AttributeName: projectId
+              KeyType: HASH
+            - AttributeName: updatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # GSI - Additional table allow to have 2nd partition key & sort key
         GlobalSecondaryIndexes:
           - IndexName: UserProjectIndex
             KeySchema:
-              - AttributeName: UserId
+              - AttributeName: userId
                 KeyType: HASH
-              - AttributeName: ProjectId
+              - AttributeName: projectId
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
+        # PointInTimeRecoverySpecification:
+        #   PointInTimeRecoveryEnabled: true
 
     JobsTable:
       Type: AWS::DynamoDB::Table
@@ -389,19 +412,23 @@ resources:
         TableName: ${self:service}-${self:provider.stage}-Jobs
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: JobId
+          - AttributeName: jobId
             AttributeType: S
-          - AttributeName: ProjectId
+          - AttributeName: projectId
+            AttributeType: S
+          - AttributeName: createdAt
             AttributeType: S
         KeySchema:
-          - AttributeName: JobId
+          - AttributeName: jobId
             KeyType: HASH
+          - AttributeName: createdAt
+            KeyType: RANGE
         GlobalSecondaryIndexes:
           - IndexName: ProjectJobIndex
             KeySchema:
-              - AttributeName: ProjectId
+              - AttributeName: projectId
                 KeyType: HASH
-              - AttributeName: JobId
+              - AttributeName: jobId
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
@@ -412,19 +439,21 @@ resources:
         TableName: ${self:service}-${self:provider.stage}-Images
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: ImageId
+          - AttributeName: imageId
             AttributeType: S
-          - AttributeName: JobId
+          - AttributeName: jobId
+            AttributeType: S
+          - AttributeName: createdAt
             AttributeType: S
         KeySchema:
-          - AttributeName: ImageId
+          - AttributeName: imageId
             KeyType: HASH
         GlobalSecondaryIndexes:
           - IndexName: JobImageIndex
             KeySchema:
-              - AttributeName: JobId
+              - AttributeName: jobId
                 KeyType: HASH
-              - AttributeName: ImageId
+              - AttributeName: createdAt
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
@@ -435,19 +464,19 @@ resources:
         TableName: ${self:service}-${self:provider.stage}-ProcessedResults
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: ResultId
+          - AttributeName: resultId
             AttributeType: S
-          - AttributeName: ImageId
+          - AttributeName: imageId
             AttributeType: S
         KeySchema:
-          - AttributeName: ResultId
+          - AttributeName: resultId
             KeyType: HASH
         GlobalSecondaryIndexes:
           - IndexName: ImageResultIndex
             KeySchema:
-              - AttributeName: ImageId
+              - AttributeName: imageId
                 KeyType: HASH
-              - AttributeName: ResultId
+              - AttributeName: resultId
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
