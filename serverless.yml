@@ -17,8 +17,6 @@ provider:
   memorySize: ${self:custom.memorySize.${self:provider.stage}}
   environment:
     ENVIRONMENT: ${self:provider.stage}
-    PROJECTS_TABLE: ${self:service}-${self:provider.stage}-Projects
-    JOBS_TABLE: ${self:service}-${self:provider.stage}-Jobs
     IMAGES_TABLE: ${self:service}-${self:provider.stage}-Images
     PROCESSED_RESULTS_TABLE: ${self:service}-${self:provider.stage}-ProcessedResults
     SQS_QUEUE_URL: 
