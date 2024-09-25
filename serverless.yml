@@ -79,8 +79,6 @@ functions:
             authorizerId: 
               Ref: ApiGatewayAuthorizer
           cors: true
-    environment:
-      PROJECTS_TABLE: ${self:provider.environment.PROJECTS_TABLE}
     role: EntryFunctionRole
 
   # Initial Check Function - file corruptions check, queue image for processing
@@ -274,13 +272,6 @@ resources:
                   Resource: 
                     - arn:aws:s3:::${self:custom.bucketName}
                     - arn:aws:s3:::${self:custom.bucketName}/*
-                - Effect: Allow
-                  Action:
-                    - dynamodb:GetItem
-                    - dynamodb:PutItem
-                    - dynamodb:UpdateItem
-                  Resource: 
-                    - Fn::GetAtt: [ProjectsTable, Arn]
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
