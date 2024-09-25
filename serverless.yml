@@ -67,7 +67,23 @@ functions:
               Ref: ApiGatewayAuthorizer
           cors: true
 
-  # Initial Check Function
+  # Entry Function - create project, generate pre-signed URLs
+  entryPoint:
+    handler: src/handlers/entry.handler
+    events:
+      - http:
+          path: upload
+          method: post
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: 
+              Ref: ApiGatewayAuthorizer
+          cors: true
+    environment:
+      PROJECTS_TABLE: ${self:provider.environment.PROJECTS_TABLE}
+    role: EntryFunctionRole
+
+  # Initial Check Function - file corruptions check, queue image for processing
   processImage:
     handler: src/handlers/processImage.handler
     events:
@@ -206,22 +222,12 @@ resources:
                     - dynamodb:DeleteItem
                     - dynamodb:Query
                   Resource: 
-                    - Fn::GetAtt: [ProjectsTable, Arn]
-                    - Fn::GetAtt: [JobsTable, Arn]
                     - Fn::GetAtt: [ImagesTable, Arn]
                     - Fn::GetAtt: [ProcessedResultsTable, Arn]
                 - Effect: Allow
                   Action:
                     - dynamodb:Query
                   Resource:
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ProjectsTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [JobsTable, Arn]
-                        - "/index/*"
                     - Fn::Join:
                       - ""
                       - - Fn::GetAtt: [ImagesTable, Arn]
@@ -237,6 +243,47 @@ resources:
                     - sqs:GetQueueAttributes
                   Resource:
                     Fn::GetAtt: [EligibleImageQueue, Arn]
+
+    EntryFunctionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-${self:provider.stage}-EntryFunctionRole
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: UploadFunctionPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: arn:aws:logs:*:*:*
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetBucketLocation
+                  Resource: 
+                    - arn:aws:s3:::${self:custom.bucketName}
+                    - arn:aws:s3:::${self:custom.bucketName}/*
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                  Resource: 
+                    - Fn::GetAtt: [ProjectsTable, Arn]
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
 
     # SQS & DynamoDB access Role - used by deadLetterQueueProcessor functions
     DeadLetterQueueProcessorRole:
@@ -266,22 +313,12 @@ resources:
                     - dynamodb:DeleteItem
                     - dynamodb:Query
                   Resource: 
-                    - Fn::GetAtt: [ProjectsTable, Arn]
-                    - Fn::GetAtt: [JobsTable, Arn]
                     - Fn::GetAtt: [ImagesTable, Arn]
                     - Fn::GetAtt: [ProcessedResultsTable, Arn]
                 - Effect: Allow
                   Action:
                     - dynamodb:Query
                   Resource:
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ProjectsTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [JobsTable, Arn]
-                        - "/index/*"
                     - Fn::Join:
                       - ""
                       - - Fn::GetAtt: [ImagesTable, Arn]
@@ -364,75 +401,6 @@ resources:
       Properties:
         QueueName: ${self:custom.deadLetterQueueName}
 
-    ProjectsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-Projects
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: projectId
-            AttributeType: S
-          - AttributeName: createdAt
-            AttributeType: S
-          - AttributeName: updatedAt
-            AttributeType: S
-          - AttributeName: userId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: projectId
-            KeyType: HASH
-          - AttributeName: createdAt
-            KeyType: RANGE
-        # LSI - Additional sort key
-        LocalSecondaryIndexes:
-        - IndexName: ProjectUpdatedAtIndex
-          KeySchema:
-            - AttributeName: projectId
-              KeyType: HASH
-            - AttributeName: updatedAt
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        # GSI - Additional table allow to have 2nd partition key & sort key
-        GlobalSecondaryIndexes:
-          - IndexName: UserProjectIndex
-            KeySchema:
-              - AttributeName: userId
-                KeyType: HASH
-              - AttributeName: projectId
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-        # PointInTimeRecoverySpecification:
-        #   PointInTimeRecoveryEnabled: true
-
-    JobsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-Jobs
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: jobId
-            AttributeType: S
-          - AttributeName: projectId
-            AttributeType: S
-          - AttributeName: createdAt
-            AttributeType: S
-        KeySchema:
-          - AttributeName: jobId
-            KeyType: HASH
-          - AttributeName: createdAt
-            KeyType: RANGE
-        GlobalSecondaryIndexes:
-          - IndexName: ProjectJobIndex
-            KeySchema:
-              - AttributeName: projectId
-                KeyType: HASH
-              - AttributeName: jobId
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-
     ImagesTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -464,19 +432,19 @@ resources:
         TableName: ${self:service}-${self:provider.stage}-ProcessedResults
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: resultId
-            AttributeType: S
           - AttributeName: imageId
             AttributeType: S
+          - AttributeName: jobId
+            AttributeType: S
         KeySchema:
-          - AttributeName: resultId
+          - AttributeName: imageId
             KeyType: HASH
         GlobalSecondaryIndexes:
-          - IndexName: ImageResultIndex
+          - IndexName: JobResultIndex
             KeySchema:
-              - AttributeName: imageId
+              - AttributeName: jobId
                 KeyType: HASH
-              - AttributeName: resultId
+              - AttributeName: imageId
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
@@ -494,38 +462,6 @@ resources:
       Description: User uploaded images
       Value: 
         Ref: PrismixImageBucket
-    ProjectsTableName:
-      Description: DynamoDB Projects Table Name
-      Value: 
-        Ref: ProjectsTable
-    ProjectsTableArn:
-      Description: DynamoDB Projects Table ARN
-      Value:
-        Fn::GetAtt: [ProjectsTable, Arn]
-    JobsTableName:
-      Description: DynamoDB Jobs Table Name
-      Value: 
-        Ref: JobsTable
-    JobsTableArn:
-      Description: DynamoDB Jobs Table ARN
-      Value:
-        Fn::GetAtt: [JobsTable, Arn]
-    ImagesTableName:
-      Description: DynamoDB Images Table Name
-      Value: 
-        Ref: ImagesTable
-    ImagesTableArn:
-      Description: DynamoDB Images Table ARN
-      Value:
-        Fn::GetAtt: [ImagesTable, Arn]
-    ProcessedResultsTableName:
-      Description: DynamoDB Processed Results Table Name
-      Value: 
-        Ref: ProcessedResultsTable
-    ProcessedResultsTableArn:
-      Description: DynamoDB Processed Results Table ARN
-      Value:
-        Fn::GetAtt: [ProcessedResultsTable, Arn]
     SQSQueueUrl:
       Description: SQS Queue URL
       Value:
@@ -542,3 +478,25 @@ resources:
       Description: Dead Letter Queue ARN
       Value:
         Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+    EntryFunctionRoleArn:
+      Description: ARN of the Upload Function IAM Role
+      Value: 
+        Fn::GetAtt: [EntryFunctionRole, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EntryFunctionRoleArn
+    ImagesTableName:
+      Description: DynamoDB Images Table Name
+      Value: 
+        Ref: ImagesTable
+    ImagesTableArn:
+      Description: DynamoDB Images Table ARN
+      Value:
+        Fn::GetAtt: [ImagesTable, Arn]
+    ProcessedResultsTableName:
+      Description: DynamoDB Processed Results Table Name
+      Value: 
+        Ref: ProcessedResultsTable
+    ProcessedResultsTableArn:
+      Description: DynamoDB Processed Results Table ARN
+      Value:
+        Fn::GetAtt: [ProcessedResultsTable, Arn]
