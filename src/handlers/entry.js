@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 
 const s3 = new AWS.S3();
@@ -6,51 +7,70 @@ const prisma = new PrismaClient();
 
 exports.handler = async (event) => {
     try {
-        const { userId, projectName, projectDescription, imageCount } = JSON.parse(event.body);
+        const { userId, projectId, projectName, projectDescription, imageCount } = JSON.parse(event.body);
 
-        // Create or update project in PostgreSQL
-        const project = await prisma.project.upsert({
-            where: {
-                userId_projectName: {
-                    userId: userId,
-                    projectName: projectName
-                }
-            },
-            update: { projectDescription },
-            create: {
-                userId,
-                projectName,
-                projectDescription,
-                dynamodbReference: `project_${Date.now()}`
-            },
+        // Debugging - example using logger
+        logger.info('Lambda function invoked', {
+            functionName: context.functionName,
+            awsRequestId: context.awsRequestId,
+            event
         });
 
-        // Generate pre-signed URLs for S3 upload
-        const preSignedUrls = [];
+        // Create or update a project
+        const [project, job] = await prisma.$transaction([
+            prisma.project.upsert({
+                where: {
+                    id: projectId, // PK
+                },
+                update: {
+                    projectName,
+                    projectDescription,
+                    updatedAt: new Date().toISOString(),
+                    userId,
+                },
+                create: {
+                    userId,
+                    projectName,
+                    projectDescription,
+                },
+            }),
+            prisma.job.create({
+                data: {
+                    userId,
+                    projectId,
+                    imageCount,
+                    jobStatus: 'INPROGRESS',
+                },
+            }),
+        ]);
+
+        // Generate pre-signed URLs for image uploads
+        const presignedUrls = [];
         for (let i = 0; i < imageCount; i++) {
-            const key = `${userId}/${project.id}/${Date.now()}_${i}.jpg`;
-            const url = s3.getSignedUrl('putObject', {
+            const imageId = uuidv4();
+            const params = {
                 Bucket: process.env.BUCKET_NAME,
-                Key: key,
+                Key: `${userId}/${project.id}/${job.id}/${imageId}`,
                 Expires: 3600, // URL expires in 1 hour
-                ContentType: 'image/jpeg'
-            });
-            preSignedUrls.push({ url, key });
+                ContentType: 'image/*',
+            };
+            const uploadUrl = await s3.getSignedUrlPromise('putObject', params);
+            presignedUrls.push({ imageId, uploadUrl });
         }
 
         return {
             statusCode: 200,
             body: JSON.stringify({
-                message: 'Project created/updated and pre-signed URLs generated',
+                message: 'Project created and pre-signed URLs generated',
                 projectId: project.id,
-                preSignedUrls
-            })
+                presignedUrls,
+            }),
         };
     } catch (error) {
         console.error('Error:', error);
         return {
             statusCode: 500,
-            body: JSON.stringify({ message: 'Internal server error' })
+            body: JSON.stringify({ message: 'Internal server error' }),
         };
     }
 };

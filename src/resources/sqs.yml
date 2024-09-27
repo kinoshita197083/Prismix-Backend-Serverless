@@ -1,0 +1,14 @@
+Resources:
+  EligibleImageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.queueName}
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+        maxReceiveCount: 3
+
+  ImageDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.deadLetterQueueName}
