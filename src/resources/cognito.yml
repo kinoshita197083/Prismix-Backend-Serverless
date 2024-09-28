@@ -1,28 +1,63 @@
 Resources:
+
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: ${self:provider.stage}-UserPool
+      UserPoolName: ${self:service}-user-pool-${self:provider.stage}
       AutoVerifiedAttributes:
         - email
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-          RequireLowercase: true
-          RequireNumbers: true
-          RequireSymbols: true
-          RequireUppercase: true
+      UsernameAttributes:
+        - email
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoUserPoolIdentityProvider
     Properties:
-      ClientName: ${self:provider.stage}-UserPoolClient
+      ClientName: ${self:service}-client-${self:provider.stage}
       UserPoolId: 
         Ref: CognitoUserPool
-      GenerateSecret: false
+      SupportedIdentityProviders: 
+        - COGNITO
+        - Google
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      CallbackURLs:
+        - ${env:COGNITO_CALLBACK_URL}
+      LogoutURLs:
+        - ${env:COGNITO_LOGOUT_URL}
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: ${self:service}-${self:provider.stage}-${self:custom.domainSuffix}
+      UserPoolId: 
+        Ref: CognitoUserPool
+
+  CognitoUserPoolIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: 
+        Ref: CognitoUserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: ${self:custom.googleClientId}
+        client_secret: ${self:custom.googleClientSecret}
+        authorize_scopes: email openid profile
+      AttributeMapping:
+        email: email
+        name: name
+        picture: picture
+        username: sub
 
   ApiGatewayAuthorizer:
     Type: AWS::ApiGateway::Authorizer

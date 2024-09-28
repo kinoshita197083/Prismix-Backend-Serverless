@@ -48,9 +48,19 @@ jobs:
         if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_DEV }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_DEV }}" >> $GITHUB_ENV
+          echo "COGNITO_DOMAIN_SUFFIX=${{ secrets.COGNITO_DOMAIN_SUFFIX }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_DEV }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_DEV }}" >> $GITHUB_ENV
+          echo "COGNITO_CALLBACK_URL=${{ secrets.COGNITO_CALLBACK_URL_DEV }}" >> $GITHUB_ENV
+          echo "COGNITO_LOGOUT_URL=${{ secrets.COGNITO_LOGOUT_URL_DEV }}" >> $GITHUB_ENV
         elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
+          echo "COGNITO_DOMAIN_SUFFIX=${{ secrets.COGNITO_DOMAIN_SUFFIX }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" >> $GITHUB_ENV
+          echo "COGNITO_CALLBACK_URL=${{ secrets.COGNITO_CALLBACK_URL_PROD }}" >> $GITHUB_ENV
+          echo "COGNITO_LOGOUT_URL=${{ secrets.COGNITO_LOGOUT_URL_PROD }}" >> $GITHUB_ENV
         else
           echo "Unsupported branch for deployment"
           exit 1

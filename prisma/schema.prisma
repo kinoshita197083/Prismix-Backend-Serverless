@@ -9,18 +9,19 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  email        String    @unique
-  credits      Int       @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  projects     Project[]
-  cognitoSub   String    @unique // Cognito User Sub
-  refreshToken String?
-  accessToken  String?
-  idToken      String?
-  tokenExpiry  DateTime?
+  id            String    @id @default(uuid())
+  username      String    @unique
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  credits       Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  cognitoSub    String    @unique // Cognito User Sub
+  projects      Project[]
+  accounts      Account[]
+  sessions      Session[]
 }
 
 model Project {
@@ -43,14 +44,14 @@ enum JobStatus {
 }
 
 model Job {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   projectId           String
-  imageCount          Int      @default(0)
-  processedImageCount Int      @default(0)
-  jobStatus           String   @default("IDLE")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  project             Project  @relation(fields: [projectId], references: [id])
+  imageCount          Int       @default(0)
+  processedImageCount Int       @default(0)
+  jobStatus           JobStatus @default(IDLE)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  project             Project   @relation(fields: [projectId], references: [id])
 }
 
 model ProjectSetting {
@@ -61,4 +62,39 @@ model ProjectSetting {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   project      Project  @relation(fields: [projectId], references: [id])
+}
+
+// Next Auth Models adjusted for Cognito
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
