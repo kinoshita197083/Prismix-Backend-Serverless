@@ -21,7 +21,7 @@ exports.handler = async (event) => {
             if (!job) continue;
 
             const processedImagesCount = await dynamodb.query({
-                TableName: process.env.IMAGES_TABLE,
+                // TableName: process.env.IMAGES_TABLE,
                 IndexName: 'JobImageIndex',
                 KeyConditionExpression: 'jobId = :jobId',
                 ExpressionAttributeValues: { ':jobId': jobId },

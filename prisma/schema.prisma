@@ -10,17 +10,15 @@ datasource db {
 
 model User {
   id            String    @id @default(uuid())
-  username      String    @unique
   email         String    @unique
-  name          String?
-  image         String?
-  emailVerified DateTime?
   credits       Int       @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  cognitoSub    String    @unique // Cognito User Sub
-  projects      Project[]
+  emailVerified DateTime?
+  image         String?
+  name          String?
   accounts      Account[]
+  projects      Project[]
   sessions      Session[]
 }
 
@@ -31,53 +29,56 @@ model Project {
   projectDescription String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
-  user               User             @relation(fields: [userId], references: [id])
   jobs               Job[]
+  user               User             @relation(fields: [userId], references: [id])
   projectSettings    ProjectSetting[]
 }
 
-enum JobStatus {
-  IDLE
-  INPROGRESS
-  COMPLETED
-  FAILED
-}
-
 model Job {
-  id                  String    @id @default(uuid())
-  projectId           String
-  imageCount          Int       @default(0)
-  processedImageCount Int       @default(0)
-  jobStatus           JobStatus @default(IDLE)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  project             Project   @relation(fields: [projectId], references: [id])
+  id               String         @id @default(uuid())
+  projectId        String
+  imageCount       Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  jobStatus        JobStatus      @default(IDLE)
+  projectSettingId String
+  inputConnection  String
+  outputConnection String
+  project          Project        @relation(fields: [projectId], references: [id])
+  ProjectSetting   ProjectSetting @relation(fields: [projectSettingId], references: [id])
+
+  @@index([projectId])
+  @@index([projectSettingId])
 }
 
 model ProjectSetting {
-  id           String   @id @default(uuid())
-  projectId    String
-  settingType  String
-  settingValue Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  project      Project  @relation(fields: [projectId], references: [id])
+  id                 String   @id @default(uuid())
+  projectId          String
+  settingType        String
+  settingValue       Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  settingDescription String
+  settingName        String
+  Job                Job[]
+  project            Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
 }
 
-// Next Auth Models adjusted for Cognito
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
+  access_token      String?
+  expires_at        Int?
+  refresh_token     String?
+  providerAccountId String
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
@@ -97,4 +98,11 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+enum JobStatus {
+  IDLE
+  INPROGRESS
+  COMPLETED
+  FAILED
 }

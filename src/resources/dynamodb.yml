@@ -1,25 +1,40 @@
 Resources:
-  ImagesTable:
+  TasksTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ${self:service}-${self:provider.stage}-Images
+      TableName: ${self:service}-${self:provider.stage}-Tasks
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: imageId
+        - AttributeName: JobID
           AttributeType: S
-        - AttributeName: jobId
+        - AttributeName: TaskID
           AttributeType: S
-        - AttributeName: createdAt
+        - AttributeName: TaskStatus
           AttributeType: S
+        - AttributeName: CreatedAt
+          AttributeType: S
+        - AttributeName: evaluation
+          AttributeType: N
       KeySchema:
-        - AttributeName: imageId
+        - AttributeName: JobID
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: JobImageIndex
+        - AttributeName: TaskID
+          KeyType: RANGE
+      LocalSecondaryIndexes:
+        - IndexName: EvaluationIndex
           KeySchema:
-            - AttributeName: jobId
+            - AttributeName: JobID
               KeyType: HASH
-            - AttributeName: createdAt
+            - AttributeName: evaluation
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      GlobalSecondaryIndexes:
+        - IndexName: TaskStatusIndex
+          KeySchema:
+            - AttributeName: TaskStatus
+              KeyType: HASH
+            - AttributeName: CreatedAt
               KeyType: RANGE
           Projection:
             ProjectionType: ALL

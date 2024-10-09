@@ -18,8 +18,7 @@ provider:
   memorySize: ${self:custom.memorySize.${self:provider.stage}}
   environment:
     ENVIRONMENT: ${self:provider.stage}
-    IMAGES_TABLE: ${self:service}-${self:provider.stage}-Images
-    PROCESSED_RESULTS_TABLE: ${self:service}-${self:provider.stage}-ProcessedResults
+    TASKS_TABLE: ${self:service}-${self:provider.stage}-Tasks
     SQS_QUEUE_URL: 
       Ref: EligibleImageQueue
     DEAD_LETTER_QUEUE_URL:
@@ -69,7 +68,6 @@ functions:
   ${file(src/resources/functions.yml)}
 
 resources:
-  - ${file(src/resources/cognito.yml)}
   - ${file(src/resources/s3.yml)}
   - ${file(src/resources/sqs.yml)}
   - ${file(src/resources/dynamodb.yml)}
@@ -83,14 +81,6 @@ resources:
             Status: Enabled
 
     Outputs:
-      UserPoolId:
-        Description: Cognito User Pool ID
-        Value: 
-          Ref: CognitoUserPool
-      UserPoolClientId:
-        Description: Cognito User Pool Client ID
-        Value: 
-          Ref: CognitoUserPoolClient
       S3BucketName:
         Description: User uploaded images
         Value: 
@@ -111,20 +101,14 @@ resources:
         Description: Dead Letter Queue ARN
         Value:
           Fn::GetAtt: [ImageDeadLetterQueue, Arn]
-      EntryFunctionRoleArn:
-        Description: ARN of the Upload Function IAM Role
+      TasksTableName:
+        Description: DynamoDB Tasks Table Name
         Value: 
-          Fn::GetAtt: [EntryFunctionRole, Arn]
-        Export:
-          Name: ${self:service}-${self:provider.stage}-EntryFunctionRoleArn
-      ImagesTableName:
-        Description: DynamoDB Images Table Name
-        Value: 
-          Ref: ImagesTable
-      ImagesTableArn:
-        Description: DynamoDB Images Table ARN
+          Ref: TasksTable
+      TasksTableArn:
+        Description: DynamoDB Tasks Table ARN
         Value:
-          Fn::GetAtt: [ImagesTable, Arn]
+          Fn::GetAtt: [TasksTable, Arn]
       ServerlessDeploymentBucketName:
         Value: 
           Ref: LayersDeploymentBucket

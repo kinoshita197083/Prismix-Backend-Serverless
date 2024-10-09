@@ -12,3 +12,46 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:custom.deadLetterQueueName}
+
+  ImageProcessingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:service}-${self:provider.stage}-image-processing-topic
+
+  ImageProcessingTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref ImageProcessingTopic
+      Topics:
+        - !Ref ImageProcessingTopic
+
+  EligibleImageQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref EligibleImageQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt EligibleImageQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref ImageProcessingTopic
+
+  ImageProcessingTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref ImageProcessingTopic
+      Protocol: sqs
+      Endpoint: !GetAtt EligibleImageQueue.Arn

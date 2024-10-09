@@ -1,32 +1,3 @@
-# Example Serverless Functions
-main:
-  handler: src/handlers/example.hello
-  events:
-    - http:
-        path: /
-        method: ANY
-        authorizer:
-          type: COGNITO_USER_POOLS
-          authorizerId: 
-            Ref: ApiGatewayAuthorizer
-        cors: true
-
-# Entry Function - create project, generate pre-signed URLs
-entryPoint:
-  handler: src/handlers/entry.handler
-  events:
-    - http:
-        path: upload
-        method: post
-        authorizer:
-          type: COGNITO_USER_POOLS
-          authorizerId: 
-            Ref: ApiGatewayAuthorizer
-        cors: true
-  environment:
-    BUCKET_NAME: ${self:custom.bucketName}
-  role: EntryFunctionRole
-
 # Initial Check Function - file corruptions check, queue image for processing
 enqueueImage:
   handler: src/handlers/enqueueImage.handler
@@ -37,8 +8,8 @@ enqueueImage:
         existing: true
   environment:
     BUCKET_NAME: ${self:custom.bucketName}
-    SQS_QUEUE_URL: 
-      Ref: EligibleImageQueue
+    SNS_TOPIC_ARN: 
+      Ref: ImageProcessingTopic
   role: EnqueueImageFunctionRole
 
 # Worker Function - main processing functions
@@ -49,8 +20,9 @@ worker:
         arn:
           Fn::GetAtt: [EligibleImageQueue, Arn]
   environment:
-    IMAGES_TABLE: ${self:provider.environment.IMAGES_TABLE}
-    PROCESSED_RESULTS_TABLE: ${self:provider.environment.PROCESSED_RESULTS_TABLE}
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    DEAD_LETTER_QUEUE_URL:
+      Ref: ImageDeadLetterQueue
   role: WorkerFunctionRole
 
 # Dead Letter Queue Processor
@@ -61,33 +33,18 @@ deadLetterQueueProcessor:
         arn:
           Fn::GetAtt: [ImageDeadLetterQueue, Arn]
   environment:
-    IMAGES_TABLE: ${self:provider.environment.IMAGES_TABLE}
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
   role: DeadLetterQueueProcessorRole
 
-# getJobStatus:
-#   handler: src/handlers/getJobStatus.handler
-#   events:
-#     - http:
-#         path: job/{jobId}/status
-#         method: get
-#         authorizer:
-#           type: COGNITO_USER_POOLS
-#           authorizerId: 
-#             Ref: ApiGatewayAuthorizer
-#         cors: true
-#   environment:
-#     JOBS_TABLE: ${self:provider.environment.JOBS_TABLE}
-#   role: JobStatusFunctionRole
-
 # DynamoDB Stream - Job Completion Checker
-jobCompletionChecker:
-  handler: src/handlers/jobCompletionChecker.handler
+# taskStreamProcessor:
+taskStreamProcessor:
+  handler: src/handlers/taskStreamProcessor.handler
   events:
     - stream:
         type: dynamodb
         arn:
-          Fn::GetAtt: [ImagesTable, StreamArn]
+          Fn::GetAtt: [TasksTable, StreamArn]
   environment:
-    IMAGES_TABLE: ${self:provider.environment.IMAGES_TABLE}
-    CREATE_ZIP_LAMBDA: ${self:service}-${self:provider.stage}-createZip
-  role: JobCompletionCheckerRole
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+  role: TaskStreamProcessorRole
