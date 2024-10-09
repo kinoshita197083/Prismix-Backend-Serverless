@@ -52,14 +52,24 @@ custom:
     path: .env.${self:provider.stage}
   deadLetterQueueName: ${self:service}-${self:provider.stage}-dlq
   serverless-layers:
-    layersDeploymentBucket: prismix-lambda-layers
     dependenciesPath: ./package.json
-    retainLayers: true
+    layersDeploymentBucket: prismix-lambda-layers
+
+# layers:
+#   base:
+#     path: layers/aws-sdk-layer
+#     description: AWS SDK and Prisma shared by all functions
+#     retain: true
+#   sharp:
+#     path: layers/sharp-layer
+#     description: Sharp library for image processing functions
+#     retain: true
 
 package:
   individually: true
   exclude:
     - node_modules/**
+    - layers/**
 
 functions:
   ${file(src/resources/functions.yml)}

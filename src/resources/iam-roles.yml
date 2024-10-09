@@ -14,6 +14,16 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: lambda-layer-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
 
   # S3 & SQS access IAM Role - used by Lambda functions
   EnqueueImageFunctionRole:
@@ -44,6 +54,7 @@ Resources:
                     - - "arn:aws:s3:::"
                       - ${self:custom.bucketName}
                       - "/*"
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -65,6 +76,16 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: lambda-layer-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
 
   # SQS & DynamoDB access Role - used by worker functions
   WorkerFunctionRole:
@@ -86,6 +107,16 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -139,6 +170,11 @@ Resources:
                   - sqs:GetQueueAttributes
                 Resource:
                   Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
 
   TaskStreamProcessorRole:
     Type: AWS::IAM::Role
@@ -173,3 +209,8 @@ Resources:
                   - dynamodb:DeleteItem
                 Resource: 
                   Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
