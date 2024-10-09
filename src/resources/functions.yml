@@ -11,7 +11,9 @@ enqueueImage:
     SNS_TOPIC_ARN: 
       Ref: ImageProcessingTopic
   role: EnqueueImageFunctionRole
-
+  layers:
+    - { Ref: SupabaseLayerLambdaLayer }
+    
 # Worker Function - main processing functions
 worker:
   handler: src/handlers/worker.handler
@@ -24,6 +26,9 @@ worker:
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
   role: WorkerFunctionRole
+  layers:
+    - { Ref: SharpLayerLambdaLayer }
+    - { Ref: SupabaseLayerLambdaLayer }
 
 # Dead Letter Queue Processor
 deadLetterQueueProcessor:
@@ -35,6 +40,8 @@ deadLetterQueueProcessor:
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
   role: DeadLetterQueueProcessorRole
+  layers:
+    - { Ref: SupabaseLayerLambdaLayer }
 
 # DynamoDB Stream - Job Completion Checker
 # taskStreamProcessor:
@@ -48,3 +55,5 @@ taskStreamProcessor:
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
   role: TaskStreamProcessorRole
+  layers:
+    - { Ref: SupabaseLayerLambdaLayer }

@@ -23,6 +23,8 @@ provider:
       Ref: EligibleImageQueue
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
+    SUPABASE_URL: ${env.SUPABASE_URL}
+    SUPABASE_API_KEY: ${env.SUPABASE_API_KEY}
   iam:
     role: BaseCloudWatchRole
   logs:
@@ -55,21 +57,43 @@ custom:
     dependenciesPath: ./package.json
     layersDeploymentBucket: prismix-lambda-layers
 
-# layers:
-#   base:
-#     path: layers/aws-sdk-layer
-#     description: AWS SDK and Prisma shared by all functions
-#     retain: true
-#   sharp:
-#     path: layers/sharp-layer
-#     description: Sharp library for image processing functions
-#     retain: true
+# Lambda Layers
+layers:
+  prismaLayer:
+    path: layers/aws-sdk-layer
+    description: AWS SDK and Prisma shared by all functions
+    compatibleRuntimes:
+      - nodejs20.x
+    allowedAccounts:
+      - '*'
+  sharpLayer:
+    path: layers/sharp-layer
+    description: Sharp library for image processing functions
+    compatibleRuntimes:
+      - nodejs20.x
+    allowedAccounts:
+      - '*'
+  supabaseLayer:
+    path: layers/supabase-layer
+    description: Supabase client for database operations
+    compatibleRuntimes:
+      - nodejs20.x
+    allowedAccounts:
+      - '*'
 
 package:
   individually: true
-  exclude:
-    - node_modules/**
-    - layers/**
+  patterns:
+    - '!node_modules/**'
+    - '!layers/**'
+    - 'node_modules/sharp/**'
+    - 'node_modules/supabase/**'
+    - 'node_modules/@supabase/**'
+    - 'node_modules/.prisma/client/schema.prisma'
+    - '!node_modules/.prisma/client/libquery_engine-*'
+    - 'node_modules/.prisma/client/libquery_engine-rhel-*'
+    - '!node_modules/prisma/libquery_engine-*'
+    - '!node_modules/@prisma/engines/**'
 
 functions:
   ${file(src/resources/functions.yml)}

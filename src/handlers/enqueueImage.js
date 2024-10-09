@@ -1,9 +1,14 @@
 const logger = require('../utils/logger');
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-const { PrismaClient } = require('@prisma/client');
+const { createClient } = require('@supabase/supabase-js')
 
 const sns = new SNSClient();
-const prisma = new PrismaClient();
+
+// Initialize Supabase client
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_API_KEY
+)
 
 exports.handler = async (event) => {
     const { Records } = event;
@@ -25,10 +30,9 @@ exports.handler = async (event) => {
             }
 
             // Fetch the project settings
-            const projectSetting = await prisma.projectSetting.findUnique({
-                where: { id: projectSettingId },
-                select: { settingValue: true }
-            });
+            const projectSetting = await fetchProjectSetting(projectSettingId)
+
+            console.log('----> Project setting: ', projectSetting);
 
             logger.info('----> Project setting: ', { projectSetting });
 
@@ -60,3 +64,30 @@ exports.handler = async (event) => {
         }
     }
 };
+
+async function fetchProjectSetting(projectSettingId) {
+    try {
+        const { data, error } = await supabase
+            .from('ProjectSetting')
+            .select('settingValue, settingType, settingName')
+            .eq('id', projectSettingId)
+            .single();
+
+        if (error) throw error;
+
+        if (!data) {
+            throw new Error(`No project setting found with id: ${projectSettingId}`);
+        }
+
+        console.log('Fetched project setting:', data);
+
+        return {
+            settingValue: data.settingValue,
+            settingType: data.settingType,
+            settingName: data.settingName
+        };
+    } catch (error) {
+        console.error('Error fetching project setting:', error);
+        throw error;
+    }
+}

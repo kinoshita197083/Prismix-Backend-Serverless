@@ -53,6 +53,8 @@ jobs:
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_DEV }}" >> $GITHUB_ENV
           echo "COGNITO_CALLBACK_URL=${{ secrets.COGNITO_CALLBACK_URL_DEV }}" >> $GITHUB_ENV
           echo "COGNITO_LOGOUT_URL=${{ secrets.COGNITO_LOGOUT_URL_DEV }}" >> $GITHUB_ENV
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_DEV }}" >> $GITHUB_ENV
+          echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_DEV }}" >> $GITHUB_ENV
         elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
@@ -61,18 +63,19 @@ jobs:
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" >> $GITHUB_ENV
           echo "COGNITO_CALLBACK_URL=${{ secrets.COGNITO_CALLBACK_URL_PROD }}" >> $GITHUB_ENV
           echo "COGNITO_LOGOUT_URL=${{ secrets.COGNITO_LOGOUT_URL_PROD }}" >> $GITHUB_ENV
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_PROD }}" >> $GITHUB_ENV
+          echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_PROD }}" >> $GITHUB_ENV
         else
           echo "Unsupported branch for deployment"
           exit 1
         fi
 
-    # Generate Prisma Client
-    - name: Generate Prisma Client
-      run: npx prisma generate
+    # - name: Generate Prisma Client
+    #   run: npx prisma generate
 
     # Run migrations
     - name: Run migrations
-      run: npx prisma migrate
+      run: npx prisma migrate deploy
 
     # Install Serverless
     - name: Install Serverless Framework

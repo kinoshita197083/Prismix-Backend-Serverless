@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -35,17 +36,17 @@ model Project {
 }
 
 model Job {
-  id               String         @id @default(uuid())
+  id               String          @id @default(uuid())
   projectId        String
-  imageCount       Int            @default(0)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  jobStatus        JobStatus      @default(IDLE)
-  projectSettingId String
+  imageCount       Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  jobStatus        JobStatus       @default(IDLE)
+  projectSettingId String?
   inputConnection  String
   outputConnection String
-  project          Project        @relation(fields: [projectId], references: [id])
-  ProjectSetting   ProjectSetting @relation(fields: [projectSettingId], references: [id])
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ProjectSetting   ProjectSetting? @relation(fields: [projectSettingId], references: [id])
 
   @@index([projectId])
   @@index([projectSettingId])
@@ -61,7 +62,7 @@ model ProjectSetting {
   settingDescription String
   settingName        String
   Job                Job[]
-  project            Project  @relation(fields: [projectId], references: [id])
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
