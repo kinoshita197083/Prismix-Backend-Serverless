@@ -1,10 +1,14 @@
 const logger = require('../utils/logger');
-const { SNSClient } = require('@aws-sdk/client-sns');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const { PrismaClient } = require('@prisma/client');
 
 const sns = new SNSClient();
+const prisma = new PrismaClient();
 
 exports.handler = async (event) => {
     const { Records } = event;
+
+    console.log('----> Event: ', event);
 
     for (const record of Records) {
         const { bucket, object } = record.s3;
@@ -12,50 +16,46 @@ exports.handler = async (event) => {
 
         try {
             // Extract userId, projectId, and jobId from the object key
-            // Key format: uploads/${userId}/${projectId}/${jobId}/${Date.now()}-${i + index}
+            // Key format: uploads/${userId}/${projectId}/${projectSettingId}/${jobId}/${Date.now()}-${i + index}
             const [type, userId, projectId, projectSettingId, jobId, imageId] = object.key.split('/');
-            console.log(`type: ${type}, userId: ${userId}, projectId: ${projectId}, projectSettingId: ${projectSettingId}, jobId: ${jobId}`);
+            logger.info(`type: ${type}, userId: ${userId}, projectId: ${projectId}, projectSettingId: ${projectSettingId}, jobId: ${jobId}`);
 
-            if (!job) {
-                throw new Error(`Job not found for key: ${object.key}`);
+            if (!jobId || !projectSettingId) {
+                throw new Error(`Job or project settings not found for key: ${object.key}`);
             }
 
             // Fetch the project settings
             const projectSetting = await prisma.projectSetting.findUnique({
-                where: { id: job.projectSettingId },
+                where: { id: projectSettingId },
                 select: { settingValue: true }
             });
 
-            if (!projectSetting) {
-                throw new Error(`Project settings not found for job: ${jobId}`);
-            }
+            logger.info('----> Project setting: ', { projectSetting });
 
-            // Prepare the message for SNS
-            const message = JSON.stringify({
+            const message = {
                 bucket: bucket.name,
                 key: object.key,
                 userId,
                 projectId,
                 jobId,
                 settingValue: projectSetting.settingValue
+            };
+
+            const publishCommand = new PublishCommand({
+                TopicArn: process.env.SNS_TOPIC_ARN,
+                Message: message,
             });
 
             // Publish the message to SNS
-            await sns.publish({
-                TopicArn: process.env.SNS_TOPIC_ARN,
-                Message: message,
-            }).promise();
+            await sns.send(publishCommand);
 
-            console.log(`Successfully published message to SNS: ${object.key}`);
+            logger.info(`Successfully published message to SNS: ${object.key}`);
         } catch (error) {
             logger.error('Error processing image', {
                 error: error.message,
                 stack: error.stack,
                 bucket: bucket.name,
-                key: object.key,
-                projectId,
-                jobId,
-                imageId
+                key: object.key
             });
         }
     }

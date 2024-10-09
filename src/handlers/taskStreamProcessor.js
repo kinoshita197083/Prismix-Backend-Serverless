@@ -1,13 +1,17 @@
-const AWS = require('aws-sdk');
-const { Client } = require('pg');
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { unmarshall } = require("@aws-sdk/util-dynamodb");
+const { PrismaClient } = require('@prisma/client');
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const dynamoClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const prisma = new PrismaClient();
 
 exports.handler = async (event) => {
     try {
         for (const record of event.Records) {
             if (record.eventName === 'MODIFY') {
-                const newImage = AWS.DynamoDB.Converter.unmarshall(record.dynamodb.NewImage);
+                const newImage = unmarshall(record.dynamodb.NewImage);
 
                 if (newImage.TaskStatus === 'COMPLETED') {
                     await checkJobCompletion(newImage.JobID);
@@ -18,7 +22,7 @@ exports.handler = async (event) => {
         console.error('Error:', error);
         throw error;
     } finally {
-        await rds.end();
+        await prisma.$disconnect();
     }
 };
 
@@ -34,7 +38,8 @@ async function checkJobCompletion(jobId) {
         Limit: 1
     };
 
-    const result = await dynamodb.query(params).promise();
+    const command = new QueryCommand(params);
+    const result = await docClient.send(command);
 
     if (result.Items.length === 0) {
         // All tasks are completed, update job status in RDS

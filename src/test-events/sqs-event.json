@@ -12,7 +12,7 @@
             },
             "messageAttributes": {},
             "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
-            "eventSource": "aws:sqs",
+            "eventSource": "local",
             "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:MyQueue",
             "awsRegion": "us-east-1"
         }
