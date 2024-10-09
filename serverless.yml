@@ -55,9 +55,6 @@ custom:
     layersDeploymentBucket: prismix-lambda-layers
     dependenciesPath: ./package.json
     retainLayers: true
-  domainSuffix:  ${env:COGNITO_DOMAIN_SUFFIX}
-  googleClientId: ${env:GOOGLE_CLIENT_ID}
-  googleClientSecret: ${env:GOOGLE_CLIENT_SECRET}
 
 package:
   individually: true

@@ -1,0 +1,20 @@
+{
+    "Records": [
+        {
+            "messageId": "19dd0b57-b21e-4ac1-bd88-01bbb068cb78",
+            "receiptHandle": "MessageReceiptHandle",
+            "body": "{\"bucket\": {\"name\": \"prismix-serverless-dev-bucket\"}, \"object\": {\"key\": \"uploads/d552debc-42ba-4610-8146-cd9e75040e32/b0869cea-1426-462b-9353-78a13dadf63c/12532c04-64d9-4275-bac7-e232c5ebd759/5ac22c20-2438-4703-818b-6e5f220251f9/1728446835315-0\"}, \"projectId\": \"d552debc-42ba-4610-8146-cd9e75040e32\", \"jobId\": \"0ad7167f-8d36-4b6e-b679-0428ca1beb12\", \"imageId\": \"1728437051300-0\"}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1523232000000",
+                "SenderId": "123456789012",
+                "ApproximateFirstReceiveTimestamp": "1523232000001"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:MyQueue",
+            "awsRegion": "us-east-1"
+        }
+    ]
+}

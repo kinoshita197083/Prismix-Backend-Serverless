@@ -14,7 +14,9 @@
     "prisma:db:push:dev": "npx dotenv -e .env.dev -- prisma db push",
     "prisma:db:pull:dev": "npx dotenv -e .env.dev -- prisma db pull",
     "build:schema:dev": "npx dotenv -e .env.dev prisma validate",
-    "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio"
+    "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio",
+    "test:enqueueImage": "serverless invoke local --function enqueueImage --path src/test-events/s3-event.json",
+    "test:worker": "serverless invoke local --function worker --path src/test-events/sqs-event.json"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +35,7 @@
     "aws-sdk": "^2.1691.0",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.1.0",
+    "sharp": "^0.33.5",
     "uuid": "^10.0.0"
   }
 }

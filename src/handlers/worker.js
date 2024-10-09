@@ -7,51 +7,53 @@ const logger = require('../utils/logger');
 const { AppError, handleError } = require('../utils/errorHandler');
 
 const rekognition = new AWS.Rekognition();
-const prisma = new PrismaClient();
 
 exports.handler = async (event, context) => {
     const { Records } = event;
     logger.info('Processing image batch', { recordCount: Records.length, awsRequestId: context.awsRequestId });
 
     for (const record of Records) {
-        const { bucket, object } = record.s3;
-        logger.info('S3 Record: ', record.s3);
-        const { projectId, jobId, imageId } = JSON.parse(record.body);
+        let bucket, s3ObjectKey, projectId, jobId, projectSettings, imageId, taskId;
 
-        logger.info('Processing image', { bucket: bucket.name, key: object.key, projectId, jobId, imageId });
+        // Parse the record based on its source
+        if (record.eventSource === 'aws:sqs') {
+            const body = JSON.parse(record.body);
+            bucket = body.bucket;
+            s3ObjectKey = body.key;
+            projectId = body.projectId;
+            jobId = body.jobId;
+            projectSettings = body.settingValue;
+            taskId = body.taskId; // Assuming taskId is passed in the message
+        } else {
+            // Local test event parsing
+            const parsed = JSON.parse(record.body);
+            bucket = parsed.bucket;
+            s3ObjectKey = parsed.key;
+            const [, , receivedProjectId, , receivedJobId, receivedImageId] = s3ObjectKey.split('/');
+            projectId = receivedProjectId;
+            jobId = receivedJobId;
+            imageId = receivedImageId;
+            taskId = `task-${imageId}`; // Generate a taskId if not provided
+        }
+
+        logger.info('Processing image', { bucket, key: s3ObjectKey, projectId, jobId, imageId, taskId });
 
         try {
-            // Fetch project settings
-            const projectSettings = await prisma.projectSetting.findMany({
-                where: { projectId },
-            });
+            // Update task status to PROCESSING
+            await updateTaskStatus(jobId, taskId, 'PROCESSING');
 
             // Download the image from S3
-            const s3Object = await s3Service.getFile({
-                Bucket: bucket.name,
-                Key: object.key
-            });
-
-            // Resize the image
-            // const resizedImage = await sharp(s3Object)
-            //     .resize({ width: 1024, height: 1024, fit: 'inside' })
-            //     .toBuffer();
-
-            // Upload resized image
-            // const resizedKey = `resized-${object.key}`;
-            // await s3Service.uploadFile({
-            //     Bucket: bucket.name,
-            //     Key: resizedKey,
-            //     Body: resizedImage,
-            //     ContentType: 'image/jpeg'
+            // const s3Object = await s3Service.getFile({
+            //     Bucket: bucket,
+            //     Key: s3ObjectKey
             // });
 
             // Perform object detection
             const rekognitionResult = await rekognition.detectLabels({
                 Image: {
                     S3Object: {
-                        Bucket: bucket.name,
-                        Name: resizedKey,
+                        Bucket: bucket,
+                        Name: s3ObjectKey,
                     },
                 },
                 MaxLabels: 10,
@@ -60,30 +62,30 @@ exports.handler = async (event, context) => {
 
             const labels = rekognitionResult.Labels;
 
-            logger.info('Rekognition Result: ', rekognitionResult);
+            logger.info('Rekognition Result', { labels, imageId, jobId, taskId });
 
-            // Apply filtering logic
-            // const includeImage = applyFilteringLogic(labels, projectSettings);
+            // Here you would implement your filtering logic based on projectSettings and labels
 
-            // Update DynamoDB tables
-            // await updateDynamoDBTables(imageId, projectId, includeImage, labels);
+            // Update task status to COMPLETED and store results
+            await updateTaskStatus(jobId, taskId, 'COMPLETED', labels);
 
-            // Update job progress
-            // await updateJobProgress(projectId, jobId);
-
-            logger.info('Successfully processed image', { imageId, projectId, jobId });
+            logger.info('Successfully processed image', { imageId, projectId, jobId, taskId });
         } catch (error) {
             logger.error('Error processing image', {
                 error: error.message,
                 stack: error.stack,
-                bucket: bucket.name,
-                key: object.key,
+                bucket,
+                key: s3ObjectKey,
                 projectId,
                 jobId,
-                imageId
+                imageId,
+                taskId
             });
 
-            // Pass the error to the Dead Letter Queue
+            // Update task status to FAILED
+            await updateTaskStatus(jobId, taskId, 'FAILED', { error: error.message });
+
+            // Send error to Dead Letter Queue
             await sqsService.sendMessage({
                 QueueUrl: process.env.DEAD_LETTER_QUEUE_URL,
                 MessageBody: JSON.stringify({
@@ -95,57 +97,30 @@ exports.handler = async (event, context) => {
     }
 };
 
-// function applyFilteringLogic(labels, projectSettings) {
-//     // Implement your filtering logic here based on project settings and labels
-//     // Return true if the image should be included, false otherwise
-//     // This is a placeholder implementation
-//     return true;
-// }
+async function updateTaskStatus(jobId, taskId, status, result = null) {
+    const updateParams = {
+        TableName: process.env.TASKS_TABLE,
+        Key: {
+            JobID: jobId,
+            TaskID: taskId
+        },
+        UpdateExpression: 'SET TaskStatus = :status, UpdatedAt = :time',
+        ExpressionAttributeValues: {
+            ':status': status,
+            ':time': new Date().toISOString()
+        }
+    };
 
-// async function updateDynamoDBTables(imageId, projectId, includeImage, labels) {
-//     const imageItem = {
-//         imageId,
-//         jobId: projectId,
-//         included: includeImage,
-//         labels: labels.map(label => label.Name),
-//         createdAt: new Date().toISOString(),
-//     };
+    if (result) {
+        updateParams.UpdateExpression += ', ProcessingResult = :result';
+        updateParams.ExpressionAttributeValues[':result'] = result;
+    }
 
-//     await dynamoService.putItem({
-//         TableName: process.env.IMAGES_TABLE,
-//         Item: imageItem,
-//     });
-
-//     const resultItem = {
-//         imageId,
-//         jobId: projectId,
-//         included: includeImage,
-//         labels: labels,
-//     };
-
-//     await dynamoService.putItem({
-//         TableName: process.env.PROCESSED_RESULTS_TABLE,
-//         Item: resultItem,
-//     });
-// }
-
-// async function updateJobProgress(projectId, jobId) {
-//     try {
-//         const job = await prisma.job.findFirst({
-//             where: { projectId, id: jobId },
-//         });
-
-//         if (job) {
-//             await prisma.job.update({
-//                 where: { id: job.id },
-//                 data: {
-//                     processedImageCount: { increment: 1 },
-//                     jobStatus: job.processedImageCount + 1 >= job.imageCount ? 'COMPLETED' : 'IN_PROGRESS',
-//                 },
-//             });
-//         }
-//     } catch (error) {
-//         logger.error('Error updating job progress', { error: error.message, projectId, jobId });
-//         throw new AppError('Failed to update job progress', 500);
-//     }
-// }
+    try {
+        await dynamoService.updateItem(updateParams);
+        logger.info(`Updated task status`, { jobId, taskId, status });
+    } catch (error) {
+        logger.error('Error updating task status in DynamoDB', { error: error.message, jobId, taskId, status });
+        throw new AppError('Failed to update task status', 500);
+    }
+}

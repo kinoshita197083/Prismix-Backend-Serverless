@@ -1,7 +1,6 @@
 const AWS = require('aws-sdk');
-const { PrismaClient } = require('@prisma/client');
+const logger = require('../utils/logger');
 const sns = new AWS.SNS();
-const prisma = new PrismaClient();
 
 exports.handler = async (event) => {
     const { Records } = event;
@@ -13,13 +12,8 @@ exports.handler = async (event) => {
         try {
             // Extract userId, projectId, and jobId from the object key
             // Key format: uploads/${userId}/${projectId}/${jobId}/${Date.now()}-${i + index}
-            const [, userId, projectId, jobId] = object.key.split('/');
-
-            // Fetch the job to get the projectSettingId
-            const job = await prisma.job.findUnique({
-                where: { id: jobId },
-                select: { projectSettingId: true }
-            });
+            const [type, userId, projectId, projectSettingId, jobId, imageId] = object.key.split('/');
+            console.log(`type: ${type}, userId: ${userId}, projectId: ${projectId}, projectSettingId: ${projectSettingId}, jobId: ${jobId}`);
 
             if (!job) {
                 throw new Error(`Job not found for key: ${object.key}`);
@@ -51,7 +45,7 @@ exports.handler = async (event) => {
                 Message: message,
             }).promise();
 
-            console.log(`Successfully enqueued image: ${object.key}`);
+            console.log(`Successfully published message to SNS: ${object.key}`);
         } catch (error) {
             logger.error('Error processing image', {
                 error: error.message,
