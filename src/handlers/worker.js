@@ -1,4 +1,3 @@
-const AWS = require('aws-sdk');
 const sharp = require('sharp');
 const s3Service = require('../services/s3Service');
 const sqsService = require('../services/sqsService');
@@ -6,8 +5,9 @@ const dynamoService = require('../services/dynamoService');
 const logger = require('../utils/logger');
 const { AppError, handleError } = require('../utils/errorHandler');
 
-const rekognition = new AWS.Rekognition();
+const { RekognitionClient } = require("@aws-sdk/client-rekognition");
 
+const rekognition = new RekognitionClient();
 exports.handler = async (event, context) => {
     const { Records } = event;
     logger.info('Processing image batch', { recordCount: Records.length, awsRequestId: context.awsRequestId });

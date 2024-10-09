@@ -38,9 +38,9 @@ jobs:
         node-version: '20.x'
     - run: npm ci
 
-    # Install the dependencies
-    - name: Install dependencies
-      run: npm install
+    # # Install the dependencies
+    # - name: Install dependencies
+    #   run: npm install
 
     # Set DATABASE_URL based on branch update
     - name: Set DATABASE_URL based on branch
@@ -76,7 +76,7 @@ jobs:
 
     # Install Serverless
     - name: Install Serverless Framework
-      run: npm install -g serverless
+      run: npm install -g serverless@latest
       
     # Deploy to Serverless
     # - name: Serverless Deploy

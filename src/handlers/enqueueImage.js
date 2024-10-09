@@ -1,6 +1,7 @@
-const AWS = require('aws-sdk');
 const logger = require('../utils/logger');
-const sns = new AWS.SNS();
+const { SNSClient } = require('@aws-sdk/client-sns');
+
+const sns = new SNSClient();
 
 exports.handler = async (event) => {
     const { Records } = event;

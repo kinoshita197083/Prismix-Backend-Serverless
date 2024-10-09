@@ -1,8 +1,8 @@
-const AWS = require('aws-sdk');
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
+const { S3Client } = require("@aws-sdk/client-s3");
 
-const s3 = new AWS.S3();
+const s3 = new S3Client();
 
 const s3Service = {
     async uploadFile(params) {

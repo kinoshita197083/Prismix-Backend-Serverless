@@ -1,8 +1,8 @@
-const AWS = require('aws-sdk');
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
 
-const dynamoDb = new AWS.DynamoDB.DocumentClient();
+const dynamoDb = new DynamoDBClient();
 
 const dynamoService = {
     async getItem(params) {

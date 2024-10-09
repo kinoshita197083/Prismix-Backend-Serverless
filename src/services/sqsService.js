@@ -1,8 +1,8 @@
-const AWS = require('aws-sdk');
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
+const { SQSClient } = require("@aws-sdk/client-sqs");
 
-const sqs = new AWS.SQS();
+const sqs = new SQSClient();
 
 const sqsService = {
     async sendMessage(params) {

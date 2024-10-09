@@ -1,8 +1,9 @@
-const AWS = require('aws-sdk');
+const { Lambda } = require('@aws-sdk/client-lambda');
 const { PrismaClient } = require('@prisma/client');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const lambda = new AWS.Lambda();
+const dynamodb = new DynamoDBClient();
+const lambda = new Lambda();
 const prisma = new PrismaClient();
 
 exports.handler = async (event) => {
