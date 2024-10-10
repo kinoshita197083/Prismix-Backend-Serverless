@@ -26,7 +26,6 @@ worker:
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
   role: WorkerFunctionRole
-  architecture: arm64
   layers:
     - { Ref: SharpLayerLambdaLayer }
     - { Ref: SupabaseLayerLambdaLayer }
