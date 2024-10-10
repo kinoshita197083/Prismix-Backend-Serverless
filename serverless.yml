@@ -62,6 +62,8 @@ layers:
   sharpLayer:
     path: layers/sharp-layer
     description: Sharp library for image processing functions
+    compatibleArchitectures:
+      - arm64
     compatibleRuntimes:
       - nodejs20.x
     allowedAccounts:

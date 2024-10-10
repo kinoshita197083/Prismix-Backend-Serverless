@@ -13,7 +13,7 @@ enqueueImage:
   role: EnqueueImageFunctionRole
   layers:
     - { Ref: SupabaseLayerLambdaLayer }
-    
+
 # Worker Function - main processing functions
 worker:
   handler: src/handlers/worker.handler
@@ -26,6 +26,7 @@ worker:
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
   role: WorkerFunctionRole
+  architecture: arm64
   layers:
     - { Ref: SharpLayerLambdaLayer }
     - { Ref: SupabaseLayerLambdaLayer }
