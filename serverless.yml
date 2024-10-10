@@ -87,7 +87,7 @@ package:
     - 'node_modules/**/*.js'
     - 'node_modules/**/*.json'
     - 'node_modules/sharp/**'
-    - 'layers/sharp-layer/nodejs/node_modules/sharp/**'
+    - 'layers/sharp-layer/nodejs/node_modules/**'
 
 functions:
   ${file(src/resources/functions.yml)}

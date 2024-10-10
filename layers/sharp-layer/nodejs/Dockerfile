@@ -1,6 +1,6 @@
 FROM public.ecr.aws/lambda/nodejs:20
 
-# set work directory y
+# set work directory
 WORKDIR /var/task
 
 COPY package*.json ./
