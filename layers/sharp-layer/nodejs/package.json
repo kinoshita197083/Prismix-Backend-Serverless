@@ -1,5 +1,8 @@
 {
     "dependencies": {
         "sharp": "^0.33.5"
+    },
+    "scripts": {
+        "postinstall": "npm install --arch=x64 --platform=linux sharp"
     }
 }

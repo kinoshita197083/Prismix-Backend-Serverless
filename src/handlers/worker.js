@@ -16,18 +16,22 @@ exports.handler = async (event, context) => {
     logger.info('----> Event', event);
 
     for (const record of Records) {
-        let bucket, object, projectId, jobId, imageId;
+        let bucket, object, projectId, jobId, imageId, projectSetting;
 
         console.log('----> Original Each Record', record);
 
         // Check if this is a real SQS event or our local test event
         if (record.eventSource === 'aws:sqs') {
             const body = JSON.parse(record.body);
-            bucket = body.bucket;
-            object = body.object;
-            projectId = body.projectId;
-            jobId = body.jobId;
-            imageId = body.imageId;
+            const message = body.Message;
+
+            console.log('----> Message', message);
+
+            bucket = message.bucket?.name;
+            object = message.key;
+            projectId = message.projectId;
+            jobId = message.jobId;
+            imageId = message.imageId;
         } else {
             // This is our local test event
             const parsedRecord = JSON.parse(record.body);
@@ -127,6 +131,6 @@ exports.handler = async (event, context) => {
 };
 
 function evaluate(labels, projectSettings) {
-    console.log('----> Evaluating ....');
+    console.log('----> Evaluating .....');
     return 'ELIGIBLE';
 }
