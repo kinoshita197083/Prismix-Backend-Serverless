@@ -1,7 +1,6 @@
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { RekognitionClient, DetectLabelsCommand } = require('@aws-sdk/client-rekognition');
-const { PrismaClient } = require('@prisma/client');
 const sharp = require('sharp');
 const logger = require('../utils/logger');
 const { AppError, handleError } = require('../utils/errorHandler');
@@ -10,7 +9,6 @@ const dynamoService = require('../services/dynamoService');
 const s3Client = new S3Client();
 const sqsClient = new SQSClient();
 const rekognitionClient = new RekognitionClient();
-const prisma = new PrismaClient();
 
 exports.handler = async (event, context) => {
     const { Records } = event;
