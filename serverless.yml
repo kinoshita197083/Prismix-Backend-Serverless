@@ -77,14 +77,17 @@ layers:
 package:
   individually: true
   patterns:
+    # Exclude all node_modules except for sharp
     - '!node_modules/**'
     - '!layers/**'
-    - 'node_modules/sharp/**'
+    - 'layers/sharp-layer/**'
     - 'node_modules/supabase/**'
     - 'node_modules/@supabase/**'
     - 'node_modules/whatwg-url/**'
     - 'node_modules/**/*.js'
     - 'node_modules/**/*.json'
+    - 'node_modules/sharp/**'
+    - 'layers/sharp-layer/nodejs/node_modules/sharp/**'
 
 functions:
   ${file(src/resources/functions.yml)}
