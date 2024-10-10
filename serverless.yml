@@ -59,13 +59,6 @@ custom:
 
 # Lambda Layers
 layers:
-  prismaLayer:
-    path: layers/aws-sdk-layer
-    description: AWS SDK and Prisma shared by all functions
-    compatibleRuntimes:
-      - nodejs20.x
-    allowedAccounts:
-      - '*'
   sharpLayer:
     path: layers/sharp-layer
     description: Sharp library for image processing functions
