@@ -39,10 +39,7 @@
     "@aws-sdk/client-sqs": "^3.667.0",
     "@aws-sdk/lib-dynamodb": "^3.667.0",
     "@aws-sdk/util-dynamodb": "^3.667.0",
-    "@prisma/client": "^5.19.1",
     "@supabase/supabase-js": "^2.45.4",
-    "prisma": "^5.20.0",
-    "sharp": "^0.33.5",
     "uuid": "^10.0.0"
   }
 }
