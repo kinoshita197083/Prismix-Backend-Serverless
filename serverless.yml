@@ -58,29 +58,33 @@ custom:
   #   layersDeploymentBucket: prismix-lambda-layers
 
 # Lambda Layers
-layers:
-  sharpLayer:
-    path: layers/sharp-layer
-    description: Sharp library for image processing functions
-    compatibleRuntimes:
-      - nodejs20.x
-    allowedAccounts:
-      - '*'
-  supabaseLayer:
-    path: layers/supabase-layer
-    description: Supabase client for database operations
-    compatibleRuntimes:
-      - nodejs20.x
-    allowedAccounts:
-      - '*'
+# layers:
+#   sharpLayer:
+#     path: layers/sharp-layer
+#     name: ${self:service}-${sls:stage}-sharp-layer
+#     description: Sharp library for image processing functions
+#     compatibleRuntimes:
+#       - nodejs20.x
+#     package:
+#       patterns:
+#         - '!**'
+#         - 'nodejs/**'
+#   supabaseLayer:
+#     path: layers/supabase-layer
+#     name: ${self:service}-${sls:stage}-supabase-layer
+#     description: Supabase client for database operations
+#     compatibleRuntimes:
+#       - nodejs20.x
+#     package:
+#       patterns:
+#         - '!**'
+#         - 'nodejs/**'
 
 package:
   individually: true
   patterns:
     - '!node_modules/**'
     - '!layers/**'
-    - 'layers/sharp-layer/**'
-    - 'layers/supabase-layer/**'
 
 functions:
   ${file(src/resources/functions.yml)}
