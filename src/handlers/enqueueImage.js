@@ -47,7 +47,7 @@ exports.handler = async (event) => {
 
             const publishCommand = new PublishCommand({
                 TopicArn: process.env.SNS_TOPIC_ARN,
-                Message: message,
+                Message: JSON.stringify(message),
             });
 
             // Publish the message to SNS

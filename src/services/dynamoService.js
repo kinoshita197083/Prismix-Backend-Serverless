@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand, UpdateItemCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
 
@@ -64,43 +64,37 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels, evaluation }) {
-        logger.info('Updating task status', { jobId, imageS3Key, taskId, status, labels, evaluation });
-
-        const updateParams = {
-            TableName: process.env.TASKS_TABLE || 'prismix-serverless-dev-Tasks',
+    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels = [], evaluation = '', isDuplicate = false, duplicateOf = null }) {
+        const params = {
+            TableName: process.env.TASKS_TABLE,
             Key: {
-                JobID: jobId,
-                TaskID: taskId
+                JobID: { S: jobId },
+                TaskID: { S: taskId }
             },
-            UpdateExpression: 'SET TaskStatus = :status, UpdatedAt = :time',
+            UpdateExpression: 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, ProcessingResult = :labels, Evaluation = :evaluation, UpdatedAt = :updatedAt',
             ExpressionAttributeValues: {
-                ':status': status,
-                ':time': new Date().toISOString()
-            }
+                ':status': { S: status },
+                ':imageS3Key': { S: imageS3Key },
+                ':labels': { L: labels },
+                ':evaluation': { S: evaluation },
+                ':updatedAt': { S: new Date().toISOString() }
+            },
+            ReturnValues: 'ALL_NEW'
         };
 
-        if (labels) {
-            updateParams.UpdateExpression += ', ProcessingResult = :result';
-            updateParams.ExpressionAttributeValues[':result'] = labels;
-        }
-
-        if (evaluation) {
-            updateParams.UpdateExpression += ', Evaluation = :evaluation';
-            updateParams.ExpressionAttributeValues[':evaluation'] = evaluation;
-        }
-
-        if (imageS3Key) {
-            updateParams.UpdateExpression += ', ImageS3Key = :imageS3Key';
-            updateParams.ExpressionAttributeValues[':imageS3Key'] = imageS3Key;
+        if (isDuplicate) {
+            params.UpdateExpression += ', IsDuplicate = :isDuplicate, DuplicateOf = :duplicateOf';
+            params.ExpressionAttributeValues[':isDuplicate'] = { BOOL: true };
+            params.ExpressionAttributeValues[':duplicateOf'] = { S: duplicateOf };
         }
 
         try {
-            logger.info('Updating task status in DynamoDB ...');
-            await this.updateItem(updateParams);
-            logger.info('Successfully updated task status');
+            const command = new UpdateItemCommand(params);
+            const result = await docClient.send(command);
+            logger.info('Task status updated successfully', { jobId, taskId, status });
+            return result.Attributes;
         } catch (error) {
-            logger.error('Error updating task status in DynamoDB', error);
+            logger.error('Error updating task status', { error, jobId, taskId, status });
             throw new AppError('Failed to update task status', 500);
         }
     }

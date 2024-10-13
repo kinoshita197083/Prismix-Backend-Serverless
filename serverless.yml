@@ -19,6 +19,7 @@ provider:
   environment:
     ENVIRONMENT: ${self:provider.stage}
     TASKS_TABLE: ${self:service}-${self:provider.stage}-Tasks
+    JOB_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-JobProgress
     SQS_QUEUE_URL: 
       Ref: EligibleImageQueue
     DEAD_LETTER_QUEUE_URL:

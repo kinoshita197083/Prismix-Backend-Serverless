@@ -40,3 +40,36 @@ Resources:
             ProjectionType: ALL
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
+
+  ImageHashesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-ImageHashes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: HashValue
+          AttributeType: S
+        - AttributeName: JobId
+          AttributeType: S
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime  # TTL attribute name
+        Enabled: true
+      KeySchema:
+        - AttributeName: HashValue
+          KeyType: HASH
+        - AttributeName: JobId
+          KeyType: RANGE
+
+  JobProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-JobProgress
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: JobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: JobId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES

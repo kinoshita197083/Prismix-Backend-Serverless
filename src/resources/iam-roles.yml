@@ -109,16 +109,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                Resource: 
-                  - Fn::Join:
-                    - ""
-                    - - "arn:aws:s3:::"
-                      - ${self:custom.bucketName}
-                      - "/*"
-                  - "arn:aws:s3:::prismix-lambda-layers/*"
-              - Effect: Allow
-                Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
@@ -126,13 +116,15 @@ Resources:
                   - dynamodb:Query
                 Resource: 
                   - Fn::GetAtt: [TasksTable, Arn]
+                  - Fn::GetAtt: [ImageHashesTable, Arn]
+                  - Fn::GetAtt: [JobProgressTable, Arn]
               - Effect: Allow
                 Action:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                 Resource:
-                  Fn::GetAtt: [EligibleImageQueue, Arn]
+                  - Fn::GetAtt: [EligibleImageQueue, Arn]
 
   # SQS & DynamoDB access Role - used by deadLetterQueueProcessor functions
   DeadLetterQueueProcessorRole:
@@ -214,3 +206,50 @@ Resources:
                   - s3:GetObject
                 Resource: 
                   - "arn:aws:s3:::prismix-lambda-layers/*"
+
+  JobCompletionCheckerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-job-completion-checker-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: job-completion-checker-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource: 
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:DescribeStream
+                  - dynamodb:ListStreams
+                Resource: 
+                  Fn::GetAtt: [JobProgressTable, StreamArn]
+              # - Effect: Allow
+              #   Action:
+              #     - sns:Publish
+              #   Resource: 
+              #     - JobCompletionTopic
+              # - Effect: Allow
+              #   Action:
+              #     - sqs:SendMessage
+              #   Resource:
+              #     - Fn::GetAtt: [JobCompletionQueue, Arn]

@@ -1,73 +1,107 @@
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, QueryCommand } = require("@aws-sdk/lib-dynamodb");
-const { unmarshall } = require("@aws-sdk/util-dynamodb");
-const { PrismaClient } = require('@prisma/client');
+const { DynamoDBClient, UpdateItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { createClient } = require('@supabase/supabase-js')
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const prisma = new PrismaClient();
+// Initialize Supabase client
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_API_KEY
+)
+
+// Initialize Dynamodb client
+const dynamoClient = new DynamoDBClient();
 
 exports.handler = async (event) => {
-    try {
-        for (const record of event.Records) {
-            if (record.eventName === 'MODIFY') {
-                const newImage = unmarshall(record.dynamodb.NewImage);
+    for (const record of event.Records) {
+        if (record.eventName === 'INSERT') {
+            const newImage = record.dynamodb.NewImage;
+            const jobId = newImage.JobId.S;
+            const evaluation = newImage.Evaluation.S;
 
-                if (newImage.TaskStatus === 'COMPLETED') {
-                    await checkJobCompletion(newImage.JobID);
-                }
-            }
+            await updateJobProgress(jobId, evaluation);
         }
-    } catch (error) {
-        console.error('Error:', error);
-        throw error;
-    } finally {
-        await prisma.$disconnect();
     }
 };
 
-async function checkJobCompletion(jobId) {
-    const params = {
-        TableName: 'Tasks',
-        KeyConditionExpression: 'JobID = :jobId',
-        FilterExpression: 'TaskStatus <> :completedStatus',
-        ExpressionAttributeValues: {
-            ':jobId': jobId,
-            ':completedStatus': 'COMPLETED'
-        },
-        Limit: 1
+async function updateJobProgress(jobId, evaluation) {
+    const updateExpression = [
+        'SET ProcessedImages = ProcessedImages + :inc',
+        '#LastUpdateTime = :now'
+    ];
+    const expressionAttributeValues = {
+        ':inc': { N: '1' },
+        ':now': { N: Date.now().toString() }
+    };
+    const expressionAttributeNames = {
+        '#LastUpdateTime': 'LastUpdateTime'
     };
 
-    const command = new QueryCommand(params);
-    const result = await docClient.send(command);
+    switch (evaluation) {
+        case 'ELIGIBLE':
+            updateExpression.push('EligibleImages = EligibleImages + :inc');
+            break;
+        case 'EXCLUDED':
+            updateExpression.push('ExcludedImages = ExcludedImages + :inc');
+            break;
+        case 'DUPLICATE':
+            updateExpression.push('DuplicateImages = DuplicateImages + :inc');
+            break;
+        case 'FAILED':
+            updateExpression.push('FailedImages = FailedImages + :inc');
+            break;
+    }
 
-    if (result.Items.length === 0) {
-        // All tasks are completed, update job status in RDS
-        await updateJobStatus(jobId, 'COMPLETED');
-        await triggerJobCompletionActions(jobId);
+    const updateItemCommand = new UpdateItemCommand({
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: { S: jobId } },
+        UpdateExpression: 'SET ' + updateExpression.join(', '),
+        ExpressionAttributeValues: expressionAttributeValues,
+        ExpressionAttributeNames: expressionAttributeNames,
+        ReturnValues: 'ALL_NEW'
+    });
+
+    const result = await dynamoClient.send(updateItemCommand);
+    const updatedItem = result.Attributes;
+
+    if (parseInt(updatedItem.ProcessedImages.N) >= parseInt(updatedItem.TotalImages.N)) {
+        try {
+            await updateJobStatus(jobId, 'COMPLETED');
+            await updateJobStatusRDS(jobId, 'COMPLETED');
+        } catch (error) {
+            console.log(`*** Error: `, error)
+        }
     }
 }
 
 async function updateJobStatus(jobId, status) {
-    try {
-        const job = await prisma.job.update({
-            where: { id: jobId },
-            data: { jobStatus: status }
-        });
-
-        if (!job) {
-            throw new Error(`Job not found for id: ${jobId}`);
+    const updateItemCommand = new UpdateItemCommand({
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: { S: jobId } },
+        UpdateExpression: 'SET #Status = :status',
+        ExpressionAttributeValues: {
+            ':status': { S: status }
+        },
+        ExpressionAttributeNames: {
+            '#Status': 'Status'
         }
-    } catch (error) {
-        console.error('Error updating job status:', error);
-        throw error;
-    }
+    });
+
+    await dynamoClient.send(updateItemCommand);
 }
 
-async function triggerJobCompletionActions(jobId) {
-    // Implement any additional actions here, such as:
-    // - Sending notifications
-    // - Triggering post-processing workflows
-    // - Updating other systems
-    console.log(`Job ${jobId} completed. Triggering completion actions.`);
+// High-level job data stores in RDS
+async function updateJobStatusRDS(jobId, status) {
+
+    const { data, error } = await supabase
+        .from('Job')
+        .update({ jobStatus: status })
+        .eq('id', jobId)
+        .single();
+
+    if (error) throw error;
+
+    if (!data) {
+        throw new Error(`No job found with id: ${projectSettingId}`);
+    }
+
+    return data;
 }
