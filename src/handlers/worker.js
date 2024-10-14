@@ -101,87 +101,55 @@ exports.handler = async (event, context) => {
         const [type, , , projectSettingId, , imageId] = s3ObjectKey.split('/');
 
         try {
-            // Get the existing task item
-            const getItemParams = {
-                TableName: process.env.TASKS_TABLE,
-                Key: {
-                    JobID: { S: jobId },
-                    TaskID: { S: imageId }
-                }
-            };
-            const { Item: existingItem } = await dynamoClient.send(new GetItemCommand(getItemParams));
-
             // Calculate image hash
             const imageHash = await calculateImageHash(bucket, s3ObjectKey);
 
             // Check for duplicate
             const duplicateImageId = await checkForDuplicate(imageHash, jobId);
 
-            let status = 'COMPLETED';
-            let isDuplicate = false;
-            let isEligible = false;
-            let isFailed = false;
-
             if (duplicateImageId) {
                 logger.info('Duplicate image found', { originalImageId: duplicateImageId, currentImageId: imageId });
-                isDuplicate = true;
-            } else {
-                // Store the hash for future duplicate checks
-                await storeImageHash(imageHash, jobId, imageId);
 
-                // Perform object detection
-                const detectLabelsCommand = new DetectLabelsCommand({
-                    Image: {
-                        S3Object: {
-                            Bucket: bucket,
-                            Name: s3ObjectKey,
-                        },
-                    },
-                    MaxLabels: 10,
-                    MinConfidence: 70,
+                // Update task status to COMPLETED and mark as duplicate
+                await dynamoService.updateTaskStatus({
+                    jobId,
+                    taskId: imageId,
+                    imageS3Key: s3ObjectKey,
+                    status: 'COMPLETED',
+                    hasDuplicate: true,
                 });
 
-                const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
-                const labels = rekognitionResult.Labels;
-
-                // Evaluate the image based on labels and settingValue
-                const evaluation = evaluate(labels, settingValue);
-                isEligible = evaluation === 'ELIGIBLE';
+                return; // Skip further processing for this image
             }
 
-            // Update the task item
-            const updateParams = {
-                TableName: process.env.TASKS_TABLE,
-                Key: {
-                    JobID: { S: jobId },
-                    TaskID: { S: imageId }
+            // Store the hash for future duplicate checks
+            await storeImageHash(imageHash, jobId, imageId);
+
+            // Perform object detection
+            const detectLabelsCommand = new DetectLabelsCommand({
+                Image: {
+                    S3Object: {
+                        Bucket: bucket,
+                        Name: s3ObjectKey,
+                    },
                 },
-                UpdateExpression: 'SET ProcessedImages = :p, #status = :s, LastUpdateTime = :t',
-                ExpressionAttributeNames: { '#status': 'Status' },
-                ExpressionAttributeValues: {
-                    ':p': { N: '1' },
-                    ':s': { S: status },
-                    ':t': { N: Date.now().toString() }
-                }
-            };
+                MaxLabels: 10,
+                MinConfidence: 70,
+            });
 
-            if (isDuplicate) {
-                updateParams.UpdateExpression += ', DuplicateImages = :d';
-                updateParams.ExpressionAttributeValues[':d'] = { N: '1' };
-            } else if (isEligible) {
-                updateParams.UpdateExpression += ', EligibleImages = :e';
-                updateParams.ExpressionAttributeValues[':e'] = { N: '1' };
-            } else if (!isDuplicate && !isEligible) {
-                updateParams.UpdateExpression += ', ExcludedImages = :ex';
-                updateParams.ExpressionAttributeValues[':ex'] = { N: '1' };
-            }
+            const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
+            const labels = rekognitionResult.Labels;
 
-            if (isFailed) {
-                updateParams.UpdateExpression += ', FailedImages = :f';
-                updateParams.ExpressionAttributeValues[':f'] = { N: '1' };
-            }
-
-            await dynamoClient.send(new UpdateItemCommand(updateParams));
+            console.log('Updating task status to COMPLETED and storing results...');
+            // Update task status to COMPLETED and store results
+            await dynamoService.updateTaskStatus({
+                jobId,
+                taskId: imageId,
+                imageS3Key: s3ObjectKey,
+                status: 'COMPLETED',
+                labels,
+                evaluation: evaluate(labels, settingValue)
+            });
 
             logger.info('Successfully processed image', { imageId, projectId, jobId });
         } catch (error) {
@@ -192,22 +160,13 @@ exports.handler = async (event, context) => {
                 key: s3ObjectKey,
             });
 
-            // Update task status to WAITING_FOR_RETRY and increment FailedImages
-            const updateParams = {
-                TableName: process.env.TASKS_TABLE,
-                Key: {
-                    JobID: { S: jobId },
-                    TaskID: { S: imageId }
-                },
-                UpdateExpression: 'SET #status = :s, LastUpdateTime = :t, FailedImages = FailedImages + :one',
-                ExpressionAttributeNames: { '#status': 'Status' },
-                ExpressionAttributeValues: {
-                    ':s': { S: 'WAITING_FOR_RETRY' },
-                    ':t': { N: Date.now().toString() },
-                    ':one': { N: '1' }
-                }
-            };
-            await dynamoClient.send(new UpdateItemCommand(updateParams));
+            // Update task status to WAITING_FOR_RETRY
+            await dynamoService.updateTaskStatus({
+                jobId,
+                taskId: imageId,
+                imageS3Key: s3ObjectKey,
+                status: 'WAITING_FOR_RETRY'
+            });
 
             // Send error to Dead Letter Queue
             const sendMessageCommand = new SendMessageCommand({
@@ -224,7 +183,6 @@ exports.handler = async (event, context) => {
 
 function evaluate(labels, projectSettings) {
     console.log('Evaluating labels...');
-    // Implement your evaluation logic here
-    // For now, we'll just return 'ELIGIBLE' as a placeholder
+    // Placeholder evaluation logic
     return 'ELIGIBLE';
 }

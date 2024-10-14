@@ -1,4 +1,4 @@
-const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
@@ -76,27 +76,36 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, taskId, status, imageS3Key, labels = [], evaluation = '', isDuplicate = false, duplicateOf = null }) {
-        const key = { JobID: jobId, TaskID: taskId };
-        let updateExpression = 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, ProcessingResult = :labels, Evaluation = :evaluation, UpdatedAt = :updatedAt';
-        let expressionAttributeValues = {
-            ':status': status,
-            ':imageS3Key': imageS3Key,
-            ':labels': labels,
-            ':evaluation': evaluation,
-            ':updatedAt': new Date().toISOString()
+    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels = [], evaluation = '', hasDuplicate = false }) {
+        const params = {
+            TableName: process.env.TASKS_TABLE,
+            Key: {
+                JobID: { S: jobId },
+                TaskID: { S: taskId }
+            },
+            UpdateExpression: 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, ProcessingResult = :labels, Evaluation = :evaluation, UpdatedAt = :updatedAt',
+            ExpressionAttributeValues: {
+                ':status': { S: status },
+                ':imageS3Key': { S: imageS3Key },
+                ':labels': { L: labels.map(label => ({ M: { Name: { S: label.Name }, Confidence: { N: label.Confidence.toString() } } })) },
+                ':evaluation': { S: evaluation },
+                ':updatedAt': { S: new Date().toISOString() }
+            },
+            ReturnValues: 'ALL_NEW'
         };
 
-        if (isDuplicate) {
-            updateExpression += ', IsDuplicate = :isDuplicate, DuplicateOf = :duplicateOf';
-            expressionAttributeValues[':isDuplicate'] = true;
-            expressionAttributeValues[':duplicateOf'] = duplicateOf || null;
+        if (hasDuplicate) {
+            params.UpdateExpression += ', HasDuplicate = :hasDuplicate';
+            params.ExpressionAttributeValues[':hasDuplicate'] = { BOOL: true };
         }
 
         try {
-            return await this.updateItem(process.env.TASKS_TABLE, key, updateExpression, expressionAttributeValues);
+            const command = new UpdateItemCommand(params);
+            const result = await client.send(command);
+            logger.info('Task status updated successfully', { jobId, taskId, status });
+            return result.Attributes;
         } catch (error) {
-            logger.error('Error updating task status', { error: error.message, jobId, taskId, status });
+            logger.error('Error updating task status', { error, jobId, taskId, status });
             throw new AppError('Failed to update task status', 500);
         }
     },
