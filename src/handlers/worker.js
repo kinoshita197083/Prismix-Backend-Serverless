@@ -14,25 +14,29 @@ const rekognitionClient = new RekognitionClient();
 const dynamoClient = new DynamoDBClient();
 
 async function calculateImageHash(bucket, key) {
-    console.log('Start Calculating image hash ...')
-    const getObjectCommand = new GetObjectCommand({ Bucket: bucket, Key: key });
-    const { Body } = await s3Client.send(getObjectCommand);
-    const buffer = await streamToBuffer(Body);
+    try {
+        console.log('Start calculating image hash...');
+        const getObjectCommand = new GetObjectCommand({ Bucket: bucket, Key: key });
+        const { Body } = await s3Client.send(getObjectCommand);
+        const buffer = await streamToBuffer(Body);
 
-    // Resize image to a standard size for consistent hashing
-    const resizedBuffer = await sharp(buffer)
-        .resize(256, 256, { fit: 'inside' })
-        .grayscale()
-        .raw()
-        .toBuffer();
+        // Resize image to a standard size for consistent hashing
+        const resizedBuffer = await sharp(buffer)
+            .resize(256, 256, { fit: 'inside' })
+            .grayscale()
+            .raw()
+            .toBuffer();
 
-    // Calculate perceptual hash
-    const hash = crypto.createHash('md5').update(resizedBuffer).digest('hex');
-    return hash;
+        // Calculate perceptual hash
+        const hash = crypto.createHash('md5').update(resizedBuffer).digest('hex');
+        return hash;
+    } catch (error) {
+        logger.error('Error calculating image hash', { error });
+        throw new AppError('Error calculating image hash', 500);
+    }
 }
 
 async function streamToBuffer(stream) {
-    console.log('Streaming to buffer ...')
     return new Promise((resolve, reject) => {
         const chunks = [];
         stream.on('data', (chunk) => chunks.push(chunk));
@@ -42,9 +46,9 @@ async function streamToBuffer(stream) {
 }
 
 async function checkForDuplicate(hash, jobId) {
-    console.log('Checking for duplications...')
+    console.log('Checking for duplicates...');
     const getItemCommand = new GetItemCommand({
-        TableName: process.env.IMAGE_HASHES_TABLE,
+        TableName: process.env.IMAGE_HASH_TABLE,
         Key: {
             HashValue: { S: hash },
             JobId: { S: jobId }
@@ -61,11 +65,11 @@ async function checkForDuplicate(hash, jobId) {
 }
 
 async function storeImageHash(hash, jobId, imageId) {
-    console.log('No duplication found: storing image hash...')
+    console.log('Storing image hash...');
     const expirationTime = Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60); // Current time + 3 days in seconds
 
     const putItemCommand = new PutItemCommand({
-        TableName: process.env.IMAGE_HASHES_TABLE,
+        TableName: process.env.IMAGE_HASH_TABLE,
         Item: {
             HashValue: { S: hash },
             JobId: { S: jobId },
@@ -83,91 +87,101 @@ async function storeImageHash(hash, jobId, imageId) {
 }
 
 exports.handler = async (event, context) => {
-    console.log('----> Event: ', event);
+    console.log('----> Event:', event);
     const { Records } = event;
     logger.info('Processing image batch', { recordCount: Records.length, awsRequestId: context.awsRequestId });
 
-    for (const record of Records) {
-        let bucket, object, projectId, jobId, imageId, projectSetting;
+    await Promise.all(Records.map(async (record) => {
+        const body = JSON.parse(record.body);
+        const message = JSON.parse(body.Message);
 
-        // Parse the record (SQS event or local test event)
-        if (record.eventSource === 'aws:sqs') {
-            const body = JSON.parse(record.body);
-            const message = JSON.parse(body.Message);
-            bucket = message.bucket.name;
-            object = { key: message.key };
-            projectId = message.projectId;
-            jobId = message.jobId;
-            imageId = message.imageId;
-        } else {
-            const parsedRecord = JSON.parse(record.body);
-            const { bucket: parsedBucket, object: parsedObject } = parsedRecord;
-            const objectKey = parsedObject.key;
-            const [type, userId, receivedProjectId, receivedProjectSettingId, receivedJobId, receivedImageId] = objectKey.split('/');
-            projectId = receivedProjectId;
-            jobId = receivedJobId;
-            imageId = receivedImageId;
-            bucket = parsedBucket.name;
-            object = parsedObject;
-        }
+        console.log('----> Message:', message);
 
-        logger.info('Processing image', { bucket, key: object.key, projectId, jobId, imageId });
+        const { bucket, key: s3ObjectKey, projectId, jobId, userId, settingValue } = message;
+        const [type, , , projectSettingId, , imageId] = s3ObjectKey.split('/');
 
         try {
+            // Get the existing task item
+            const getItemParams = {
+                TableName: process.env.TASKS_TABLE,
+                Key: {
+                    JobID: { S: jobId },
+                    TaskID: { S: imageId }
+                }
+            };
+            const { Item: existingItem } = await dynamoClient.send(new GetItemCommand(getItemParams));
+
             // Calculate image hash
-            const imageHash = await calculateImageHash(bucket, object.key);
+            const imageHash = await calculateImageHash(bucket, s3ObjectKey);
 
             // Check for duplicate
             const duplicateImageId = await checkForDuplicate(imageHash, jobId);
 
+            let status = 'COMPLETED';
+            let isDuplicate = false;
+            let isEligible = false;
+            let isFailed = false;
+
             if (duplicateImageId) {
                 logger.info('Duplicate image found', { originalImageId: duplicateImageId, currentImageId: imageId });
+                isDuplicate = true;
+            } else {
+                // Store the hash for future duplicate checks
+                await storeImageHash(imageHash, jobId, imageId);
 
-                // Update task status to COMPLETED and mark as duplicate
-                await dynamoService.updateTaskStatus({
-                    JobID: jobId,
-                    TaskID: imageId,
-                    ImageS3Key: object.key,
-                    TaskStatus: 'COMPLETED',
-                    isDuplicate: true,
-                    duplicateOf: duplicateImageId
+                // Perform object detection
+                const detectLabelsCommand = new DetectLabelsCommand({
+                    Image: {
+                        S3Object: {
+                            Bucket: bucket,
+                            Name: s3ObjectKey,
+                        },
+                    },
+                    MaxLabels: 10,
+                    MinConfidence: 70,
                 });
 
-                continue; // Skip further processing for this image
+                const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
+                const labels = rekognitionResult.Labels;
+
+                // Evaluate the image based on labels and settingValue
+                const evaluation = evaluate(labels, settingValue);
+                isEligible = evaluation === 'ELIGIBLE';
             }
 
-            // Store the hash for future duplicate checks
-            await storeImageHash(imageHash, jobId, imageId);
-
-            // Perform object detection
-            const detectLabelsCommand = new DetectLabelsCommand({
-                Image: {
-                    S3Object: {
-                        Bucket: bucket,
-                        Name: object.key,
-                    },
+            // Update the task item
+            const updateParams = {
+                TableName: process.env.TASKS_TABLE,
+                Key: {
+                    JobID: { S: jobId },
+                    TaskID: { S: imageId }
                 },
-                MaxLabels: 10,
-                MinConfidence: 70,
-            });
+                UpdateExpression: 'SET ProcessedImages = :p, #status = :s, LastUpdateTime = :t',
+                ExpressionAttributeNames: { '#status': 'Status' },
+                ExpressionAttributeValues: {
+                    ':p': { N: '1' },
+                    ':s': { S: status },
+                    ':t': { N: Date.now().toString() }
+                }
+            };
 
-            const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
+            if (isDuplicate) {
+                updateParams.UpdateExpression += ', DuplicateImages = :d';
+                updateParams.ExpressionAttributeValues[':d'] = { N: '1' };
+            } else if (isEligible) {
+                updateParams.UpdateExpression += ', EligibleImages = :e';
+                updateParams.ExpressionAttributeValues[':e'] = { N: '1' };
+            } else if (!isDuplicate && !isEligible) {
+                updateParams.UpdateExpression += ', ExcludedImages = :ex';
+                updateParams.ExpressionAttributeValues[':ex'] = { N: '1' };
+            }
 
-            const labels = rekognitionResult.Labels;
+            if (isFailed) {
+                updateParams.UpdateExpression += ', FailedImages = :f';
+                updateParams.ExpressionAttributeValues[':f'] = { N: '1' };
+            }
 
-            logger.info('Rekognition Result', { result: labels, imageId, jobId });
-
-            // Here you would implement your filtering logic based on projectSettings and labels
-
-            // Update task status to COMPLETED and store results
-            await dynamoService.updateTaskStatus({
-                JobID: jobId,
-                TaskID: imageId,
-                ImageS3Key: object.key,
-                TaskStatus: 'COMPLETED',
-                ProcessingResult: labels,
-                Evaluation: evaluate(labels, {})
-            });
+            await dynamoClient.send(new UpdateItemCommand(updateParams));
 
             logger.info('Successfully processed image', { imageId, projectId, jobId });
         } catch (error) {
@@ -175,16 +189,25 @@ exports.handler = async (event, context) => {
                 error: error.message,
                 stack: error.stack,
                 bucket,
-                key: object.key,
+                key: s3ObjectKey,
             });
 
-            // Update task status to FAILED
-            await dynamoService.updateTaskStatus({
-                JobID: jobId,
-                TaskID: imageId,
-                ImageS3Key: object.key,
-                TaskStatus: 'FAILED'
-            });
+            // Update task status to WAITING_FOR_RETRY and increment FailedImages
+            const updateParams = {
+                TableName: process.env.TASKS_TABLE,
+                Key: {
+                    JobID: { S: jobId },
+                    TaskID: { S: imageId }
+                },
+                UpdateExpression: 'SET #status = :s, LastUpdateTime = :t, FailedImages = FailedImages + :one',
+                ExpressionAttributeNames: { '#status': 'Status' },
+                ExpressionAttributeValues: {
+                    ':s': { S: 'WAITING_FOR_RETRY' },
+                    ':t': { N: Date.now().toString() },
+                    ':one': { N: '1' }
+                }
+            };
+            await dynamoClient.send(new UpdateItemCommand(updateParams));
 
             // Send error to Dead Letter Queue
             const sendMessageCommand = new SendMessageCommand({
@@ -196,10 +219,12 @@ exports.handler = async (event, context) => {
             });
             await sqsClient.send(sendMessageCommand);
         }
-    }
+    }));
 };
 
 function evaluate(labels, projectSettings) {
-    console.log('----> Evaluating .....');
+    console.log('Evaluating labels...');
+    // Implement your evaluation logic here
+    // For now, we'll just return 'ELIGIBLE' as a placeholder
     return 'ELIGIBLE';
 }

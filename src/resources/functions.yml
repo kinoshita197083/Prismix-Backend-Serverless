@@ -17,6 +17,7 @@ enqueueImage:
 # Worker Function - main processing functions
 worker:
   handler: src/handlers/worker.handler
+  memorySize: 2048
   events:
     - sqs:
         arn:

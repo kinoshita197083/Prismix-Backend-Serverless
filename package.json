@@ -17,7 +17,7 @@
     "build:schema:dev": "npx dotenv -e .env.dev prisma validate",
     "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio",
     "test:enqueueImage": "serverless invoke local --function enqueueImage --path src/test-events/s3-event.json",
-    "test:worker": "serverless invoke local --function worker --path src/test-events/sqs-event.json"
+    "test:worker": "npx dotenv -e .env.dev -- serverless invoke local --function worker --path src/test-events/sqs-event.json"
   },
   "keywords": [],
   "author": "",
@@ -40,6 +40,7 @@
     "@aws-sdk/lib-dynamodb": "^3.667.0",
     "@aws-sdk/util-dynamodb": "^3.667.0",
     "@supabase/supabase-js": "^2.45.4",
+    "sharp": "^0.33.5",
     "uuid": "^10.0.0"
   }
 }

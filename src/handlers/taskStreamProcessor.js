@@ -11,10 +11,12 @@ const supabase = createClient(
 const dynamoClient = new DynamoDBClient();
 
 exports.handler = async (event) => {
+    console.log('----> Event: ', event);
+
     for (const record of event.Records) {
         if (record.eventName === 'INSERT') {
             const newImage = record.dynamodb.NewImage;
-            const jobId = newImage.JobId.S;
+            const jobId = newImage.JobID.S;
             const evaluation = newImage.Evaluation.S;
 
             await updateJobProgress(jobId, evaluation);

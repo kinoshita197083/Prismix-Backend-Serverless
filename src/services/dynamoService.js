@@ -1,5 +1,5 @@
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand, UpdateItemCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
 
@@ -7,95 +7,131 @@ const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
 const dynamoService = {
-    async getItem(params) {
+    async getItem(tableName, key) {
         try {
-            logger.info('Getting item from DynamoDB', { params });
-            const command = new GetCommand(params);
+            logger.info('Getting item from DynamoDB', { tableName, key });
+            const command = new GetCommand({ TableName: tableName, Key: key });
             const result = await docClient.send(command);
             return result.Item;
         } catch (error) {
-            logger.error('Error getting item from DynamoDB', { error, params });
+            logger.error('Error getting item from DynamoDB', { error, tableName, key });
             throw new AppError('Failed to retrieve item from database', 500);
         }
     },
 
-    async putItem(params) {
+    async putItem(tableName, item) {
         try {
-            logger.info('Putting item into DynamoDB', { params });
-            const command = new PutCommand(params);
+            logger.info('Putting item into DynamoDB', { tableName, item });
+            const command = new PutCommand({ TableName: tableName, Item: item });
             await docClient.send(command);
         } catch (error) {
-            logger.error('Error putting item into DynamoDB', { error, params });
+            logger.error('Error putting item into DynamoDB', { error, tableName, item });
             throw new AppError('Failed to save item to database', 500);
         }
     },
 
-    async queryItems(params) {
+    async queryItems(tableName, keyConditionExpression, expressionAttributeValues) {
         try {
-            logger.info('Querying items from DynamoDB', { params });
-            const command = new QueryCommand(params);
+            logger.info('Querying items from DynamoDB', { tableName, keyConditionExpression, expressionAttributeValues });
+            const command = new QueryCommand({
+                TableName: tableName,
+                KeyConditionExpression: keyConditionExpression,
+                ExpressionAttributeValues: expressionAttributeValues
+            });
             const result = await docClient.send(command);
             return result.Items;
         } catch (error) {
-            logger.error('Error querying items from DynamoDB', { error, params });
+            logger.error('Error querying items from DynamoDB', { error, tableName, keyConditionExpression, expressionAttributeValues });
             throw new AppError('Failed to query items from database', 500);
         }
     },
 
-    async updateItem(params) {
+    async updateItem(tableName, key, updateExpression, expressionAttributeValues, expressionAttributeNames) {
         try {
-            logger.info('Updating item in DynamoDB', JSON.stringify(params, null, 2));
-            const command = new UpdateCommand(params);
-            await docClient.send(command);
+            logger.info('Updating item in DynamoDB', { tableName, key, updateExpression, expressionAttributeValues, expressionAttributeNames });
+            const command = new UpdateCommand({
+                TableName: tableName,
+                Key: key,
+                UpdateExpression: updateExpression,
+                ExpressionAttributeValues: expressionAttributeValues,
+                ExpressionAttributeNames: expressionAttributeNames,
+                ReturnValues: 'ALL_NEW'
+            });
+            const result = await docClient.send(command);
+            return result.Attributes;
         } catch (error) {
-            logger.error('Error updating item in DynamoDB', error);
+            logger.error('Error updating item in DynamoDB', { error, tableName, key, updateExpression });
             throw new AppError(`Failed to update item in database: ${error.message}`, 500);
         }
     },
 
-    async deleteItem(params) {
+    async deleteItem(tableName, key) {
         try {
-            logger.info('Deleting item from DynamoDB', { params });
-            const command = new DeleteCommand(params);
+            logger.info('Deleting item from DynamoDB', { tableName, key });
+            const command = new DeleteCommand({ TableName: tableName, Key: key });
             await docClient.send(command);
         } catch (error) {
-            logger.error('Error deleting item from DynamoDB', { error, params });
+            logger.error('Error deleting item from DynamoDB', { error, tableName, key });
             throw new AppError('Failed to delete item from database', 500);
         }
     },
 
-    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels = [], evaluation = '', isDuplicate = false, duplicateOf = null }) {
-        const params = {
-            TableName: process.env.TASKS_TABLE,
-            Key: {
-                JobID: { S: jobId },
-                TaskID: { S: taskId }
-            },
-            UpdateExpression: 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, ProcessingResult = :labels, Evaluation = :evaluation, UpdatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':status': { S: status },
-                ':imageS3Key': { S: imageS3Key },
-                ':labels': { L: labels },
-                ':evaluation': { S: evaluation },
-                ':updatedAt': { S: new Date().toISOString() }
-            },
-            ReturnValues: 'ALL_NEW'
+    async updateTaskStatus({ jobId, taskId, status, imageS3Key, labels = [], evaluation = '', isDuplicate = false, duplicateOf = null }) {
+        const key = { JobID: jobId, TaskID: taskId };
+        let updateExpression = 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, ProcessingResult = :labels, Evaluation = :evaluation, UpdatedAt = :updatedAt';
+        let expressionAttributeValues = {
+            ':status': status,
+            ':imageS3Key': imageS3Key,
+            ':labels': labels,
+            ':evaluation': evaluation,
+            ':updatedAt': new Date().toISOString()
         };
 
         if (isDuplicate) {
-            params.UpdateExpression += ', IsDuplicate = :isDuplicate, DuplicateOf = :duplicateOf';
-            params.ExpressionAttributeValues[':isDuplicate'] = { BOOL: true };
-            params.ExpressionAttributeValues[':duplicateOf'] = { S: duplicateOf };
+            updateExpression += ', IsDuplicate = :isDuplicate, DuplicateOf = :duplicateOf';
+            expressionAttributeValues[':isDuplicate'] = true;
+            expressionAttributeValues[':duplicateOf'] = duplicateOf || null;
         }
 
         try {
-            const command = new UpdateItemCommand(params);
-            const result = await docClient.send(command);
-            logger.info('Task status updated successfully', { jobId, taskId, status });
-            return result.Attributes;
+            return await this.updateItem(process.env.TASKS_TABLE, key, updateExpression, expressionAttributeValues);
         } catch (error) {
-            logger.error('Error updating task status', { error, jobId, taskId, status });
+            logger.error('Error updating task status', { error: error.message, jobId, taskId, status });
             throw new AppError('Failed to update task status', 500);
+        }
+    },
+
+    async updateJobProgress(jobId, evaluation) {
+        const key = { JobId: jobId };
+        let updateExpression = 'SET ProcessedImages = ProcessedImages + :inc, #LastUpdateTime = :now';
+        let expressionAttributeValues = {
+            ':inc': 1,
+            ':now': Date.now()
+        };
+        let expressionAttributeNames = {
+            '#LastUpdateTime': 'LastUpdateTime'
+        };
+
+        switch (evaluation) {
+            case 'ELIGIBLE':
+                updateExpression += ', EligibleImages = EligibleImages + :inc';
+                break;
+            case 'EXCLUDED':
+                updateExpression += ', ExcludedImages = ExcludedImages + :inc';
+                break;
+            case 'DUPLICATE':
+                updateExpression += ', DuplicateImages = DuplicateImages + :inc';
+                break;
+            case 'FAILED':
+                updateExpression += ', FailedImages = FailedImages + :inc';
+                break;
+        }
+
+        try {
+            return await this.updateItem(process.env.JOB_PROGRESS_TABLE, key, updateExpression, expressionAttributeValues, expressionAttributeNames);
+        } catch (error) {
+            logger.error('Error updating job progress', { error: error.message, jobId, evaluation });
+            throw new AppError('Failed to update job progress', 500);
         }
     }
 };
