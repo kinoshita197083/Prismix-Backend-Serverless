@@ -116,6 +116,7 @@ exports.handler = async (event, context) => {
                     taskId: imageId,
                     imageS3Key: s3ObjectKey,
                     status: 'COMPLETED',
+                    evaluation: 'DUPLICATE',
                     hasDuplicate: true,
                 });
 

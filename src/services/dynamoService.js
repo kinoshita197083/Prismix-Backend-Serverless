@@ -76,7 +76,7 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels = [], evaluation = '', hasDuplicate = false }) {
+    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels = [], evaluation = '' }) {
         const params = {
             TableName: process.env.TASKS_TABLE,
             Key: {
@@ -87,17 +87,12 @@ const dynamoService = {
             ExpressionAttributeValues: {
                 ':status': { S: status },
                 ':imageS3Key': { S: imageS3Key },
-                ':labels': { L: labels.map(label => ({ M: { Name: { S: label.Name }, Confidence: { N: label.Confidence.toString() } } })) },
+                ':labels': { L: labels },
                 ':evaluation': { S: evaluation },
                 ':updatedAt': { S: new Date().toISOString() }
             },
             ReturnValues: 'ALL_NEW'
         };
-
-        if (hasDuplicate) {
-            params.UpdateExpression += ', HasDuplicate = :hasDuplicate';
-            params.ExpressionAttributeValues[':hasDuplicate'] = { BOOL: true };
-        }
 
         try {
             const command = new UpdateItemCommand(params);
