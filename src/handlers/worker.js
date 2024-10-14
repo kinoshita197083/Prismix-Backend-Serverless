@@ -117,7 +117,6 @@ exports.handler = async (event, context) => {
                     imageS3Key: s3ObjectKey,
                     status: 'COMPLETED',
                     evaluation: 'DUPLICATE',
-                    hasDuplicate: true,
                 });
 
                 return; // Skip further processing for this image
