@@ -120,13 +120,14 @@ exports.handler = async (event, context) => {
             if (isDuplicate) {
                 logger.info('Duplicate image found', { originalImageId, currentImageId: imageId });
 
-                // Update task status to COMPLETED and mark as duplicate only for the duplicated image
+                // Update task status to COMPLETED and mark as duplicate
                 await dynamoService.updateTaskStatus({
                     jobId,
                     taskId: imageId,
                     imageS3Key: s3ObjectKey,
                     status: 'COMPLETED',
                     evaluation: 'DUPLICATE',
+                    updatedAt: new Date().toISOString()
                 });
 
                 return; // Skip further processing for this image
@@ -149,9 +150,6 @@ exports.handler = async (event, context) => {
             console.log('Rekognition labels:', JSON.stringify(labels, null, 2));
 
             console.log('Updating task status to COMPLETED and storing results...');
-            console.log('JobId:', jobId);
-            console.log('TaskId:', imageId);
-            console.log('ImageS3Key:', s3ObjectKey);
             console.log('Labels:', JSON.stringify(labels, null, 2));
 
             const evaluation = evaluate(labels, settingValue);

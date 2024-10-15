@@ -40,6 +40,10 @@ deadLetterQueueProcessor:
           Fn::GetAtt: [ImageDeadLetterQueue, Arn]
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    DEAD_LETTER_QUEUE_URL:
+      Ref: ImageDeadLetterQueue
+    ORIGINAL_QUEUE_URL:
+      Ref: EligibleImageQueue
   role: DeadLetterQueueProcessorRole
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1

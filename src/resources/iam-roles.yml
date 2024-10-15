@@ -103,7 +103,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
-        - PolicyName: dynamodb-sqs-s3-access-policy
+        - PolicyName: dynamodb-sqs-s3-rekognition-access-policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -134,6 +134,10 @@ Resources:
                   - sqs:GetQueueAttributes
                 Resource:
                   - Fn::GetAtt: [EligibleImageQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - rekognition:DetectLabels
+                Resource: "*"
 
   # SQS & DynamoDB access Role - used by deadLetterQueueProcessor functions
   DeadLetterQueueProcessorRole:
@@ -151,7 +155,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
-        - PolicyName: dlq-dynamodb-access-policy
+        - PolicyName: dlq-dynamodb-sqs-access-policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -169,8 +173,10 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
+                  - sqs:SendMessage
                 Resource:
-                  Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+                  - Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+                  - Fn::GetAtt: [EligibleImageQueue, Arn]
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -209,7 +215,8 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
                 Resource: 
-                  Fn::GetAtt: [TasksTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+                  - Fn::GetAtt: [JobProgressTable, Arn]
               - Effect: Allow
                 Action:
                   - s3:GetObject

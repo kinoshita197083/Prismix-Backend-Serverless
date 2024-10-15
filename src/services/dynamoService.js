@@ -80,46 +80,50 @@ const dynamoService = {
     async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation }) {
         console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation });
 
-        const params = {
-            TableName: process.env.TASKS_TABLE,
-            Key: {
-                JobID: { S: jobId },
-                TaskID: { S: taskId }
-            },
-            UpdateExpression: 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, UpdatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':status': { S: status },
-                ':imageS3Key': { S: imageS3Key },
-                ':updatedAt': { S: new Date().toISOString() }
-            },
-            ReturnValues: 'ALL_NEW'
+        const updateExpression = ['SET TaskStatus = :status, ImageS3Key = :imageS3Key, UpdatedAt = :updatedAt'];
+        const expressionAttributeValues = {
+            ':status': { S: status },
+            ':imageS3Key': { S: imageS3Key },
+            ':updatedAt': { S: new Date().toISOString() }
         };
 
         if (labels && Array.isArray(labels) && labels.length > 0) {
-            console.log('Labels before processing:', JSON.stringify(labels, null, 2));
-            params.UpdateExpression += ', ProcessingResult = :labels';
-            params.ExpressionAttributeValues[':labels'] = {
-                L: labels.map(label => ({
-                    M: Object.entries(label).reduce((acc, [key, value]) => {
-                        if (Array.isArray(value)) {
-                            acc[key] = { L: value.map(item => ({ M: this.convertToDynamoDBFormat(item) })) };
-                        } else if (typeof value === 'object' && value !== null) {
-                            acc[key] = { M: this.convertToDynamoDBFormat(value) };
-                        } else if (typeof value === 'number') {
-                            acc[key] = { N: value.toString() };
-                        } else {
+            try {
+                const flattenedLabels = labels.map(label => ({
+                    name: label.Name || '',
+                    Confidence: label.Confidence ? `${label.Confidence.toFixed(2)}%` : '0%',
+                    Categories: Array.isArray(label.Categories) ? label.Categories.map(cat => cat.Name).join(', ') : '',
+                    Parents: Array.isArray(label.Parents) && label.Parents.length > 0 ? label.Parents.map(parent => parent.Name).join(', ') : 'None',
+                    Aliases: Array.isArray(label.Aliases) && label.Aliases.length > 0 ? label.Aliases.map(alias => alias.Name).join(', ') : 'None'
+                }));
+
+                updateExpression.push('ProcessingResult = :labels');
+                expressionAttributeValues[':labels'] = {
+                    L: flattenedLabels.map(label => ({
+                        M: Object.entries(label).reduce((acc, [key, value]) => {
                             acc[key] = { S: value.toString() };
-                        }
-                        return acc;
-                    }, {})
-                }))
-            };
+                            return acc;
+                        }, {})
+                    }))
+                };
+            } catch (error) {
+                console.error('Error processing labels:', error);
+                // If there's an error processing labels, we'll skip adding them to the update
+            }
         }
 
         if (evaluation) {
-            params.UpdateExpression += ', Evaluation = :evaluation';
-            params.ExpressionAttributeValues[':evaluation'] = { S: evaluation };
+            updateExpression.push('Evaluation = :evaluation');
+            expressionAttributeValues[':evaluation'] = { S: evaluation };
         }
+
+        const params = {
+            TableName: process.env.TASKS_TABLE,
+            Key: { JobID: { S: jobId }, TaskID: { S: taskId } },
+            UpdateExpression: updateExpression.join(', '),
+            ExpressionAttributeValues: expressionAttributeValues,
+            ReturnValues: 'ALL_NEW'
+        };
 
         console.log('DynamoDB update params:', JSON.stringify(params, null, 2));
 
@@ -173,22 +177,6 @@ const dynamoService = {
             logger.error('Error updating job progress', { error: error.message, jobId, evaluation });
             throw new AppError('Failed to update job progress', 500);
         }
-    },
-
-    // Helper function to convert objects to DynamoDB format
-    convertToDynamoDBFormat(obj) {
-        return Object.entries(obj).reduce((acc, [key, value]) => {
-            if (Array.isArray(value)) {
-                acc[key] = { L: value.map(item => ({ M: this.convertToDynamoDBFormat(item) })) };
-            } else if (typeof value === 'object' && value !== null) {
-                acc[key] = { M: this.convertToDynamoDBFormat(value) };
-            } else if (typeof value === 'number') {
-                acc[key] = { N: value.toString() };
-            } else {
-                acc[key] = { S: value.toString() };
-            }
-            return acc;
-        }, {});
     }
 };
 

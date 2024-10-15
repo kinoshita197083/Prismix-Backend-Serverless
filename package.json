@@ -17,7 +17,8 @@
     "build:schema:dev": "npx dotenv -e .env.dev prisma validate",
     "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio",
     "test:enqueueImage": "serverless invoke local --function enqueueImage --path src/test-events/s3-event.json",
-    "test:worker": "npx dotenv -e .env.dev -- serverless invoke local --function worker --path src/test-events/sqs-event.json"
+    "test:worker": "npx dotenv -e .env.dev -- serverless invoke local --function worker --path src/test-events/sqs-event.json",
+    "test:task-stream-processor": "npx dotenv -e .env.dev -- serverless invoke local --function taskStreamProcessor --path src/test-events/task-stream-event.json"
   },
   "keywords": [],
   "author": "",
