@@ -6,7 +6,7 @@
   "scripts": {
     "test": "jest",
     "dev": "serverless offline",
-    "build": "serverless package",
+    "build": "npx dotenv -e .env.dev -- serverless package",
     "start": "nodemon --exec serverless offline start",
     "info": "sls info",
     "deployments": "serverless deploy list",
