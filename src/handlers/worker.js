@@ -45,8 +45,8 @@ async function streamToBuffer(stream) {
     });
 }
 
-async function checkForDuplicate(hash, jobId) {
-    console.log('Checking for duplicates...');
+async function checkAndStoreImageHash(hash, jobId, imageId) {
+    console.log('Checking and storing image hash...', { hash, jobId, imageId });
     const getItemCommand = new GetItemCommand({
         TableName: process.env.IMAGE_HASH_TABLE,
         Key: {
@@ -57,33 +57,42 @@ async function checkForDuplicate(hash, jobId) {
 
     try {
         const { Item } = await dynamoClient.send(getItemCommand);
-        return Item ? Item.ImageId.S : null;
+
+        if (Item) {
+            console.log('Hash already exists, this is a duplicate');
+            return { isDuplicate: true, originalImageId: Item.ImageId.S };
+        }
+
+        // If no item found, store the new hash
+        const putItemCommand = new PutItemCommand({
+            TableName: process.env.IMAGE_HASH_TABLE,
+            Item: {
+                HashValue: { S: hash },
+                JobId: { S: jobId },
+                ImageId: { S: imageId },
+                Timestamp: { N: Date.now().toString() },
+                ExpirationTime: { N: (Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60)).toString() }
+            },
+            ConditionExpression: 'attribute_not_exists(HashValue) AND attribute_not_exists(JobId)'
+        });
+
+        await dynamoClient.send(putItemCommand);
+        console.log('Successfully stored new hash');
+        return { isDuplicate: false };
     } catch (error) {
-        logger.error('Error checking for duplicate', { error });
-        return null;
+        if (error.name === 'ConditionalCheckFailedException') {
+            console.log('Race condition: Hash was stored by another process');
+            return { isDuplicate: true, originalImageId: 'Unknown due to race condition' };
+        }
+        logger.error('Error checking and storing image hash', { error });
+        throw error;
     }
 }
 
-async function storeImageHash(hash, jobId, imageId) {
-    console.log('Storing image hash...');
-    const expirationTime = Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60); // Current time + 3 days in seconds
-
-    const putItemCommand = new PutItemCommand({
-        TableName: process.env.IMAGE_HASH_TABLE,
-        Item: {
-            HashValue: { S: hash },
-            JobId: { S: jobId },
-            ImageId: { S: imageId },
-            Timestamp: { N: Date.now().toString() },
-            ExpirationTime: { N: expirationTime.toString() } // Set TTL
-        }
-    });
-
-    try {
-        await dynamoClient.send(putItemCommand);
-    } catch (error) {
-        logger.error('Error storing image hash', { error });
-    }
+function evaluate(labels, projectSettings) {
+    console.log('Evaluating labels...');
+    // Placeholder evaluation logic
+    return 'ELIGIBLE';
 }
 
 exports.handler = async (event, context) => {
@@ -103,14 +112,15 @@ exports.handler = async (event, context) => {
         try {
             // Calculate image hash
             const imageHash = await calculateImageHash(bucket, s3ObjectKey);
+            console.log('Calculated image hash:', imageHash);
 
-            // Check for duplicate
-            const duplicateImageId = await checkForDuplicate(imageHash, jobId);
+            // Check and store the hash
+            const { isDuplicate, originalImageId } = await checkAndStoreImageHash(imageHash, jobId, imageId);
 
-            if (duplicateImageId) {
-                logger.info('Duplicate image found', { originalImageId: duplicateImageId, currentImageId: imageId });
+            if (isDuplicate) {
+                logger.info('Duplicate image found', { originalImageId, currentImageId: imageId });
 
-                // Update task status to COMPLETED and mark as duplicate
+                // Update task status to COMPLETED and mark as duplicate only for the duplicated image
                 await dynamoService.updateTaskStatus({
                     jobId,
                     taskId: imageId,
@@ -121,9 +131,6 @@ exports.handler = async (event, context) => {
 
                 return; // Skip further processing for this image
             }
-
-            // Store the hash for future duplicate checks
-            await storeImageHash(imageHash, jobId, imageId);
 
             // Perform object detection
             const detectLabelsCommand = new DetectLabelsCommand({
@@ -138,20 +145,40 @@ exports.handler = async (event, context) => {
             });
 
             const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
-            const labels = rekognitionResult.Labels;
+            const labels = rekognitionResult.Labels || [];
+            console.log('Rekognition labels:', JSON.stringify(labels, null, 2));
 
             console.log('Updating task status to COMPLETED and storing results...');
-            // Update task status to COMPLETED and store results
-            await dynamoService.updateTaskStatus({
-                jobId,
-                taskId: imageId,
-                imageS3Key: s3ObjectKey,
-                status: 'COMPLETED',
-                labels,
-                evaluation: evaluate(labels, settingValue)
-            });
+            console.log('JobId:', jobId);
+            console.log('TaskId:', imageId);
+            console.log('ImageS3Key:', s3ObjectKey);
+            console.log('Labels:', JSON.stringify(labels, null, 2));
 
-            logger.info('Successfully processed image', { imageId, projectId, jobId });
+            const evaluation = evaluate(labels, settingValue);
+            console.log('Evaluation result:', evaluation);
+
+            // Update task status to COMPLETED and store results
+            try {
+                await dynamoService.updateTaskStatus({
+                    jobId,
+                    taskId: imageId,
+                    imageS3Key: s3ObjectKey,
+                    status: 'COMPLETED',
+                    labels,
+                    evaluation
+                });
+                logger.info('Successfully processed image', { imageId, projectId, jobId });
+            } catch (updateError) {
+                logger.error('Error updating task status', {
+                    error: updateError.message,
+                    stack: updateError.stack,
+                    jobId,
+                    taskId: imageId,
+                    labels: JSON.stringify(labels),
+                    evaluation
+                });
+                throw updateError; // Re-throw to be caught by the outer catch block
+            }
         } catch (error) {
             logger.error('Error processing image', {
                 error: error.message,
@@ -161,12 +188,16 @@ exports.handler = async (event, context) => {
             });
 
             // Update task status to WAITING_FOR_RETRY
-            await dynamoService.updateTaskStatus({
-                jobId,
-                taskId: imageId,
-                imageS3Key: s3ObjectKey,
-                status: 'WAITING_FOR_RETRY'
-            });
+            try {
+                await dynamoService.updateTaskStatus({
+                    jobId,
+                    taskId: imageId,
+                    imageS3Key: s3ObjectKey,
+                    status: 'WAITING_FOR_RETRY'
+                });
+            } catch (retryUpdateError) {
+                logger.error('Error updating task status to WAITING_FOR_RETRY', { error: retryUpdateError.message, jobId, taskId: imageId });
+            }
 
             // Send error to Dead Letter Queue
             const sendMessageCommand = new SendMessageCommand({
@@ -180,9 +211,3 @@ exports.handler = async (event, context) => {
         }
     }));
 };
-
-function evaluate(labels, projectSettings) {
-    console.log('Evaluating labels...');
-    // Placeholder evaluation logic
-    return 'ELIGIBLE';
-}

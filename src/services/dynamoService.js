@@ -2,6 +2,7 @@ const { DynamoDBClient, GetItemCommand, UpdateItemCommand } = require('@aws-sdk/
 const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
+const { marshall } = require('@aws-sdk/util-dynamodb');
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -76,23 +77,51 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, imageS3Key, taskId, status, labels = [], evaluation = '' }) {
+    async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation }) {
+        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation });
+
         const params = {
             TableName: process.env.TASKS_TABLE,
             Key: {
                 JobID: { S: jobId },
                 TaskID: { S: taskId }
             },
-            UpdateExpression: 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, ProcessingResult = :labels, Evaluation = :evaluation, UpdatedAt = :updatedAt',
+            UpdateExpression: 'SET TaskStatus = :status, ImageS3Key = :imageS3Key, UpdatedAt = :updatedAt',
             ExpressionAttributeValues: {
                 ':status': { S: status },
                 ':imageS3Key': { S: imageS3Key },
-                ':labels': { L: labels },
-                ':evaluation': { S: evaluation },
                 ':updatedAt': { S: new Date().toISOString() }
             },
             ReturnValues: 'ALL_NEW'
         };
+
+        if (labels && Array.isArray(labels) && labels.length > 0) {
+            console.log('Labels before processing:', JSON.stringify(labels, null, 2));
+            params.UpdateExpression += ', ProcessingResult = :labels';
+            params.ExpressionAttributeValues[':labels'] = {
+                L: labels.map(label => ({
+                    M: Object.entries(label).reduce((acc, [key, value]) => {
+                        if (Array.isArray(value)) {
+                            acc[key] = { L: value.map(item => ({ M: this.convertToDynamoDBFormat(item) })) };
+                        } else if (typeof value === 'object' && value !== null) {
+                            acc[key] = { M: this.convertToDynamoDBFormat(value) };
+                        } else if (typeof value === 'number') {
+                            acc[key] = { N: value.toString() };
+                        } else {
+                            acc[key] = { S: value.toString() };
+                        }
+                        return acc;
+                    }, {})
+                }))
+            };
+        }
+
+        if (evaluation) {
+            params.UpdateExpression += ', Evaluation = :evaluation';
+            params.ExpressionAttributeValues[':evaluation'] = { S: evaluation };
+        }
+
+        console.log('DynamoDB update params:', JSON.stringify(params, null, 2));
 
         try {
             const command = new UpdateItemCommand(params);
@@ -100,8 +129,15 @@ const dynamoService = {
             logger.info('Task status updated successfully', { jobId, taskId, status });
             return result.Attributes;
         } catch (error) {
-            logger.error('Error updating task status', { error, jobId, taskId, status });
-            throw new AppError('Failed to update task status', 500);
+            logger.error('Error updating task status', {
+                error: error.message,
+                stack: error.stack,
+                jobId,
+                taskId,
+                status,
+                params: JSON.stringify(params)
+            });
+            throw new Error('Failed to update task status');
         }
     },
 
@@ -137,6 +173,22 @@ const dynamoService = {
             logger.error('Error updating job progress', { error: error.message, jobId, evaluation });
             throw new AppError('Failed to update job progress', 500);
         }
+    },
+
+    // Helper function to convert objects to DynamoDB format
+    convertToDynamoDBFormat(obj) {
+        return Object.entries(obj).reduce((acc, [key, value]) => {
+            if (Array.isArray(value)) {
+                acc[key] = { L: value.map(item => ({ M: this.convertToDynamoDBFormat(item) })) };
+            } else if (typeof value === 'object' && value !== null) {
+                acc[key] = { M: this.convertToDynamoDBFormat(value) };
+            } else if (typeof value === 'number') {
+                acc[key] = { N: value.toString() };
+            } else {
+                acc[key] = { S: value.toString() };
+            }
+            return acc;
+        }, {});
     }
 };
 
