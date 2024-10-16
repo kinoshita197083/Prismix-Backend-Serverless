@@ -1,136 +1,474 @@
 {
     "Records": [
         {
-            "eventID": "61c84e12e923ef5dfc98e1f86182cd33",
+            "eventID": "2670b10686e9c3de33b80675a927c0e9",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728901718,
+                "ApproximateCreationDateTime": 1728970559,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728901710099-2"
+                        "S": "1728970549814-1"
                     },
                     "JobID": {
-                        "S": "bc1d0960-d402-4bbb-9531-8f5ee7c5be66"
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
                     }
                 },
                 "NewImage": {
-                    "Evaluation": {
-                        "S": "ELIGIBLE"
-                    },
                     "TaskID": {
-                        "S": "1728901710099-2"
-                    },
-                    "ProcessingResult": {
-                        "L": []
+                        "S": "1728970549814-1"
                     },
                     "TaskStatus": {
                         "S": "WAITING_FOR_RETRY"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-14T10:28:38.257Z"
+                        "S": "2024-10-15T05:35:59.400Z"
                     },
                     "JobID": {
-                        "S": "bc1d0960-d402-4bbb-9531-8f5ee7c5be66"
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/08dec7d8-3960-4d12-8fdc-d6b67216e2fd/2c5d18d9-f048-4444-a0fa-95b8ca15a51e/bc1d0960-d402-4bbb-9531-8f5ee7c5be66/1728901710099-2"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-1"
                     }
                 },
-                "SequenceNumber": "25595500000000096622181783",
-                "SizeBytes": 394,
+                "SequenceNumber": "28815100000000064931705845",
+                "SizeBytes": 365,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "5291e3b2e54ce48bca11c753254a7e6e",
+            "eventID": "49cf2edfdc880ce21545b4493e8ba34e",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728901718,
+                "ApproximateCreationDateTime": 1728970559,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728901710098-0"
+                        "S": "1728970549813-0"
                     },
                     "JobID": {
-                        "S": "bc1d0960-d402-4bbb-9531-8f5ee7c5be66"
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
                     }
                 },
                 "NewImage": {
                     "Evaluation": {
-                        "S": "ELIGIBLE"
+                        "S": "DUPLICATE"
                     },
                     "TaskID": {
-                        "S": "1728901710098-0"
-                    },
-                    "ProcessingResult": {
-                        "L": []
+                        "S": "1728970549813-0"
                     },
                     "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
+                        "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-14T10:28:38.260Z"
+                        "S": "2024-10-15T05:35:59.446Z"
                     },
                     "JobID": {
-                        "S": "bc1d0960-d402-4bbb-9531-8f5ee7c5be66"
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/08dec7d8-3960-4d12-8fdc-d6b67216e2fd/2c5d18d9-f048-4444-a0fa-95b8ca15a51e/bc1d0960-d402-4bbb-9531-8f5ee7c5be66/1728901710098-0"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549813-0"
                     }
                 },
-                "SequenceNumber": "25595600000000096622181881",
-                "SizeBytes": 394,
+                "SequenceNumber": "28815200000000064931705924",
+                "SizeBytes": 376,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "3b975038b245abc67591e3743ae7d576",
+            "eventID": "fe3b4f781cdd7872625e34d924e40c7a",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728901718,
+                "ApproximateCreationDateTime": 1728970559,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728901710099-1"
+                        "S": "1728970549814-2"
                     },
                     "JobID": {
-                        "S": "bc1d0960-d402-4bbb-9531-8f5ee7c5be66"
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
                     }
                 },
                 "NewImage": {
-                    "Evaluation": {
-                        "S": "ELIGIBLE"
-                    },
                     "TaskID": {
-                        "S": "1728901710099-1"
-                    },
-                    "ProcessingResult": {
-                        "L": []
+                        "S": "1728970549814-2"
                     },
                     "TaskStatus": {
                         "S": "WAITING_FOR_RETRY"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-14T10:28:38.357Z"
+                        "S": "2024-10-15T05:35:59.533Z"
                     },
                     "JobID": {
-                        "S": "bc1d0960-d402-4bbb-9531-8f5ee7c5be66"
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/08dec7d8-3960-4d12-8fdc-d6b67216e2fd/2c5d18d9-f048-4444-a0fa-95b8ca15a51e/bc1d0960-d402-4bbb-9531-8f5ee7c5be66/1728901710099-1"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-2"
                     }
                 },
-                "SequenceNumber": "25595700000000096622181882",
-                "SizeBytes": 394,
+                "SequenceNumber": "28815300000000064931705925",
+                "SizeBytes": 365,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "67deb519ac72307e875fca95a80ee2f5",
+            "eventName": "INSERT",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970559,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-4"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "TaskID": {
+                        "S": "1728970549814-4"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:35:59.810Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-4"
+                    }
+                },
+                "SequenceNumber": "28815400000000064931705926",
+                "SizeBytes": 365,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "2b39ec70118838315c622e35f357c79d",
+            "eventName": "INSERT",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970560,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-3"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "TaskID": {
+                        "S": "1728970549814-3"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:00.642Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-3"
+                    }
+                },
+                "SequenceNumber": "28815500000000064931706731",
+                "SizeBytes": 365,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "3f8e00f3c4919a88798ca199709fe6fc",
+            "eventName": "INSERT",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970561,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-5"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "TaskID": {
+                        "S": "1728970549814-5"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:01.360Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-5"
+                    }
+                },
+                "SequenceNumber": "28815600000000064931707442",
+                "SizeBytes": 365,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "47e897fc4a6a141395a55d062476a4a8",
+            "eventName": "MODIFY",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970587,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-1"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "Evaluation": {
+                        "S": "DUPLICATE"
+                    },
+                    "TaskID": {
+                        "S": "1728970549814-1"
+                    },
+                    "TaskStatus": {
+                        "S": "COMPLETED"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:27.505Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-1"
+                    }
+                },
+                "OldImage": {
+                    "TaskID": {
+                        "S": "1728970549814-1"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:35:59.400Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-1"
+                    }
+                },
+                "SequenceNumber": "28815700000000064931739316",
+                "SizeBytes": 679,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "4f87234f463c3da73c83d8c6a63233cf",
+            "eventName": "MODIFY",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970588,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-2"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "Evaluation": {
+                        "S": "DUPLICATE"
+                    },
+                    "TaskID": {
+                        "S": "1728970549814-2"
+                    },
+                    "TaskStatus": {
+                        "S": "COMPLETED"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:28.087Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-2"
+                    }
+                },
+                "OldImage": {
+                    "TaskID": {
+                        "S": "1728970549814-2"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:35:59.533Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-2"
+                    }
+                },
+                "SequenceNumber": "28815800000000064931740221",
+                "SizeBytes": 679,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "383b17e1a4b6b04544ac862e28058277",
+            "eventName": "MODIFY",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970588,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-4"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "Evaluation": {
+                        "S": "DUPLICATE"
+                    },
+                    "TaskID": {
+                        "S": "1728970549814-4"
+                    },
+                    "TaskStatus": {
+                        "S": "COMPLETED"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:28.332Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-4"
+                    }
+                },
+                "OldImage": {
+                    "TaskID": {
+                        "S": "1728970549814-4"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:35:59.810Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-4"
+                    }
+                },
+                "SequenceNumber": "28815900000000064931740675",
+                "SizeBytes": 679,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
+        },
+        {
+            "eventID": "9f2a02441fffb3d8fd3554361fc05a9b",
+            "eventName": "MODIFY",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1728970590,
+                "Keys": {
+                    "TaskID": {
+                        "S": "1728970549814-3"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    }
+                },
+                "NewImage": {
+                    "Evaluation": {
+                        "S": "DUPLICATE"
+                    },
+                    "TaskID": {
+                        "S": "1728970549814-3"
+                    },
+                    "TaskStatus": {
+                        "S": "COMPLETED"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:30.605Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-3"
+                    }
+                },
+                "OldImage": {
+                    "TaskID": {
+                        "S": "1728970549814-3"
+                    },
+                    "TaskStatus": {
+                        "S": "WAITING_FOR_RETRY"
+                    },
+                    "UpdatedAt": {
+                        "S": "2024-10-15T05:36:00.642Z"
+                    },
+                    "JobID": {
+                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                    },
+                    "ImageS3Key": {
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-3"
+                    }
+                },
+                "SequenceNumber": "28816000000000064931744481",
+                "SizeBytes": 679,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"

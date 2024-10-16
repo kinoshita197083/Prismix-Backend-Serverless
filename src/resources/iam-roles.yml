@@ -261,16 +261,11 @@ Resources:
                   - dynamodb:ListStreams
                 Resource: 
                   Fn::GetAtt: [JobProgressTable, StreamArn]
-              # - Effect: Allow
-              #   Action:
-              #     - sns:Publish
-              #   Resource: 
-              #     - JobCompletionTopic
-              # - Effect: Allow
-              #   Action:
-              #     - sqs:SendMessage
-              #   Resource:
-              #     - Fn::GetAtt: [JobCompletionQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: 
+                  Ref: JobCompletionTopic
 
   DeliveryProcessorRole:
     Type: AWS::IAM::Role

@@ -59,6 +59,8 @@ jobCompletionChecker:
   environment:
     JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_COMPLETION_TOPIC_ARN: 
+      Ref: JobCompletionTopic
     # JOB_COMPLETION_TOPIC_ARN: 
     #   Ref: JobCompletionTopic
     # JOB_COMPLETION_QUEUE_URL:

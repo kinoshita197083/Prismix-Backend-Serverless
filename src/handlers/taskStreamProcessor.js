@@ -15,13 +15,21 @@ exports.handler = async (event) => {
 
     try {
         for (const record of event.Records) {
-            if (record.eventName === 'INSERT') {
+            if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
                 const newImage = record.dynamodb.NewImage;
                 const jobId = newImage.JobID.S;
-                const evaluation = newImage.Evaluation.S;
+                console.log('----> Job ID: ', jobId);
 
-                console.log(`Processing new task for Job ID: ${jobId}, Evaluation: ${evaluation}`);
-                await updateJobProgress(jobId, evaluation);
+                // Check if Evaluation exists before accessing it
+                const evaluation = newImage.Evaluation ? newImage.Evaluation.S : null;
+                console.log('----> Evaluation: ', evaluation);
+
+                if (evaluation) {
+                    console.log(`Processing task for Job ID: ${jobId}, Evaluation: ${evaluation}`);
+                    await updateJobProgress(jobId, evaluation);
+                } else {
+                    console.log(`Skipping task for Job ID: ${jobId} - No evaluation yet`);
+                }
             }
         }
         console.log('All records processed successfully');
