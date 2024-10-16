@@ -18,7 +18,9 @@
     "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio",
     "test:enqueueImage": "serverless invoke local --function enqueueImage --path src/test-events/s3-event.json",
     "test:worker": "npx dotenv -e .env.dev -- serverless invoke local --function worker --path src/test-events/sqs-event.json",
-    "test:task-stream-processor": "npx dotenv -e .env.dev -- serverless invoke local --function taskStreamProcessor --path src/test-events/task-stream-event.json"
+    "test:task-stream-processor": "npx dotenv -e .env.dev -- serverless invoke local --function taskStreamProcessor --path src/test-events/task-stream-event.json",
+    "test:notification-processor": "npx dotenv -e .env.dev -- serverless invoke local --function notificationProcessor --path src/test-events/notification-event.json",
+    "test:delivery-processor": "npx dotenv -e .env.dev -- serverless invoke local --function deliveryProcessor --path src/test-events/delivery-event.json"
   },
   "keywords": [],
   "author": "",
@@ -36,6 +38,7 @@
     "@aws-sdk/client-lambda": "^3.667.0",
     "@aws-sdk/client-rekognition": "^3.667.0",
     "@aws-sdk/client-s3": "^3.670.0",
+    "@aws-sdk/client-ses": "^3.670.0",
     "@aws-sdk/client-sns": "^3.667.0",
     "@aws-sdk/client-sqs": "^3.667.0",
     "@aws-sdk/lib-dynamodb": "^3.670.0",
