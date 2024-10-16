@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, QueryCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const JSZip = require('jszip');
 const stream = require('stream');
@@ -25,6 +25,13 @@ exports.handler = async (event) => {
 
             if (eligibleTasks.length === 0) {
                 logger.warn(`No eligible tasks found for job ${jobId}`);
+                continue;
+            }
+
+            const userId = await fetchUserIdFromJobProgress(jobId);
+
+            if (!userId) {
+                logger.error(`User ID not found for job ${jobId}`);
                 continue;
             }
 
@@ -59,7 +66,7 @@ exports.handler = async (event) => {
             const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
             // Store zip file in S3
-            const zipKey = `download/${jobId}/images.zip`;
+            const zipKey = `download/${userId}/${jobId}/images.zip`;
             await uploadToS3(zipBuffer, zipKey);
 
             logger.info(`Delivery processed for job ${jobId}. Zip file stored at ${zipKey}`);
@@ -139,6 +146,23 @@ async function uploadToS3(buffer, key) {
         logger.info(`Successfully uploaded zip file to S3: ${key}`);
     } catch (error) {
         logger.error(`Error uploading zip file to S3: ${key}`, { error: error.message });
+        throw error;
+    }
+}
+
+async function fetchUserIdFromJobProgress(jobId) {
+    const params = {
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: jobId },
+        ProjectionExpression: 'UserId'
+    };
+
+    try {
+        const command = new GetCommand(params);
+        const result = await docClient.send(command);
+        return result.Item ? result.Item.UserId : null;
+    } catch (error) {
+        logger.error('Error fetching userId from JobProgress:', { error, jobId });
         throw error;
     }
 }

@@ -300,6 +300,11 @@ Resources:
                   Fn::GetAtt: [TasksTable, Arn]
               - Effect: Allow
                 Action:
+                  - dynamodb:GetItem
+                Resource:
+                  Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
@@ -340,3 +345,10 @@ Resources:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: 
+                  - Fn::GetAtt: [JobProgressTable, Arn]
