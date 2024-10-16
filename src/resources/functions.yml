@@ -80,3 +80,32 @@ taskStreamProcessor:
   role: TaskStreamProcessorRole
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+deliveryProcessor:
+  handler: src/handlers/deliveryProcessor.handler
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [DeliveryQueue, Arn]
+  environment:
+    DELIVERY_QUEUE_URL:
+      Ref: DeliveryQueue
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    BUCKET_NAME: ${self:custom.bucketName}
+  role: DeliveryProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:jszip-layer:1
+
+notificationProcessor:
+  handler: src/handlers/notificationProcessor.handler
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [NotificationQueue, Arn]
+  environment:
+    NOTIFICATION_QUEUE_URL:
+      Ref: NotificationQueue
+  role: NotificationProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1

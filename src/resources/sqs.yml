@@ -55,3 +55,67 @@ Resources:
       TopicArn: !Ref ImageProcessingTopic
       Protocol: sqs
       Endpoint: !GetAtt EligibleImageQueue.Arn
+
+# POST PROCESSING
+  JobCompletionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:service}-${self:provider.stage}-job-completion-topic
+
+  DeliveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-delivery-queue
+
+  NotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-notification-queue
+
+  DeliveryQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref DeliveryQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt DeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  NotificationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref NotificationQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt NotificationQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  JobCompletionTopicDeliverySubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt DeliveryQueue.Arn
+
+  JobCompletionTopicNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt NotificationQueue.Arn
