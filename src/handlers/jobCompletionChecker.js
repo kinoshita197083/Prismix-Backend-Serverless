@@ -9,7 +9,11 @@ exports.handler = async (event) => {
     for (const record of event.Records) {
         if (record.eventName === 'MODIFY') {
             const newImage = record.dynamodb.NewImage;
+            const oldImage = record.dynamodb.OldImage;
             const jobId = newImage.JobId.S;
+            const userId = oldImage.UserId?.S;
+
+            console.log('----> userId: ', userId);
 
             // Check if Status field exists in the new image
             if (newImage.Status && newImage.Status.S) {

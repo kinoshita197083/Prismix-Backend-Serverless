@@ -46,7 +46,7 @@ exports.handler = async (event) => {
             console.log('User information retrieved successfully:', user);
 
             // Send email notification
-            await sendEmailNotification(user.email, jobId, user.name);
+            await sendEmailNotification(user.email, user.name, jobId);
 
             logger.info(`Notification sent for job ${jobId} to user ${userId}`);
         } catch (error) {
@@ -55,21 +55,70 @@ exports.handler = async (event) => {
     }
 };
 
-async function sendEmailNotification(email, jobId, name) {
+async function sendEmailNotification(email, name, jobId) {
     const params = {
         Destination: {
             ToAddresses: [email],
         },
         Message: {
             Body: {
+                Html: {
+                    Charset: "UTF-8",
+                    Data: `
+                        <html>
+                            <head>
+                                <style>
+                                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                                    .header { background-color: #4CAF50; color: white; padding: 10px; text-align: center; }
+                                    .content { padding: 20px; background-color: #f9f9f9; }
+                                    .footer { text-align: center; margin-top: 20px; font-size: 0.8em; color: #777; }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="container">
+                                    <div class="header">
+                                        <h1>Job Completion Notification</h1>
+                                    </div>
+                                    <div class="content">
+                                        <p>Dear ${name},</p>
+                                        <p>We are pleased to inform you that your job has been completed successfully.</p>
+                                        <p><strong>Job ID:</strong> ${jobId}</p>
+                                        <p>You can now access and review the results of your job through our platform. If you have any questions or need further assistance, please don't hesitate to contact our support team.</p>
+                                        <p>Thank you for using our services.</p>
+                                        <p>Best regards,<br>The Prismix Team</p>
+                                    </div>
+                                    <div class="footer">
+                                        <p>This is an automated message. Please do not reply to this email.</p>
+                                    </div>
+                                </div>
+                            </body>
+                        </html>
+                    `
+                },
                 Text: {
                     Charset: "UTF-8",
-                    Data: `Hello ${name}, your job ${jobId} has been completed successfully.`
+                    Data: `
+Dear ${name},
+
+We are pleased to inform you that your job has been completed successfully.
+
+Job ID: ${jobId}
+
+You can now access and review the results of your job through our platform. If you have any questions or need further assistance, please don't hesitate to contact our support team.
+
+Thank you for using our services.
+
+Best regards,
+The Prismix Team
+
+This is an automated message. Please do not reply to this email.
+                    `
                 }
             },
             Subject: {
                 Charset: "UTF-8",
-                Data: "Job Completion Notification"
+                Data: "Your Job Has Been Completed - Prismix Notification"
             }
         },
         Source: process.env.SENDER_EMAIL_ADDRESS,
