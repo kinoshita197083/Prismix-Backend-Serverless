@@ -1,474 +1,1756 @@
 {
     "Records": [
         {
-            "eventID": "2670b10686e9c3de33b80675a927c0e9",
+            "eventID": "11cf67dd7b4f577c8c9119bc1be77611",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970559,
+                "ApproximateCreationDateTime": 1729338273,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-1"
+                        "S": "1729338253076-1.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    }
-                },
-                "NewImage": {
-                    "TaskID": {
-                        "S": "1728970549814-1"
-                    },
-                    "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
-                    },
-                    "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.400Z"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    },
-                    "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-1"
-                    }
-                },
-                "SequenceNumber": "28815100000000064931705845",
-                "SizeBytes": 365,
-                "StreamViewType": "NEW_AND_OLD_IMAGES"
-            },
-            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
-        },
-        {
-            "eventID": "49cf2edfdc880ce21545b4493e8ba34e",
-            "eventName": "INSERT",
-            "eventVersion": "1.1",
-            "eventSource": "aws:dynamodb",
-            "awsRegion": "us-east-1",
-            "dynamodb": {
-                "ApproximateCreationDateTime": 1728970559,
-                "Keys": {
-                    "TaskID": {
-                        "S": "1728970549813-0"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
                     "Evaluation": {
-                        "S": "DUPLICATE"
+                        "S": "ELIGIBLE"
                     },
                     "TaskID": {
-                        "S": "1728970549813-0"
+                        "S": "1729338253076-1.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "100.00%"
+                                    },
+                                    "Categories": {
+                                        "S": "Hobbies and Interests"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Photography"
+                                    },
+                                    "Aliases": {
+                                        "S": "Photo"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "100.00%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Head, Person"
+                                    },
+                                    "name": {
+                                        "S": "Face"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "100.00%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Head"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "100.00%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Person"
+                                    },
+                                    "Aliases": {
+                                        "S": "Human"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "100.00%"
+                                    },
+                                    "Categories": {
+                                        "S": "Hobbies and Interests"
+                                    },
+                                    "Parents": {
+                                        "S": "Face, Head, Person, Photography"
+                                    },
+                                    "name": {
+                                        "S": "Portrait"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.95%"
+                                    },
+                                    "Categories": {
+                                        "S": "Expressions and Emotions"
+                                    },
+                                    "Parents": {
+                                        "S": "Face, Head, Person"
+                                    },
+                                    "name": {
+                                        "S": "Happy"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.95%"
+                                    },
+                                    "Categories": {
+                                        "S": "Expressions and Emotions"
+                                    },
+                                    "Parents": {
+                                        "S": "Face, Happy, Head, Person"
+                                    },
+                                    "name": {
+                                        "S": "Smile"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "89.26%"
+                                    },
+                                    "Categories": {
+                                        "S": "Beauty and Personal Care"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Cosmetics"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "89.26%"
+                                    },
+                                    "Categories": {
+                                        "S": "Beauty and Personal Care"
+                                    },
+                                    "Parents": {
+                                        "S": "Cosmetics"
+                                    },
+                                    "name": {
+                                        "S": "Lipstick"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "72.79%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Skin"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
                         "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.446Z"
+                        "S": "2024-10-19T11:44:33.032Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549813-0"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253076-1.png"
                     }
                 },
-                "SequenceNumber": "28815200000000064931705924",
-                "SizeBytes": 376,
+                "SequenceNumber": "49621900000000065927309989",
+                "SizeBytes": 1376,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "fe3b4f781cdd7872625e34d924e40c7a",
+            "eventID": "65c9c8257a982fc4612de9efb37ae46c",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970559,
+                "ApproximateCreationDateTime": 1729338273,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-2"
+                        "S": "1729338253076-3.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
+                    "Evaluation": {
+                        "S": "ELIGIBLE"
+                    },
                     "TaskID": {
-                        "S": "1728970549814-2"
+                        "S": "1729338253076-3.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.21%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Person"
+                                    },
+                                    "Aliases": {
+                                        "S": "Human"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.05%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Head, Person"
+                                    },
+                                    "name": {
+                                        "S": "Face"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.05%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Head"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "94.14%"
+                                    },
+                                    "Categories": {
+                                        "S": "Hobbies and Interests"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Photography"
+                                    },
+                                    "Aliases": {
+                                        "S": "Photo"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "92.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Colors and Visual Composition"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Urban"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "91.60%"
+                                    },
+                                    "Categories": {
+                                        "S": "Hobbies and Interests"
+                                    },
+                                    "Parents": {
+                                        "S": "Face, Head, Person, Photography"
+                                    },
+                                    "name": {
+                                        "S": "Portrait"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "86.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Clothing"
+                                    },
+                                    "Aliases": {
+                                        "S": "Apparel"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "86.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "Clothing"
+                                    },
+                                    "name": {
+                                        "S": "Coat"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "75.27%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "People"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
+                        "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.533Z"
+                        "S": "2024-10-19T11:44:33.152Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-2"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253076-3.png"
                     }
                 },
-                "SequenceNumber": "28815300000000064931705925",
-                "SizeBytes": 365,
+                "SequenceNumber": "49622000000000065927310199",
+                "SizeBytes": 1248,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "67deb519ac72307e875fca95a80ee2f5",
+            "eventID": "dcde3bd7a9c4f63935ee3d2b98e8747b",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970559,
+                "ApproximateCreationDateTime": 1729338273,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-4"
+                        "S": "1729338253077-16.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
+                    "Evaluation": {
+                        "S": "ELIGIBLE"
+                    },
                     "TaskID": {
-                        "S": "1728970549814-4"
+                        "S": "1729338253077-16.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.23%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Child"
+                                    },
+                                    "Aliases": {
+                                        "S": "Kid"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.23%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Female"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.23%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Female, Person"
+                                    },
+                                    "name": {
+                                        "S": "Girl"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.23%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Person"
+                                    },
+                                    "Aliases": {
+                                        "S": "Human"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "98.01%"
+                                    },
+                                    "Categories": {
+                                        "S": "Buildings and Architecture"
+                                    },
+                                    "Parents": {
+                                        "S": "Architecture, Building"
+                                    },
+                                    "name": {
+                                        "S": "Housing"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.71%"
+                                    },
+                                    "Categories": {
+                                        "S": "Buildings and Architecture"
+                                    },
+                                    "Parents": {
+                                        "S": "Architecture, Building, Outdoors"
+                                    },
+                                    "name": {
+                                        "S": "Shelter"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.22%"
+                                    },
+                                    "Categories": {
+                                        "S": "Materials"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Wood"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "91.24%"
+                                    },
+                                    "Categories": {
+                                        "S": "Buildings and Architecture"
+                                    },
+                                    "Parents": {
+                                        "S": "Architecture, Building, Housing"
+                                    },
+                                    "name": {
+                                        "S": "House"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "87.14%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "Clothing"
+                                    },
+                                    "name": {
+                                        "S": "Dress"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "78.19%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "Clothing, Footwear"
+                                    },
+                                    "name": {
+                                        "S": "Shoe"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
+                        "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.810Z"
+                        "S": "2024-10-19T11:44:33.192Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-4"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253077-16.png"
                     }
                 },
-                "SequenceNumber": "28815400000000064931705926",
-                "SizeBytes": 365,
+                "SequenceNumber": "49622100000000065927310200",
+                "SizeBytes": 1382,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "2b39ec70118838315c622e35f357c79d",
+            "eventID": "a9685031c454473041d7d98e31217380",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970560,
+                "ApproximateCreationDateTime": 1729338273,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-3"
+                        "S": "1729338253077-13.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
+                    "Evaluation": {
+                        "S": "ELIGIBLE"
+                    },
                     "TaskID": {
-                        "S": "1728970549814-3"
+                        "S": "1729338253077-13.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.56%"
+                                    },
+                                    "Categories": {
+                                        "S": "Furniture and Furnishings"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Furniture"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Animal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Cat"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Mammal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.12%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Pet"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "94.32%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "Furniture"
+                                    },
+                                    "name": {
+                                        "S": "Bed"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "88.44%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Blanket"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "85.70%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "Home Decor"
+                                    },
+                                    "name": {
+                                        "S": "Cushion"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "72.57%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Cat, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Abyssinian"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "71.55%"
+                                    },
+                                    "Categories": {
+                                        "S": "Furniture and Furnishings"
+                                    },
+                                    "Parents": {
+                                        "S": "Furniture"
+                                    },
+                                    "name": {
+                                        "S": "Couch"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
+                        "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:36:00.642Z"
+                        "S": "2024-10-19T11:44:33.775Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-3"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253077-13.png"
                     }
                 },
-                "SequenceNumber": "28815500000000064931706731",
-                "SizeBytes": 365,
+                "SequenceNumber": "49622200000000065927310891",
+                "SizeBytes": 1311,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "3f8e00f3c4919a88798ca199709fe6fc",
+            "eventID": "63d64ac89b27e88b8a25ab75232dbc85",
             "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970561,
+                "ApproximateCreationDateTime": 1729338273,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-5"
+                        "S": "1729338253077-10.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    }
-                },
-                "NewImage": {
-                    "TaskID": {
-                        "S": "1728970549814-5"
-                    },
-                    "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
-                    },
-                    "UpdatedAt": {
-                        "S": "2024-10-15T05:36:01.360Z"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    },
-                    "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-5"
-                    }
-                },
-                "SequenceNumber": "28815600000000064931707442",
-                "SizeBytes": 365,
-                "StreamViewType": "NEW_AND_OLD_IMAGES"
-            },
-            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
-        },
-        {
-            "eventID": "47e897fc4a6a141395a55d062476a4a8",
-            "eventName": "MODIFY",
-            "eventVersion": "1.1",
-            "eventSource": "aws:dynamodb",
-            "awsRegion": "us-east-1",
-            "dynamodb": {
-                "ApproximateCreationDateTime": 1728970587,
-                "Keys": {
-                    "TaskID": {
-                        "S": "1728970549814-1"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
                     "Evaluation": {
-                        "S": "DUPLICATE"
+                        "S": "ELIGIBLE"
                     },
                     "TaskID": {
-                        "S": "1728970549814-1"
+                        "S": "1729338253077-10.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.97%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Cat, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Abyssinian"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.97%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Animal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.97%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Cat"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.97%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Mammal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.97%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Pet"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.77%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Blanket"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
                         "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:36:27.505Z"
+                        "S": "2024-10-19T11:44:33.874Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-1"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253077-10.png"
                     }
                 },
-                "OldImage": {
-                    "TaskID": {
-                        "S": "1728970549814-1"
-                    },
-                    "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
-                    },
-                    "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.400Z"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    },
-                    "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-1"
-                    }
-                },
-                "SequenceNumber": "28815700000000064931739316",
-                "SizeBytes": 679,
+                "SequenceNumber": "49622300000000065927311001",
+                "SizeBytes": 945,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "4f87234f463c3da73c83d8c6a63233cf",
-            "eventName": "MODIFY",
+            "eventID": "46de80c5e94a49b6df004976cb13c2a7",
+            "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970588,
+                "ApproximateCreationDateTime": 1729338274,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-2"
+                        "S": "1729338253077-14.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
                     "Evaluation": {
-                        "S": "DUPLICATE"
+                        "S": "ELIGIBLE"
                     },
                     "TaskID": {
-                        "S": "1728970549814-2"
+                        "S": "1729338253077-14.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.90%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "Home Decor"
+                                    },
+                                    "name": {
+                                        "S": "Cushion"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.90%"
+                                    },
+                                    "Categories": {
+                                        "S": "Furniture and Furnishings"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Home Decor"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.92%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Animal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.92%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Cat"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.92%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Pet"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.78%"
+                                    },
+                                    "Categories": {
+                                        "S": "Furniture and Furnishings"
+                                    },
+                                    "Parents": {
+                                        "S": "Furniture"
+                                    },
+                                    "name": {
+                                        "S": "Couch"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "95.78%"
+                                    },
+                                    "Categories": {
+                                        "S": "Furniture and Furnishings"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Furniture"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "90.63%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Blanket"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "82.24%"
+                                    },
+                                    "Categories": {
+                                        "S": "Home and Indoors"
+                                    },
+                                    "Parents": {
+                                        "S": "Furniture"
+                                    },
+                                    "name": {
+                                        "S": "Bed"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "71.13%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "Clothing, Hosiery"
+                                    },
+                                    "name": {
+                                        "S": "Sock"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
                         "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:36:28.087Z"
+                        "S": "2024-10-19T11:44:33.982Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-2"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253077-14.png"
                     }
                 },
-                "OldImage": {
-                    "TaskID": {
-                        "S": "1728970549814-2"
-                    },
-                    "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
-                    },
-                    "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.533Z"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    },
-                    "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-2"
-                    }
-                },
-                "SequenceNumber": "28815800000000064931740221",
-                "SizeBytes": 679,
+                "SequenceNumber": "49622400000000065927311159",
+                "SizeBytes": 1316,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "383b17e1a4b6b04544ac862e28058277",
-            "eventName": "MODIFY",
+            "eventID": "c9b919eacc1848ad3d09567b94ed1be5",
+            "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970588,
+                "ApproximateCreationDateTime": 1729338274,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-4"
+                        "S": "1729338253076-2.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
                     "Evaluation": {
-                        "S": "DUPLICATE"
+                        "S": "ELIGIBLE"
                     },
                     "TaskID": {
-                        "S": "1728970549814-4"
+                        "S": "1729338253076-2.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.62%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Person"
+                                    },
+                                    "Aliases": {
+                                        "S": "Human"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.87%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Adult"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.87%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Female"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "97.87%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Adult, Female, Person"
+                                    },
+                                    "name": {
+                                        "S": "Woman"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "93.40%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Head, Person"
+                                    },
+                                    "name": {
+                                        "S": "Face"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "93.40%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Head"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "92.63%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Clothing"
+                                    },
+                                    "Aliases": {
+                                        "S": "Apparel"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "92.63%"
+                                    },
+                                    "Categories": {
+                                        "S": "Apparel and Accessories"
+                                    },
+                                    "Parents": {
+                                        "S": "Clothing"
+                                    },
+                                    "name": {
+                                        "S": "Coat"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "89.16%"
+                                    },
+                                    "Categories": {
+                                        "S": "Beauty and Personal Care"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Hair"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "72.94%"
+                                    },
+                                    "Categories": {
+                                        "S": "Everyday Objects"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Candle"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
                         "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:36:28.332Z"
+                        "S": "2024-10-19T11:44:34.014Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-4"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253076-2.png"
                     }
                 },
-                "OldImage": {
-                    "TaskID": {
-                        "S": "1728970549814-4"
-                    },
-                    "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
-                    },
-                    "UpdatedAt": {
-                        "S": "2024-10-15T05:35:59.810Z"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    },
-                    "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-4"
-                    }
-                },
-                "SequenceNumber": "28815900000000064931740675",
-                "SizeBytes": 679,
+                "SequenceNumber": "49622500000000065927311160",
+                "SizeBytes": 1303,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"
         },
         {
-            "eventID": "9f2a02441fffb3d8fd3554361fc05a9b",
-            "eventName": "MODIFY",
+            "eventID": "e5901430bb728625c431916e80d7f161",
+            "eventName": "INSERT",
             "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
-                "ApproximateCreationDateTime": 1728970590,
+                "ApproximateCreationDateTime": 1729338274,
                 "Keys": {
                     "TaskID": {
-                        "S": "1728970549814-3"
+                        "S": "1729338253076-7.png"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     }
                 },
                 "NewImage": {
                     "Evaluation": {
-                        "S": "DUPLICATE"
+                        "S": "ELIGIBLE"
                     },
                     "TaskID": {
-                        "S": "1728970549814-3"
+                        "S": "1729338253076-7.png"
+                    },
+                    "ProcessingResult": {
+                        "L": [
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.93%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Cat, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Abyssinian"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.93%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Animal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.93%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal, Mammal, Pet"
+                                    },
+                                    "name": {
+                                        "S": "Cat"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.93%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Mammal"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "99.93%"
+                                    },
+                                    "Categories": {
+                                        "S": "Animals and Pets"
+                                    },
+                                    "Parents": {
+                                        "S": "Animal"
+                                    },
+                                    "name": {
+                                        "S": "Pet"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "83.94%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Head, Person"
+                                    },
+                                    "name": {
+                                        "S": "Face"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "83.94%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "Person"
+                                    },
+                                    "name": {
+                                        "S": "Head"
+                                    },
+                                    "Aliases": {
+                                        "S": "None"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "Confidence": {
+                                        "S": "83.94%"
+                                    },
+                                    "Categories": {
+                                        "S": "Person Description"
+                                    },
+                                    "Parents": {
+                                        "S": "None"
+                                    },
+                                    "name": {
+                                        "S": "Person"
+                                    },
+                                    "Aliases": {
+                                        "S": "Human"
+                                    }
+                                }
+                            }
+                        ]
                     },
                     "TaskStatus": {
                         "S": "COMPLETED"
                     },
                     "UpdatedAt": {
-                        "S": "2024-10-15T05:36:30.605Z"
+                        "S": "2024-10-19T11:44:34.335Z"
                     },
                     "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
+                        "S": "c366bed4-c16e-49e3-9a88-fa364a1608e9"
                     },
                     "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-3"
+                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/9bfd3529-2318-4a36-acd0-1f914369bdf1/bcf80702-82d8-4620-98df-62250e94c590/c366bed4-c16e-49e3-9a88-fa364a1608e9/1729338253076-7.png"
                     }
                 },
-                "OldImage": {
-                    "TaskID": {
-                        "S": "1728970549814-3"
-                    },
-                    "TaskStatus": {
-                        "S": "WAITING_FOR_RETRY"
-                    },
-                    "UpdatedAt": {
-                        "S": "2024-10-15T05:36:00.642Z"
-                    },
-                    "JobID": {
-                        "S": "4e2f6199-ef7a-41a1-8251-a766392868bd"
-                    },
-                    "ImageS3Key": {
-                        "S": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/841fc5e2-f304-4a71-b452-d4b868ddfb3f/ee332f9a-0108-48f4-af90-dea6c1cbc83b/4e2f6199-ef7a-41a1-8251-a766392868bd/1728970549814-3"
-                    }
-                },
-                "SequenceNumber": "28816000000000064931744481",
-                "SizeBytes": 679,
+                "SequenceNumber": "49622600000000065927311561",
+                "SizeBytes": 1120,
                 "StreamViewType": "NEW_AND_OLD_IMAGES"
             },
             "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-Tasks/stream/2024-10-09T01:14:34.673"

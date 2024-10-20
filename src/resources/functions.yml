@@ -72,11 +72,15 @@ jobCompletionChecker:
 # taskStreamProcessor:
 taskStreamProcessor:
   handler: src/handlers/taskStreamProcessor.handler
+  memorySize: 2048 
+  timeout: 300 #15 minutes (15 * 60 = 900 seconds)
   events:
     - stream:
         type: dynamodb
         arn:
           Fn::GetAtt: [TasksTable, StreamArn]
+        batchSize: 100  # Increase batch size
+        startingPosition: LATEST
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
   role: TaskStreamProcessorRole
