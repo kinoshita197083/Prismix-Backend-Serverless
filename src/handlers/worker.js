@@ -45,8 +45,8 @@ async function streamToBuffer(stream) {
     });
 }
 
-async function checkAndStoreImageHash(hash, jobId, imageId) {
-    console.log('Checking and storing image hash...', { hash, jobId, imageId });
+async function checkAndStoreImageHash(hash, jobId, imageId, s3Key) {
+    console.log('Checking and storing image hash...', { hash, jobId, imageId, s3Key });
     const getItemCommand = new GetItemCommand({
         TableName: process.env.IMAGE_HASH_TABLE,
         Key: {
@@ -60,7 +60,11 @@ async function checkAndStoreImageHash(hash, jobId, imageId) {
 
         if (Item) {
             console.log('Hash already exists, this is a duplicate');
-            return { isDuplicate: true, originalImageId: Item.ImageId.S };
+            return {
+                isDuplicate: true,
+                originalImageId: Item.ImageId.S,
+                originalImageS3Key: Item.ImageS3Key.S
+            };
         }
 
         // If no item found, store the new hash
@@ -70,6 +74,7 @@ async function checkAndStoreImageHash(hash, jobId, imageId) {
                 HashValue: { S: hash },
                 JobId: { S: jobId },
                 ImageId: { S: imageId },
+                ImageS3Key: { S: s3Key },
                 Timestamp: { N: Date.now().toString() },
                 ExpirationTime: { N: (Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60)).toString() }
             },
@@ -82,7 +87,11 @@ async function checkAndStoreImageHash(hash, jobId, imageId) {
     } catch (error) {
         if (error.name === 'ConditionalCheckFailedException') {
             console.log('Race condition: Hash was stored by another process');
-            return { isDuplicate: true, originalImageId: 'Unknown due to race condition' };
+            return {
+                isDuplicate: true,
+                originalImageId: 'Unknown due to race condition',
+                originalImageS3Key: 'Unknown due to race condition'
+            };
         }
         logger.error('Error checking and storing image hash', { error });
         throw error;
@@ -115,10 +124,10 @@ exports.handler = async (event, context) => {
             console.log('Calculated image hash:', imageHash);
 
             // Check and store the hash
-            const { isDuplicate, originalImageId } = await checkAndStoreImageHash(imageHash, jobId, imageId);
+            const { isDuplicate, originalImageId, originalImageS3Key } = await checkAndStoreImageHash(imageHash, jobId, imageId, s3ObjectKey);
 
             if (isDuplicate) {
-                logger.info('Duplicate image found', { originalImageId, currentImageId: imageId });
+                logger.info('Duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
 
                 // Update task status to COMPLETED and mark as duplicate
                 await dynamoService.updateTaskStatus({
@@ -127,7 +136,9 @@ exports.handler = async (event, context) => {
                     imageS3Key: s3ObjectKey,
                     status: 'COMPLETED',
                     evaluation: 'DUPLICATE',
-                    updatedAt: new Date().toISOString()
+                    updatedAt: new Date().toISOString(),
+                    duplicateOf: originalImageId,
+                    duplicateOfS3Key: originalImageS3Key
                 });
 
                 return; // Skip further processing for this image

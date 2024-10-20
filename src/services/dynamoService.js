@@ -77,8 +77,8 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation }) {
-        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation });
+    async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key }) {
+        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key });
 
         const updateExpression = ['SET TaskStatus = :status, ImageS3Key = :imageS3Key, UpdatedAt = :updatedAt'];
         const expressionAttributeValues = {
@@ -115,6 +115,16 @@ const dynamoService = {
         if (evaluation) {
             updateExpression.push('Evaluation = :evaluation');
             expressionAttributeValues[':evaluation'] = { S: evaluation };
+        }
+
+        if (duplicateOf) {
+            updateExpression.push('DuplicateOf = :duplicateOf');
+            expressionAttributeValues[':duplicateOf'] = { S: duplicateOf };
+        }
+
+        if (duplicateOfS3Key) {
+            updateExpression.push('DuplicateOfS3Key = :duplicateOfS3Key');
+            expressionAttributeValues[':duplicateOfS3Key'] = { S: duplicateOfS3Key };
         }
 
         const params = {
