@@ -72,4 +72,4 @@ Resources:
         - AttributeName: JobId
           KeyType: HASH
       StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
+        StreamViewType: NEW_IMAGE

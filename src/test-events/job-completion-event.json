@@ -1,111 +1,208 @@
 {
+    "level": "INFO",
+    "message": "Job completion checker started",
     "Records": [
         {
-            "eventID": "a8ae763a51b10520485d8c29266a0db1",
+            "eventID": "807f8ed856d220b80cfcf1b97ad25d90",
             "eventName": "MODIFY",
+            "eventVersion": "1.1",
             "eventSource": "aws:dynamodb",
             "awsRegion": "us-east-1",
             "dynamodb": {
+                "ApproximateCreationDateTime": 1729416564,
                 "Keys": {
                     "JobId": {
-                        "S": "1de58baf-6de8-4fe4-ba03-fbf64a315297"
+                        "S": "da76dc7a-073e-4673-9a4d-bb450546655f"
                     }
                 },
                 "NewImage": {
                     "Status": {
-                        "S": "IN_PROGRESS"
+                        "S": "COMPLETED"
                     },
-                    "LastUpdateTime": {
-                        "N": "1729408519111"
+                    "ProjectId": {
+                        "S": "9bfd3529-2318-4a36-acd0-1f914369bdf1"
                     },
-                    "ProcessedImages": {
-                        "N": "42"
+                    "StartTime": {
+                        "N": "1729416506124"
+                    },
+                    "DuplicateImages": {
+                        "N": "1"
+                    },
+                    "FailedImages": {
+                        "N": "0"
                     },
                     "TotalImages": {
+                        "N": "55"
+                    },
+                    "ExcludedImages": {
+                        "N": "0"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729416564901"
+                    },
+                    "ProcessedImages": {
                         "N": "53"
+                    },
+                    "UserId": {
+                        "S": "d552debc-42ba-4610-8146-cd9e75040e32"
+                    },
+                    "EligibleImages": {
+                        "N": "52"
+                    },
+                    "JobId": {
+                        "S": "da76dc7a-073e-4673-9a4d-bb450546655f"
+                    },
+                    "ProcessingEnded": {
+                        "BOOL": true
                     }
                 },
                 "OldImage": {
                     "Status": {
-                        "S": "IN_PROGRESS"
+                        "S": "COMPLETED"
                     },
-                    "LastUpdateTime": {
-                        "N": "1729408519103"
+                    "ProjectId": {
+                        "S": "9bfd3529-2318-4a36-acd0-1f914369bdf1"
                     },
-                    "ProcessedImages": {
-                        "N": "41"
+                    "StartTime": {
+                        "N": "1729416506124"
+                    },
+                    "DuplicateImages": {
+                        "N": "1"
+                    },
+                    "FailedImages": {
+                        "N": "0"
                     },
                     "TotalImages": {
-                        "N": "53"
-                    }
-                }
-            }
-        },
-        {
-            "eventID": "ff39e8349dbe4e4a28894ef103026f8f",
-            "eventName": "MODIFY",
-            "dynamodb": {
-                "Keys": {
-                    "JobId": {
-                        "S": "1de58baf-6de8-4fe4-ba03-fbf64a315297"
-                    }
-                },
-                "NewImage": {
-                    "ProcessedImages": {
-                        "N": "43"
+                        "N": "55"
+                    },
+                    "ExcludedImages": {
+                        "N": "0"
                     },
                     "LastUpdateTime": {
-                        "N": "1729408519119"
-                    }
-                },
-                "OldImage": {
-                    "ProcessedImages": {
-                        "N": "42"
-                    },
-                    "LastUpdateTime": {
-                        "N": "1729408519111"
-                    }
-                }
-            }
-        },
-        {
-            "eventID": "91c2ead31825d5f8c8bff11401b8efce",
-            "eventName": "MODIFY",
-            "dynamodb": {
-                "Keys": {
-                    "JobId": {
-                        "S": "1de58baf-6de8-4fe4-ba03-fbf64a315297"
-                    }
-                },
-                "NewImage": {
-                    "Status": {
-                        "S": "IN_PROGRESS"
-                    },
-                    "LastUpdateTime": {
-                        "N": "1729408519180"
+                        "N": "1729416564173"
                     },
                     "ProcessedImages": {
+                        "N": "52"
+                    },
+                    "UserId": {
+                        "S": "d552debc-42ba-4610-8146-cd9e75040e32"
+                    },
+                    "EligibleImages": {
                         "N": "51"
                     },
+                    "JobId": {
+                        "S": "da76dc7a-073e-4673-9a4d-bb450546655f"
+                    },
+                    "ProcessingEnded": {
+                        "BOOL": true
+                    }
+                },
+                "SequenceNumber": "33244700000000063553696080",
+                "SizeBytes": 619,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-JobProgress/stream/2024-10-13T08:17:44.671"
+        },
+        {
+            "eventID": "2874245bfdca4149ed56585e1ce4fc61",
+            "eventName": "MODIFY",
+            "eventVersion": "1.1",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "ApproximateCreationDateTime": 1729416564,
+                "Keys": {
+                    "JobId": {
+                        "S": "da76dc7a-073e-4673-9a4d-bb450546655f"
+                    }
+                },
+                "NewImage": {
+                    "Status": {
+                        "S": "COMPLETED"
+                    },
+                    "ProjectId": {
+                        "S": "9bfd3529-2318-4a36-acd0-1f914369bdf1"
+                    },
+                    "StartTime": {
+                        "N": "1729416506124"
+                    },
+                    "DuplicateImages": {
+                        "N": "1"
+                    },
+                    "FailedImages": {
+                        "N": "0"
+                    },
                     "TotalImages": {
+                        "N": "55"
+                    },
+                    "ExcludedImages": {
+                        "N": "0"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729416564910"
+                    },
+                    "ProcessedImages": {
+                        "N": "54"
+                    },
+                    "UserId": {
+                        "S": "d552debc-42ba-4610-8146-cd9e75040e32"
+                    },
+                    "EligibleImages": {
                         "N": "53"
+                    },
+                    "JobId": {
+                        "S": "da76dc7a-073e-4673-9a4d-bb450546655f"
+                    },
+                    "ProcessingEnded": {
+                        "BOOL": true
                     }
                 },
                 "OldImage": {
                     "Status": {
-                        "S": "IN_PROGRESS"
+                        "S": "COMPLETED"
                     },
-                    "LastUpdateTime": {
-                        "N": "1729408519173"
+                    "ProjectId": {
+                        "S": "9bfd3529-2318-4a36-acd0-1f914369bdf1"
                     },
-                    "ProcessedImages": {
-                        "N": "50"
+                    "StartTime": {
+                        "N": "1729416506124"
+                    },
+                    "DuplicateImages": {
+                        "N": "1"
+                    },
+                    "FailedImages": {
+                        "N": "0"
                     },
                     "TotalImages": {
+                        "N": "55"
+                    },
+                    "ExcludedImages": {
+                        "N": "0"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729416564901"
+                    },
+                    "ProcessedImages": {
                         "N": "53"
+                    },
+                    "UserId": {
+                        "S": "d552debc-42ba-4610-8146-cd9e75040e32"
+                    },
+                    "EligibleImages": {
+                        "N": "52"
+                    },
+                    "JobId": {
+                        "S": "da76dc7a-073e-4673-9a4d-bb450546655f"
+                    },
+                    "ProcessingEnded": {
+                        "BOOL": true
                     }
-                }
-            }
+                },
+                "SequenceNumber": "33244800000000063553696081",
+                "SizeBytes": 619,
+                "StreamViewType": "NEW_AND_OLD_IMAGES"
+            },
+            "eventSourceARN": "arn:aws:dynamodb:us-east-1:980352750282:table/prismix-serverless-dev-JobProgress/stream/2024-10-13T08:17:44.671"
         }
     ]
 }

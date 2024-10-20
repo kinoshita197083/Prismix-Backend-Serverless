@@ -1,6 +1,6 @@
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, UpdateCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const logger = require('../utils/logger');
 
 const snsClient = new SNSClient();
@@ -10,7 +10,12 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 exports.handler = async (event) => {
     logger.info('Job completion checker started', event);
 
-    for (const record of event.Records) {
+    const uniqueRecords = removeDuplicateRecords(event.Records);
+
+    console.log('Original records: ', event.Records.length);
+    console.log('Unique records: ', uniqueRecords.length);
+
+    for (const record of uniqueRecords) {
         if (record.eventName === 'MODIFY') {
             const newImage = record.dynamodb.NewImage;
             const keys = record.dynamodb.Keys;
@@ -46,8 +51,9 @@ exports.handler = async (event) => {
                 if (status === 'COMPLETED') {
                     logger.info(`Job ${jobId} is completed. Initiating post-processing.`);
                     try {
+                        const jobCompleted = await completeJob(jobId);
                         await publishToSNS(jobId);
-                        await completeJob(jobId);
+                        console.log('----> jobCompleted: ', jobCompleted);
                     } catch (error) {
                         logger.error(`Failed to publish completion for job ${jobId}`, { error: error.message, stack: error.stack });
                     }
@@ -86,18 +92,61 @@ async function publishToSNS(jobId) {
 async function completeJob(jobId) {
     logger.info(`Completing job ${jobId}`);
 
-    const updateCommand = new UpdateItemCommand({
+    // IMPORTANT: This function should never modify or update TotalImages
+    const updateCommand = new UpdateCommand({
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        UpdateExpression: 'SET JobCompleted = :completed',
-        ExpressionAttributeValues: { ':completed': { BOOL: true } }
+        UpdateExpression: 'SET #JobCompleted = :completed',
+        ExpressionAttributeNames: { '#JobCompleted': 'JobCompleted' },
+        ExpressionAttributeValues: { ':completed': true },
+        ReturnValues: 'ALL_NEW'  // This will return the updated item
     });
 
     try {
         const result = await docClient.send(updateCommand);
-        logger.info(`Job ${jobId} completed successfully`, { result });
+        const updatedItem = result.Attributes;
+
+        if (!updatedItem) {
+            logger.error(`No item returned after update for job ${jobId}`);
+            return false;
+        }
+
+        if (typeof updatedItem.JobCompleted === 'undefined') {
+            logger.error(`JobCompleted field is undefined for job ${jobId}`, { updatedItem });
+            return false;
+        }
+
+        const jobCompleted = updatedItem.JobCompleted;
+        logger.info(`Job ${jobId} completed successfully`, { jobCompleted, updatedItem });
+        return jobCompleted;
     } catch (error) {
-        logger.error(`Error completing job ${jobId}:`, { error: error.message });
-        throw error;
+        logger.error(`Error completing job ${jobId}:`, { error: error.message, stack: error.stack });
+        return false;
     }
+}
+
+// Utils
+function removeDuplicateRecords(records) {
+    const seenRecords = new Set();
+    return records.filter(record => {
+        try {
+            const newImage = record.dynamodb.NewImage;
+            const status = newImage.Status.S;
+            const jobId = newImage.JobId.S;
+
+            if (status === "COMPLETED") {
+                const uniqueKey = `${status}-${jobId}`;
+                if (seenRecords.has(uniqueKey)) {
+                    return false;
+                } else {
+                    seenRecords.add(uniqueKey);
+                    return true;
+                }
+            }
+        } catch (error) {
+            console.warn('Error processing record:', error);
+            // If any key is missing, skip the record
+            return false;
+        }
+    });
 }

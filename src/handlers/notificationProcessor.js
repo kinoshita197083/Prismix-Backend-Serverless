@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
-const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const logger = require('../utils/logger');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_API_KEY);
@@ -13,7 +13,12 @@ const ses = new SESClient();
 exports.handler = async (event) => {
     logger.info('Notification processor event:', { event });
 
-    for (const record of event.Records) {
+    const uniqueRecords = removeDuplicateRecords(event.Records);
+
+    console.log('Original records: ', event.Records.length);
+    console.log('Unique records: ', uniqueRecords.length);
+
+    for (const record of uniqueRecords) {
         const body = JSON.parse(record.body);
         const message = JSON.parse(body.Message);
         const jobId = message.jobId;
@@ -23,6 +28,7 @@ exports.handler = async (event) => {
             const data = await fetchDataFromJobProgress(jobId);
             const userId = data.UserId; // Ensure userId is defined here
             const isEmailSent = data.EmailSent;
+            console.log('----> isEmailSent: ', isEmailSent);
 
             logger.info(`Processing notification for job ${jobId} and user ${userId}`);
 
@@ -30,8 +36,6 @@ exports.handler = async (event) => {
                 logger.info(`Email already sent for job ${jobId}. Skipping notification.`);
                 return;
             }
-
-            console.log('----> userId: ', data);
 
             // Retrieve user email from Supabase
             const { data: user, error } = await supabase
@@ -60,12 +64,29 @@ exports.handler = async (event) => {
 
             logger.info(`Notification sent for job ${jobId} to user ${userId}`);
         } catch (error) {
-            logger.error('Error processing notification:', { error, jobId, userId });
+            logger.error('Error processing notification:', { error, jobId });
         }
     }
 };
 
+function removeDuplicateRecords(records) {
+    const seenJobIds = new Set();
+    return records.filter(record => {
+        const body = JSON.parse(record.body);
+        const message = JSON.parse(body.Message);
+        const jobId = message.jobId;
+
+        if (seenJobIds.has(jobId)) {
+            return false;
+        } else {
+            seenJobIds.add(jobId);
+            return true;
+        }
+    });
+}
+
 async function updateEmailSent(jobId) {
+    logger.info(`Updating email sent status for job ${jobId}`);
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
@@ -73,8 +94,14 @@ async function updateEmailSent(jobId) {
         ExpressionAttributeValues: { ':emailSent': true }
     };
 
-    await docClient.send(new UpdateItemCommand(params));
-    console.log(`Email sent status updated for job ${jobId}`);
+    try {
+        await docClient.send(new UpdateCommand(params));
+        logger.info(`Email sent status updated for job ${jobId}`);
+    } catch (error) {
+        console.log('----> Update Email sent error: ', error);
+        logger.error(`Error updating email sent status for job ${jobId}:`, { error });
+        throw error;
+    }
 }
 
 async function sendEmailNotification(email, name, jobId) {

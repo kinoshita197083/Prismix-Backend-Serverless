@@ -261,6 +261,8 @@ Resources:
                   - dynamodb:GetShardIterator
                   - dynamodb:DescribeStream
                   - dynamodb:ListStreams
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
                 Resource: 
                   Fn::GetAtt: [JobProgressTable, StreamArn]
               - Effect: Allow
@@ -352,6 +354,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource: 
