@@ -8,16 +8,18 @@ const dynamoClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 exports.handler = async (event) => {
-    logger.info('Job completion checker started', { event: JSON.stringify(event) });
+    logger.info('Job completion checker started', event);
 
     for (const record of event.Records) {
         if (record.eventName === 'MODIFY') {
             const newImage = record.dynamodb.NewImage;
-            const oldImage = record.dynamodb.OldImage;
-            const jobId = newImage.JobId.S;
-            const userId = oldImage.UserId?.S;
+            const keys = record.dynamodb.Keys;
+            const jobId = keys.JobId?.S;
 
-            console.log('----> userId: ', userId);
+            if (!jobId) {
+                logger.error('JobId is missing in the new image', { newImage });
+                continue; // Skip this record if JobId is not present
+            }
 
             const jobCompletionCommand = new GetCommand({
                 TableName: process.env.JOB_PROGRESS_TABLE,
@@ -27,6 +29,8 @@ exports.handler = async (event) => {
             const jobCompletionResult = await docClient.send(jobCompletionCommand);
             const jobCompletionItem = jobCompletionResult.Item;
             const jobCompleted = jobCompletionItem.JobCompleted?.BOOL;
+
+            console.log('----> jobCompleted: ', jobCompleted);
 
             if (jobCompleted) {
                 logger.info(`Job ${jobId} is already completed. Skipping.`);
@@ -90,8 +94,8 @@ async function completeJob(jobId) {
     });
 
     try {
-        await docClient.send(updateCommand);
-        logger.info(`Job ${jobId} completed successfully`);
+        const result = await docClient.send(updateCommand);
+        logger.info(`Job ${jobId} completed successfully`, { result });
     } catch (error) {
         logger.error(`Error completing job ${jobId}:`, { error: error.message });
         throw error;

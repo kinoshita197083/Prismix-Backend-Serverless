@@ -1,0 +1,111 @@
+{
+    "Records": [
+        {
+            "eventID": "a8ae763a51b10520485d8c29266a0db1",
+            "eventName": "MODIFY",
+            "eventSource": "aws:dynamodb",
+            "awsRegion": "us-east-1",
+            "dynamodb": {
+                "Keys": {
+                    "JobId": {
+                        "S": "1de58baf-6de8-4fe4-ba03-fbf64a315297"
+                    }
+                },
+                "NewImage": {
+                    "Status": {
+                        "S": "IN_PROGRESS"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729408519111"
+                    },
+                    "ProcessedImages": {
+                        "N": "42"
+                    },
+                    "TotalImages": {
+                        "N": "53"
+                    }
+                },
+                "OldImage": {
+                    "Status": {
+                        "S": "IN_PROGRESS"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729408519103"
+                    },
+                    "ProcessedImages": {
+                        "N": "41"
+                    },
+                    "TotalImages": {
+                        "N": "53"
+                    }
+                }
+            }
+        },
+        {
+            "eventID": "ff39e8349dbe4e4a28894ef103026f8f",
+            "eventName": "MODIFY",
+            "dynamodb": {
+                "Keys": {
+                    "JobId": {
+                        "S": "1de58baf-6de8-4fe4-ba03-fbf64a315297"
+                    }
+                },
+                "NewImage": {
+                    "ProcessedImages": {
+                        "N": "43"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729408519119"
+                    }
+                },
+                "OldImage": {
+                    "ProcessedImages": {
+                        "N": "42"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729408519111"
+                    }
+                }
+            }
+        },
+        {
+            "eventID": "91c2ead31825d5f8c8bff11401b8efce",
+            "eventName": "MODIFY",
+            "dynamodb": {
+                "Keys": {
+                    "JobId": {
+                        "S": "1de58baf-6de8-4fe4-ba03-fbf64a315297"
+                    }
+                },
+                "NewImage": {
+                    "Status": {
+                        "S": "IN_PROGRESS"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729408519180"
+                    },
+                    "ProcessedImages": {
+                        "N": "51"
+                    },
+                    "TotalImages": {
+                        "N": "53"
+                    }
+                },
+                "OldImage": {
+                    "Status": {
+                        "S": "IN_PROGRESS"
+                    },
+                    "LastUpdateTime": {
+                        "N": "1729408519173"
+                    },
+                    "ProcessedImages": {
+                        "N": "50"
+                    },
+                    "TotalImages": {
+                        "N": "53"
+                    }
+                }
+            }
+        }
+    ]
+}

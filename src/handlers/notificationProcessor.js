@@ -18,13 +18,13 @@ exports.handler = async (event) => {
         const message = JSON.parse(body.Message);
         const jobId = message.jobId;
 
-        logger.info(`Processing notification for job ${jobId} and user ${userId}`);
-
         try {
             // Fetch userId from JobProgress table
             const data = await fetchDataFromJobProgress(jobId);
-            const userId = data.UserId;
+            const userId = data.UserId; // Ensure userId is defined here
             const isEmailSent = data.EmailSent;
+
+            logger.info(`Processing notification for job ${jobId} and user ${userId}`);
 
             if (isEmailSent) {
                 logger.info(`Email already sent for job ${jobId}. Skipping notification.`);
