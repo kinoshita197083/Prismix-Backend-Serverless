@@ -23,8 +23,16 @@ exports.handler = async (event) => {
 
         try {
             // Fetch userId from JobProgress table
-            const userId = await fetchUserIdFromJobProgress(jobId);
-            console.log('----> userId: ', userId);
+            const data = await fetchDataFromJobProgress(jobId);
+            const userId = data.UserId;
+            const isEmailSent = data.EmailSent;
+
+            if (isEmailSent) {
+                logger.info(`Email already sent for job ${jobId}. Skipping notification.`);
+                return;
+            }
+
+            console.log('----> userId: ', data);
 
             // Retrieve user email from Supabase
             const { data: user, error } = await supabase
@@ -48,12 +56,26 @@ exports.handler = async (event) => {
             // Send email notification
             await sendEmailNotification(user.email, user.name, jobId);
 
+            // Update EmailSent to true
+            await updateEmailSent(jobId);
+
             logger.info(`Notification sent for job ${jobId} to user ${userId}`);
         } catch (error) {
             logger.error('Error processing notification:', { error, jobId, userId });
         }
     }
 };
+
+async function updateEmailSent(jobId) {
+    const params = {
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: jobId },
+        UpdateExpression: 'SET EmailSent = :emailSent',
+        ExpressionAttributeValues: { ':emailSent': true }
+    };
+
+    await docClient.send(new UpdateItemCommand(params));
+}
 
 async function sendEmailNotification(email, name, jobId) {
     const params = {
@@ -134,7 +156,7 @@ This is an automated message. Please do not reply to this email.
     }
 }
 
-async function fetchUserIdFromJobProgress(jobId) {
+async function fetchDataFromJobProgress(jobId) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
@@ -144,7 +166,7 @@ async function fetchUserIdFromJobProgress(jobId) {
     try {
         const command = new GetCommand(params);
         const result = await docClient.send(command);
-        return result.Item ? result.Item.UserId : null;
+        return result.Item ? result.Item : null;
     } catch (error) {
         logger.error('Error fetching userId from JobProgress:', { error, jobId });
         throw error;

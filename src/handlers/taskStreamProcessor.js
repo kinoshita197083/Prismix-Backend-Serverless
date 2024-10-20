@@ -1,38 +1,41 @@
-const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
-const { createClient } = require('@supabase/supabase-js');
-const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBClient, UpdateItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { createClient } = require('@supabase/supabase-js')
 
 // Initialize Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_API_KEY
-);
+)
 
-// Initialize DynamoDB client
+// Initialize Dynamodb client
 const dynamoClient = new DynamoDBClient();
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 exports.handler = async (event) => {
     console.log('----> Event received: ', JSON.stringify(event, null, 2));
 
     try {
-        const updatePromises = event.Records.map(record => {
+        for (const record of event.Records) {
             if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
                 const newImage = record.dynamodb.NewImage;
                 const jobId = newImage.JobID.S;
+                console.log('----> Job ID: ', jobId);
+
+                // Check if Evaluation exists before accessing it
                 const evaluation = newImage.Evaluation ? newImage.Evaluation.S : null;
+                console.log('----> Evaluation: ', evaluation);
 
                 if (evaluation) {
-                    return updateJobProgress(jobId, evaluation);
+                    console.log(`Processing task for Job ID: ${jobId}, Evaluation: ${evaluation}`);
+                    await updateJobProgress(jobId, evaluation);
+                } else {
+                    console.log(`Skipping task for Job ID: ${jobId} - No evaluation yet`);
                 }
             }
-            return Promise.resolve();
-        });
-
-        await Promise.all(updatePromises);
+        }
         console.log('All records processed successfully');
     } catch (error) {
         console.error('Error in handler:', error);
+        throw error; // Re-throw to ensure AWS Lambda marks the execution as failed
     }
 };
 
@@ -40,58 +43,99 @@ async function updateJobProgress(jobId, evaluation) {
     console.log(`Updating job progress for Job ID: ${jobId}, Evaluation: ${evaluation}`);
 
     try {
-        const updateExpression = ['SET #LastUpdateTime = :now'];
+        const updateExpression = [
+            'SET #LastUpdateTime = :now',
+            'ProcessedImages = if_not_exists(ProcessedImages, :zero) + :inc'
+        ];
         const expressionAttributeValues = {
-            ':now': Date.now(),
-            ':inc': 1,
-            ':completed': 'COMPLETED',
-            ':inProgress': 'IN_PROGRESS',
-            ':zero': 0
+            ':now': { N: Date.now().toString() },
+            ':inc': { N: '1' },
+            ':zero': { N: '0' }
         };
         const expressionAttributeNames = {
             '#LastUpdateTime': 'LastUpdateTime',
+            '#ProcessedImages': 'ProcessedImages',
+            '#TotalImages': 'TotalImages',
             '#Status': 'Status'
         };
 
-        // Increment ProcessedImages
-        updateExpression.push('ProcessedImages = if_not_exists(ProcessedImages, :zero) + :inc');
-
-        // Update evaluation-specific image count
-        if (['Duplicate', 'Eligible', 'Excluded', 'Failed'].includes(capitalizeFirstLetter(evaluation))) {
-            const attributeName = `${capitalizeFirstLetter(evaluation)}Images`;
+        // Update the specific evaluation type count
+        const capitalizedEvaluation = capitalizeFirstLetter(evaluation);
+        if (['Duplicate', 'Eligible', 'Excluded', 'Failed'].includes(capitalizedEvaluation)) {
+            const attributeName = `${capitalizedEvaluation}Images`;
             updateExpression.push(`${attributeName} = if_not_exists(${attributeName}, :zero) + :inc`);
             expressionAttributeNames[`#${attributeName}`] = attributeName;
         } else {
-            console.warn(`Unexpected evaluation type: ${capitalizeFirstLetter(evaluation)}`);
+            console.warn(`Unexpected evaluation type: ${capitalizedEvaluation}`);
         }
 
-        // Conditionally update status based on ProcessedImages and TotalImages
-        updateExpression.push(
-            '#Status = if_not_exists(#Status, if(ProcessedImages + :inc >= TotalImages, :completed, :inProgress))'
-        );
+        // Add conditional update for job completion
+        updateExpression.push('SET #Status = if_not_exists(#Status, :processing)');
+        expressionAttributeValues[':processing'] = { S: 'PROCESSING' };
+        expressionAttributeValues[':completed'] = { S: 'COMPLETED' };
 
-        const updateCommand = new UpdateCommand({
+        const conditionExpression =
+            'attribute_exists(#TotalImages) AND ' +
+            '(#ProcessedImages + :inc >= #TotalImages OR attribute_not_exists(#Status))';
+
+        const updateItemCommand = new UpdateItemCommand({
             TableName: process.env.JOB_PROGRESS_TABLE,
-            Key: { JobId: jobId },
+            Key: { JobId: { S: jobId } },
             UpdateExpression: updateExpression.join(', '),
+            ConditionExpression: conditionExpression,
             ExpressionAttributeValues: expressionAttributeValues,
             ExpressionAttributeNames: expressionAttributeNames,
             ReturnValues: 'ALL_NEW'
         });
 
-        const updateResult = await docClient.send(updateCommand);
+        console.log('Sending update command:', JSON.stringify(updateItemCommand, null, 2));
+
+        const updateResult = await dynamoClient.send(updateItemCommand);
         const updatedItem = updateResult.Attributes;
 
         console.log(`Updated item for Job ID ${jobId}:`, JSON.stringify(updatedItem, null, 2));
 
-        // Check if the job was just marked as completed
-        if (updatedItem.Status === 'COMPLETED') {
-            console.log(`Job ${jobId} has processed all images and was just marked as COMPLETED.`);
+        // Check if job is completed
+        if (!updatedItem.ProcessingEnded && updatedItem.Status && updatedItem.Status.S === 'COMPLETED') {
+            console.log(`Job ${jobId} has processed all images. Marked as COMPLETED.`);
+            await updateJobStatus(jobId, 'COMPLETED');
             await updateJobStatusRDS(jobId, 'COMPLETED');
         }
     } catch (error) {
-        console.error(`Error updating job progress for Job ID ${jobId}:`, error);
-        // Continue on error without throwing to avoid lambda failures
+        if (error.name === 'ConditionalCheckFailedException') {
+            console.log(`Conditional update failed for Job ID ${jobId}. This is likely due to concurrent updates or the job already being completed.`);
+        } else {
+            console.error(`Error updating job progress for Job ID ${jobId}:`, error);
+            throw error;
+        }
+    }
+}
+
+async function updateJobStatus(jobId, status) {
+    console.log(`Updating job status to ${status} for Job ID: ${jobId}`);
+    try {
+        const updateExpression = ['SET #Status = :status', '#processingEnded = :isEnded'];
+        const expressionAttributeValues = {
+            ':status': { S: status },
+            ':isEnded': { BOOL: true }
+        };
+        const expressionAttributeNames = {
+            '#Status': 'Status',
+            '#processingEnded': 'ProcessingEnded'
+        };
+        const updateItemCommand = new UpdateItemCommand({
+            TableName: process.env.JOB_PROGRESS_TABLE,
+            Key: { JobId: { S: jobId } },
+            UpdateExpression: updateExpression,
+            ExpressionAttributeValues: expressionAttributeValues,
+            ExpressionAttributeNames: expressionAttributeNames
+        });
+
+        await dynamoClient.send(updateItemCommand);
+        console.log(`Successfully updated job status to ${status} for Job ID: ${jobId}`);
+    } catch (error) {
+        console.error(`Error updating job status for Job ID ${jobId}:`, error);
+        throw error;
     }
 }
 
@@ -115,9 +159,15 @@ async function updateJobStatusRDS(jobId, status) {
 }
 
 function capitalizeFirstLetter(input) {
-    if (typeof input !== 'string') {
+    if (typeof input !== 'string' || input === null) {
         return '';
     }
+
     input = input.trim();
-    return input.length === 0 ? '' : input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
+
+    if (input.length === 0) {
+        return '';
+    }
+
+    return input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
 }
