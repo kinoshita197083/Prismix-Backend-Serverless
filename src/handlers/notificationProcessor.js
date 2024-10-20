@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const logger = require('../utils/logger');
 
@@ -17,7 +17,6 @@ exports.handler = async (event) => {
         const body = JSON.parse(record.body);
         const message = JSON.parse(body.Message);
         const jobId = message.jobId;
-        const userId = message.userId; // Assuming the userId is included in the message
 
         logger.info(`Processing notification for job ${jobId} and user ${userId}`);
 
@@ -75,6 +74,7 @@ async function updateEmailSent(jobId) {
     };
 
     await docClient.send(new UpdateItemCommand(params));
+    console.log(`Email sent status updated for job ${jobId}`);
 }
 
 async function sendEmailNotification(email, name, jobId) {

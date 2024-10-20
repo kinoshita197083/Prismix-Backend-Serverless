@@ -43,14 +43,17 @@ async function updateJobProgress(jobId, evaluation) {
     console.log(`Updating job progress for Job ID: ${jobId}, Evaluation: ${evaluation}`);
 
     try {
-        const updateExpression = [
-            'SET #LastUpdateTime = :now',
-            'ProcessedImages = if_not_exists(ProcessedImages, :zero) + :inc'
+        const setExpressions = [
+            '#LastUpdateTime = :now',
+            '#Status = if_not_exists(#Status, :processing)'
+        ];
+        const addExpressions = [
+            '#ProcessedImages :inc'
         ];
         const expressionAttributeValues = {
             ':now': { N: Date.now().toString() },
             ':inc': { N: '1' },
-            ':zero': { N: '0' }
+            ':processing': { S: 'PROCESSING' },
         };
         const expressionAttributeNames = {
             '#LastUpdateTime': 'LastUpdateTime',
@@ -63,26 +66,17 @@ async function updateJobProgress(jobId, evaluation) {
         const capitalizedEvaluation = capitalizeFirstLetter(evaluation);
         if (['Duplicate', 'Eligible', 'Excluded', 'Failed'].includes(capitalizedEvaluation)) {
             const attributeName = `${capitalizedEvaluation}Images`;
-            updateExpression.push(`${attributeName} = if_not_exists(${attributeName}, :zero) + :inc`);
+            addExpressions.push(`#${attributeName} :inc`);
             expressionAttributeNames[`#${attributeName}`] = attributeName;
         } else {
             console.warn(`Unexpected evaluation type: ${capitalizedEvaluation}`);
         }
 
-        // Add conditional update for job completion
-        updateExpression.push('SET #Status = if_not_exists(#Status, :processing)');
-        expressionAttributeValues[':processing'] = { S: 'PROCESSING' };
-        expressionAttributeValues[':completed'] = { S: 'COMPLETED' };
-
-        const conditionExpression =
-            'attribute_exists(#TotalImages) AND ' +
-            '(#ProcessedImages + :inc >= #TotalImages OR attribute_not_exists(#Status))';
-
         const updateItemCommand = new UpdateItemCommand({
             TableName: process.env.JOB_PROGRESS_TABLE,
             Key: { JobId: { S: jobId } },
-            UpdateExpression: updateExpression.join(', '),
-            ConditionExpression: conditionExpression,
+            UpdateExpression: `SET ${setExpressions.join(', ')} ADD ${addExpressions.join(', ')}`,
+            ConditionExpression: 'attribute_exists(#TotalImages)',
             ExpressionAttributeValues: expressionAttributeValues,
             ExpressionAttributeNames: expressionAttributeNames,
             ReturnValues: 'ALL_NEW'
@@ -96,7 +90,11 @@ async function updateJobProgress(jobId, evaluation) {
         console.log(`Updated item for Job ID ${jobId}:`, JSON.stringify(updatedItem, null, 2));
 
         // Check if job is completed
-        if (!updatedItem.ProcessingEnded && updatedItem.Status && updatedItem.Status.S === 'COMPLETED') {
+        const processedImages = parseInt(updatedItem.ProcessedImages.N, 10);
+        const totalImages = parseInt(updatedItem.TotalImages.N, 10);
+        const processingEnded = updatedItem.ProcessingEnded ? updatedItem.ProcessingEnded.BOOL : false;
+
+        if (!processingEnded && processedImages >= totalImages) {
             console.log(`Job ${jobId} has processed all images. Marked as COMPLETED.`);
             await updateJobStatus(jobId, 'COMPLETED');
             await updateJobStatusRDS(jobId, 'COMPLETED');
@@ -114,7 +112,7 @@ async function updateJobProgress(jobId, evaluation) {
 async function updateJobStatus(jobId, status) {
     console.log(`Updating job status to ${status} for Job ID: ${jobId}`);
     try {
-        const updateExpression = ['SET #Status = :status', '#processingEnded = :isEnded'];
+        const updateExpression = ['#Status = :status', '#processingEnded = :isEnded'];
         const expressionAttributeValues = {
             ':status': { S: status },
             ':isEnded': { BOOL: true }
@@ -126,7 +124,7 @@ async function updateJobStatus(jobId, status) {
         const updateItemCommand = new UpdateItemCommand({
             TableName: process.env.JOB_PROGRESS_TABLE,
             Key: { JobId: { S: jobId } },
-            UpdateExpression: updateExpression,
+            UpdateExpression: 'SET ' + updateExpression.join(', '),
             ExpressionAttributeValues: expressionAttributeValues,
             ExpressionAttributeNames: expressionAttributeNames
         });

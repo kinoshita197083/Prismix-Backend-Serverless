@@ -1,7 +1,11 @@
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
 const logger = require('../utils/logger');
 
 const snsClient = new SNSClient();
+const dynamoClient = new DynamoDBClient();
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 exports.handler = async (event) => {
     logger.info('Job completion checker started', { event: JSON.stringify(event) });
@@ -15,6 +19,20 @@ exports.handler = async (event) => {
 
             console.log('----> userId: ', userId);
 
+            const jobCompletionCommand = new GetCommand({
+                TableName: process.env.JOB_PROGRESS_TABLE,
+                Key: { JobId: jobId }
+            });
+
+            const jobCompletionResult = await docClient.send(jobCompletionCommand);
+            const jobCompletionItem = jobCompletionResult.Item;
+            const jobCompleted = jobCompletionItem.JobCompleted?.BOOL;
+
+            if (jobCompleted) {
+                logger.info(`Job ${jobId} is already completed. Skipping.`);
+                return;
+            }
+
             // Check if Status field exists in the new image
             if (newImage.Status && newImage.Status.S) {
                 const status = newImage.Status.S;
@@ -25,6 +43,7 @@ exports.handler = async (event) => {
                     logger.info(`Job ${jobId} is completed. Initiating post-processing.`);
                     try {
                         await publishToSNS(jobId);
+                        await completeJob(jobId);
                     } catch (error) {
                         logger.error(`Failed to publish completion for job ${jobId}`, { error: error.message, stack: error.stack });
                     }
@@ -56,6 +75,25 @@ async function publishToSNS(jobId) {
         logger.info(`Successfully published job completion for ${jobId} to SNS`, { messageId: result.MessageId });
     } catch (error) {
         logger.error(`Error publishing to SNS for job ${jobId}:`, { error: error.message, params });
+        throw error;
+    }
+}
+
+async function completeJob(jobId) {
+    logger.info(`Completing job ${jobId}`);
+
+    const updateCommand = new UpdateItemCommand({
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: jobId },
+        UpdateExpression: 'SET JobCompleted = :completed',
+        ExpressionAttributeValues: { ':completed': { BOOL: true } }
+    });
+
+    try {
+        await docClient.send(updateCommand);
+        logger.info(`Job ${jobId} completed successfully`);
+    } catch (error) {
+        logger.error(`Error completing job ${jobId}:`, { error: error.message });
         throw error;
     }
 }
