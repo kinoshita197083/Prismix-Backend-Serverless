@@ -307,6 +307,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - events:DisableRule
+                  - events:DeleteRule
+                  - events:ListTargetsByRule
+                  - events:RemoveTargets
                 Resource: 
                   Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
 

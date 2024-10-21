@@ -1,4 +1,13 @@
 Resources:
+  JobProgressCheckerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Fn::GetAtt: [JobProgressCheckerLambdaFunction, Arn]
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*"
   # EventBridge rule to trigger job progress checker on job creation
   # JobEventRule:
   #   Type: AWS::Events::Rule
@@ -47,4 +56,5 @@ Resources:
   #     Principal: "events.amazonaws.com"
   #     SourceArn:
   #       Fn::GetAtt: [JobProgressPeriodicCheckRule, Arn]
+
 

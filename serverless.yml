@@ -91,6 +91,7 @@ functions:
   ${file(src/resources/functions.yml)}
 
 resources:
+  - ${file(src/resources/eventbridge.yml)}
   - ${file(src/resources/s3.yml)}
   - ${file(src/resources/sqs.yml)}
   - ${file(src/resources/dynamodb.yml)}

@@ -3,7 +3,9 @@ const { createClient } = require('@supabase/supabase-js');
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
-const { EventBridgeClient, DisableRuleCommand } = require("@aws-sdk/client-eventbridge");
+const { EventBridgeClient, DisableRuleCommand, DeleteRuleCommand,
+    ListTargetsByRuleCommand, RemoveTargetsCommand
+} = require("@aws-sdk/client-eventbridge");
 
 const client = new DynamoDBClient({});
 const dynamoDB = DynamoDBDocumentClient.from(client);
@@ -28,8 +30,6 @@ exports.handler = async (event) => {
         if (!jobId) {
             throw new Error('Invalid event structure');
         }
-
-        console.log('Event details: ', { jobId });
 
         // Check job status and update progress
         const jobCompleted = await checkAndUpdateJobStatus(jobId);
@@ -283,9 +283,37 @@ async function updateJobStatusRDS(jobId, status) {
     }
 }
 
+async function disableAndDeleteEventBridgeRule(ruleName) {
+    try {
+        // Disable the rule
+        await eventBridgeClient.send(new DisableRuleCommand({ Name: ruleName }));
+        console.log(`Disabled EventBridge rule: ${ruleName}`);
+
+        // List targets for the rule
+        const listTargetsResponse = await eventBridgeClient.send(new ListTargetsByRuleCommand({ Rule: ruleName }));
+        const targets = listTargetsResponse.Targets;
+
+        if (targets && targets.length > 0) {
+            // Remove all targets
+            const targetIds = targets.map(target => target.Id);
+            await eventBridgeClient.send(new RemoveTargetsCommand({
+                Rule: ruleName,
+                Ids: targetIds
+            }));
+            console.log(`Removed ${targetIds.length} targets from rule: ${ruleName}`);
+        }
+
+        // Delete the rule
+        await eventBridgeClient.send(new DeleteRuleCommand({ Name: ruleName }));
+        console.log(`Deleted EventBridge rule: ${ruleName}`);
+    } catch (error) {
+        console.error(`Error disabling and deleting EventBridge rule ${ruleName}:`, error);
+        throw error;
+    }
+}
+
 async function disableEventBridgeRule(jobId) {
     const ruleName = `JobProgressCheck-${jobId}`;
-    const command = new DisableRuleCommand({ Name: ruleName });
-    await eventBridgeClient.send(command);
-    console.log(`Disabled EventBridge rule for job ${jobId}`);
+    await disableAndDeleteEventBridgeRule(ruleName);
+    console.log(`Disabled and deleted EventBridge rule for job ${jobId}`);
 }
