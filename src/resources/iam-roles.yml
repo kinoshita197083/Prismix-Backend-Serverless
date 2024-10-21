@@ -134,6 +134,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
+                  - sqs:SendMessage
                 Resource:
                   - Fn::GetAtt: [EligibleImageQueue, Arn]
               - Effect: Allow

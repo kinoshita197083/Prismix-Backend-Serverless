@@ -18,7 +18,9 @@ async function calculateImageHash(bucket, key) {
         console.log('Start calculating image hash...');
         const getObjectCommand = new GetObjectCommand({ Bucket: bucket, Key: key });
         const { Body } = await s3Client.send(getObjectCommand);
+        console.log('Image retrieved from S3 successfully');
         const buffer = await streamToBuffer(Body);
+        console.log('buffer processed successfully');
 
         // Resize image to a standard size for consistent hashing
         const resizedBuffer = await sharp(buffer)
@@ -27,8 +29,11 @@ async function calculateImageHash(bucket, key) {
             .raw()
             .toBuffer();
 
+        console.log('resizedBuffer: ', resizedBuffer);
+
         // Calculate perceptual hash
         const hash = crypto.createHash('md5').update(resizedBuffer).digest('hex');
+        console.log('hash: ', hash);
         return hash;
     } catch (error) {
         logger.error('Error calculating image hash', { error });
@@ -202,7 +207,8 @@ exports.handler = async (event, context) => {
                     jobId,
                     taskId: imageId,
                     imageS3Key: s3ObjectKey,
-                    status: 'WAITING_FOR_RETRY'
+                    status: 'WAITING_FOR_RETRY',
+                    evaluation: 'FAILED'
                 });
             } catch (retryUpdateError) {
                 logger.error('Error updating task status to WAITING_FOR_RETRY', { error: retryUpdateError.message, jobId, taskId: imageId });
