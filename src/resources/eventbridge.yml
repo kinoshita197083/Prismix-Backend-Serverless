@@ -1,50 +1,50 @@
 Resources:
   # EventBridge rule to trigger job progress checker on job creation
-  JobEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: "Rule to trigger job progress checker on job creation"
-      EventPattern:
-        source:
-          - "com.yourapp.jobcreation"
-        detail-type:
-          - "JobCreated"
-          - "JobUpdated"
-      State: "ENABLED"
-      Targets:
-        - Arn:
-            Fn::GetAtt: [jobProgressChecker, Arn]
+  # JobEventRule:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: "Rule to trigger job progress checker on job creation"
+  #     EventPattern:
+  #       source:
+  #         - "com.yourapp.jobcreation"
+  #       detail-type:
+  #         - "JobCreated"
+  #         - "JobUpdated"
+  #     State: "ENABLED"
+  #     Targets:
+  #       - Arn:
+  #           Fn::GetAtt: [jobProgressChecker, Arn]
 
   # EventBridge rule for periodic job progress checks (every 1 minute)
-  JobProgressPeriodicCheckRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: "Rule to trigger job progress checker periodically"
-      ScheduleExpression: "rate(1 minute)" # Adjust schedule as necessary
-      State: "ENABLED"
-      Targets:
-        - Arn:
-            Fn::GetAtt: [jobProgressChecker, Arn]
+  # JobProgressPeriodicCheckRule:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: "Rule to trigger job progress checker periodically"
+  #     ScheduleExpression: "rate(1 minute)" # Adjust schedule as necessary
+  #     State: "ENABLED"
+  #     Targets:
+  #       - Arn:
+  #           Fn::GetAtt: [jobProgressChecker, Arn]
 
   # Permissions to allow EventBridge to invoke the Lambda function on job creation
-  JobProgressCheckerInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName:
-        Fn::GetAtt: [jobProgressChecker, Arn]
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn:
-        Fn::GetAtt: [JobEventRule, Arn]
+  # JobProgressCheckerInvokePermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName:
+  #       Fn::GetAtt: [jobProgressChecker, Arn]
+  #     Action: "lambda:InvokeFunction"
+  #     Principal: "events.amazonaws.com"
+  #     SourceArn:
+  #       Fn::GetAtt: [JobEventRule, Arn]
 
   # Permissions to allow EventBridge to invoke the Lambda function periodically
-  JobProgressPeriodicCheckInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName:
-        Fn::GetAtt: [jobProgressChecker, Arn]
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn:
-        Fn::GetAtt: [JobProgressPeriodicCheckRule, Arn]
+  # JobProgressPeriodicCheckInvokePermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName:
+  #       Fn::GetAtt: [jobProgressChecker, Arn]
+  #     Action: "lambda:InvokeFunction"
+  #     Principal: "events.amazonaws.com"
+  #     SourceArn:
+  #       Fn::GetAtt: [JobProgressPeriodicCheckRule, Arn]
 

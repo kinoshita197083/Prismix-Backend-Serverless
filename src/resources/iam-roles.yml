@@ -304,6 +304,11 @@ Resources:
                   - sns:Publish
                 Resource: 
                   Ref: JobCompletionTopic
+              - Effect: Allow
+                Action:
+                  - events:DisableRule
+                Resource: 
+                  Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
 
   DeliveryProcessorRole:
     Type: AWS::IAM::Role
@@ -393,3 +398,4 @@ Resources:
                   - dynamodb:Scan
                 Resource: 
                   - Fn::GetAtt: [JobProgressTable, Arn]
+

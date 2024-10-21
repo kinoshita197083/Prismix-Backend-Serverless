@@ -3,10 +3,12 @@ const { createClient } = require('@supabase/supabase-js');
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
+const { EventBridgeClient, DisableRuleCommand } = require("@aws-sdk/client-eventbridge");
 
 const client = new DynamoDBClient({});
 const dynamoDB = DynamoDBDocumentClient.from(client);
 const snsClient = new SNSClient();
+const eventBridgeClient = new EventBridgeClient();
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -21,16 +23,30 @@ exports.handler = async (event) => {
     try {
         console.log('----> Event received: ', event);
 
-        let jobId, projectId, userId;
-        try {
-            ({ jobId, projectId, userId } = JSON.parse(event.detail));
-        } catch (error) {
-            ({ jobId, projectId, userId } = event.detail);
+        const { jobId } = event;
+
+        if (!jobId) {
+            throw new Error('Invalid event structure');
         }
-        console.log('Event details: ', { jobId, projectId, userId });
+
+        console.log('Event details: ', { jobId });
 
         // Check job status and update progress
-        await checkAndUpdateJobStatus(jobId, projectId, userId);
+        const jobCompleted = await checkAndUpdateJobStatus(jobId);
+
+        // If job is completed, update RDS and SNS and disable the EventBridge rule
+        if (jobCompleted) {
+            await updateJobStatusRDS(jobId, 'COMPLETED');
+            // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
+            console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
+
+            await publishToSNS(jobId);
+            // logger.info('Job completion published to SNS', { jobId });
+            console.log('Job completion published to SNS', { jobId });
+
+            await disableEventBridgeRule(jobId);
+            console.log(`Job completed, disabling EventBridge rule for job ${jobId}`);
+        }
 
         console.log(`Successfully processed event for jobId: ${jobId}`);
         return { statusCode: 200, body: 'Event processed successfully' };
@@ -65,8 +81,9 @@ function isRetryableError(error) {
 }
 
 // Check job status and update it with version control
-async function checkAndUpdateJobStatus(jobId, projectId, userId) {
-    logger.info('Starting job status check and update', { jobId, projectId, userId });
+async function checkAndUpdateJobStatus(jobId) {
+    // logger.info('Starting job status check and update', { jobId });
+    console.log('Starting job status check and update', { jobId });
 
     try {
         const { processedImages,
@@ -104,33 +121,26 @@ async function checkAndUpdateJobStatus(jobId, projectId, userId) {
             // Update job progress with optimistic locking based on version
             if (processedImages < totalImages) {
                 console.log('Job not completed yet, updating progress');
-                await updateJobProgress(jobId, projectId, userId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, 'IN_PROGRESS', version);
+                await updateJobProgress(jobId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, 'IN_PROGRESS', version);
                 // logger.info('Job progress updated', { jobId, status: 'IN_PROGRESS' });
                 console.log('Job progress updated', { jobId, status: 'IN_PROGRESS' });
+                return false;
             } else if (processedImages === totalImages) {
                 console.log('Job completed, updating progress to COMPLETED');
-                await updateJobProgress(jobId, projectId, userId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, 'COMPLETED', version);
+                await updateJobProgress(jobId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, 'COMPLETED', version);
                 // logger.info('Job completed, progress updated', { jobId, status: 'COMPLETED' });
                 console.log('Job completed, progress updated', { jobId, status: 'COMPLETED' });
-
-                await updateJobStatusRDS(jobId, 'COMPLETED');
-                // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
-                console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
-
-                await publishToSNS(jobId);
-                // logger.info('Job completion published to SNS', { jobId });
-                console.log('Job completion published to SNS', { jobId });
+                return true;
             }
         } else {
             // logger.info('No progress detected, skipping update', { jobId });
             console.log('No progress detected, skipping update', { jobId });
+            return false;
         }
     } catch (error) {
         // logger.error('Error in checkAndUpdateJobStatus', {
         console.log('Error in checkAndUpdateJobStatus', {
             jobId,
-            projectId,
-            userId,
             error: error.message,
             stack: error.stack
         });
@@ -192,13 +202,11 @@ async function getCurrentJobProgress(jobId) {
 }
 
 // Update job progress with version check (optimistic locking)
-async function updateJobProgress(jobId, projectId, userId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, status, currentVersion) {
+async function updateJobProgress(jobId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, status, currentVersion) {
     const params = {
         TableName: JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
         UpdateExpression: 'SET ' + [
-            'projectId = :projectId',
-            'userId = :userId',
             'processedImages = :processedImages',
             'eligibleImages = :eligibleImages',
             'failedImages = :failedImages',
@@ -211,8 +219,6 @@ async function updateJobProgress(jobId, projectId, userId, processedImages, elig
         ConditionExpression: 'version = :currentVersion', // Optimistic locking
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
-            ':projectId': projectId,
-            ':userId': userId,
             ':processedImages': processedImages,
             ':eligibleImages': eligibleImages,
             ':failedImages': failedImages,
@@ -275,4 +281,11 @@ async function updateJobStatusRDS(jobId, status) {
         console.error(`Error updating job status in RDS for Job ID ${jobId}:`, error);
         throw error;
     }
+}
+
+async function disableEventBridgeRule(jobId) {
+    const ruleName = `JobProgressCheck-${jobId}`;
+    const command = new DisableRuleCommand({ Name: ruleName });
+    await eventBridgeClient.send(command);
+    console.log(`Disabled EventBridge rule for job ${jobId}`);
 }
