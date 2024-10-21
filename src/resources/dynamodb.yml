@@ -38,8 +38,8 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-      StreamSpecification:
-        StreamViewType: NEW_IMAGE
+      # StreamSpecification:
+      #   StreamViewType: NEW_IMAGE
 
   ImageHashesTable:
     Type: AWS::DynamoDB::Table
@@ -71,5 +71,5 @@ Resources:
       KeySchema:
         - AttributeName: JobId
           KeyType: HASH
-      StreamSpecification:
-        StreamViewType: NEW_IMAGE
+      # StreamSpecification:
+      #   StreamViewType: NEW_IMAGE

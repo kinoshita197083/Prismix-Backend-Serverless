@@ -1,0 +1,15 @@
+{
+    "version": "0",
+    "id": "15777750-e82c-e3a0-9e46-56b8c125b254",
+    "detail-type": "JobCreated",
+    "source": "com.yourapp.jobcreation",
+    "account": "980352750282",
+    "time": "2024-10-21T02:40:14Z",
+    "region": "us-east-1",
+    "resources": [],
+    "detail": {
+        "jobId": "a9b93989-09aa-4dba-bbd3-b3fd4ede17ab",
+        "projectId": null,
+        "userId": "d552debc-42ba-4610-8146-cd9e75040e32"
+    }
+}

@@ -271,6 +271,40 @@ Resources:
                 Resource: 
                   Ref: JobCompletionTopic
 
+  JobProgressCheckerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-job-progress-checker-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: job-progress-checker-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem 
+                  - dynamodb:Query
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: 
+                  Ref: JobCompletionTopic
+
   DeliveryProcessorRole:
     Type: AWS::IAM::Role
     Properties:

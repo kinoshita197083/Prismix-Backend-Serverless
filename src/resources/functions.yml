@@ -49,43 +49,62 @@ deadLetterQueueProcessor:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
 
 # DynamoDB Stream - Job Completion Checker
-jobCompletionChecker:
-  handler: src/handlers/jobCompletionChecker.handler
+# jobCompletionChecker:
+#   handler: src/handlers/jobCompletionChecker.handler
+#   events:
+#     - stream:
+#         type: dynamodb
+#         arn:
+#           Fn::GetAtt: [JobProgressTable, StreamArn]
+#   environment:
+#     JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+#     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+#     JOB_COMPLETION_TOPIC_ARN: 
+#       Ref: JobCompletionTopic
+#     # JOB_COMPLETION_TOPIC_ARN: 
+#     #   Ref: JobCompletionTopic
+#     # JOB_COMPLETION_QUEUE_URL:
+#     #   Ref: JobCompletionQueue
+#   role: JobCompletionCheckerRole
+#   layers:
+#     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+jobProgressChecker:
+  handler: src/handlers/jobProgressChecker.handler
   events:
-    - stream:
-        type: dynamodb
-        arn:
-          Fn::GetAtt: [JobProgressTable, StreamArn]
+    - eventBridge:
+        pattern:
+          source:
+            - "com.yourapp.jobcreation"
+          detail-type:
+            - "JobCreated"
+            - "JobUpdated"
   environment:
-    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
     JOB_COMPLETION_TOPIC_ARN: 
       Ref: JobCompletionTopic
-    # JOB_COMPLETION_TOPIC_ARN: 
-    #   Ref: JobCompletionTopic
-    # JOB_COMPLETION_QUEUE_URL:
-    #   Ref: JobCompletionQueue
-  role: JobCompletionCheckerRole
+  role: JobProgressCheckerRole
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
 
 # taskStreamProcessor:
-taskStreamProcessor:
-  handler: src/handlers/taskStreamProcessor.handler
-  memorySize: 2048 
-  timeout: 300 #15 minutes (15 * 60 = 900 seconds)
-  events:
-    - stream:
-        type: dynamodb
-        arn:
-          Fn::GetAtt: [TasksTable, StreamArn]
-        batchSize: 100  # Increase batch size
-        startingPosition: LATEST
-  environment:
-    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
-  role: TaskStreamProcessorRole
-  layers:
-    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+# taskStreamProcessor:
+#   handler: src/handlers/taskStreamProcessor.handler
+#   memorySize: 2048 
+#   timeout: 300 #15 minutes (15 * 60 = 900 seconds)
+#   events:
+#     - stream:
+#         type: dynamodb
+#         arn:
+#           Fn::GetAtt: [TasksTable, StreamArn]
+#         batchSize: 100  # Increase batch size
+#         startingPosition: LATEST
+#   environment:
+#     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+#   role: TaskStreamProcessorRole
+#   layers:
+#     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
 
 deliveryProcessor:
   handler: src/handlers/deliveryProcessor.handler

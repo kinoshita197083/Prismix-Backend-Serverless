@@ -21,7 +21,8 @@
     "test:task-stream-processor": "npx dotenv -e .env.dev -- serverless invoke local --function taskStreamProcessor --path src/test-events/task-stream-event.json",
     "test:notification-processor": "npx dotenv -e .env.dev -- serverless invoke local --function notificationProcessor --path src/test-events/notification-event.json",
     "test:delivery-processor": "npx dotenv -e .env.dev -- serverless invoke local --function deliveryProcessor --path src/test-events/delivery-event.json",
-    "test:job-completion-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobCompletionChecker --path src/test-events/job-completion-event.json"
+    "test:job-completion-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobCompletionChecker --path src/test-events/job-completion-event.json",
+    "test:job-progress-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobProgressChecker --path src/test-events/job-progress-event.json"
   },
   "keywords": [],
   "author": "",
