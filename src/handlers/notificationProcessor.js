@@ -13,12 +13,12 @@ const ses = new SESClient();
 exports.handler = async (event) => {
     logger.info('Notification processor event:', { event });
 
-    const uniqueRecords = removeDuplicateRecords(event.Records);
+    // const uniqueRecords = removeDuplicateRecords(event.Records);
 
     console.log('Original records: ', event.Records.length);
-    console.log('Unique records: ', uniqueRecords.length);
+    // console.log('Unique records: ', uniqueRecords.length);
 
-    for (const record of uniqueRecords) {
+    for (const record of event.Records) {
         const body = JSON.parse(record.body);
         const message = JSON.parse(body.Message);
         const jobId = message.jobId;
@@ -26,9 +26,12 @@ exports.handler = async (event) => {
         try {
             // Fetch userId from JobProgress table
             const data = await fetchDataFromJobProgress(jobId);
-            const userId = data.UserId; // Ensure userId is defined here
+            const userId = data.userId; // Ensure userId is defined here
             const isEmailSent = data.EmailSent;
             console.log('----> isEmailSent: ', isEmailSent);
+
+            console.log('userId: ', userId);
+            console.log('jobId: ', jobId);
 
             logger.info(`Processing notification for job ${jobId} and user ${userId}`);
 
@@ -187,7 +190,7 @@ async function fetchDataFromJobProgress(jobId) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        ProjectionExpression: 'UserId'
+        ProjectionExpression: 'userId'
     };
 
     try {
