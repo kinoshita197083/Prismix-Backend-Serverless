@@ -46,6 +46,7 @@
     "@aws-sdk/lib-dynamodb": "^3.670.0",
     "@aws-sdk/util-dynamodb": "^3.667.0",
     "@supabase/supabase-js": "^2.45.4",
+    "googleapis": "^144.0.0",
     "jszip": "^3.10.1",
     "sharp": "^0.33.5",
     "uuid": "^10.0.0"

@@ -403,3 +403,45 @@ Resources:
                 Resource: 
                   - Fn::GetAtt: [JobProgressTable, Arn]
 
+  ImageUploaderFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-image-uploader-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: image-uploader-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::GetAtt: [ImageUploadQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"

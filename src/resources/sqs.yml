@@ -119,3 +119,26 @@ Resources:
       TopicArn: !Ref JobCompletionTopic
       Protocol: sqs
       Endpoint: !GetAtt NotificationQueue.Arn
+
+  ImageUploadQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-queue
+      VisibilityTimeout: 300  # 5 minutes, matching the Lambda function timeout
+
+  ImageUploadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ImageUploadQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt ImageUploadQueue.Arn
