@@ -22,7 +22,8 @@
     "test:notification-processor": "npx dotenv -e .env.dev -- serverless invoke local --function notificationProcessor --path src/test-events/notification-event.json",
     "test:delivery-processor": "npx dotenv -e .env.dev -- serverless invoke local --function deliveryProcessor --path src/test-events/delivery-event.json",
     "test:job-completion-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobCompletionChecker --path src/test-events/job-completion-event.json",
-    "test:job-progress-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobProgressChecker --path src/test-events/job-progress-event.json"
+    "test:job-progress-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobProgressChecker --path src/test-events/job-progress-event.json",
+    "test:external-image-import": "npx dotenv -e .env.dev -- serverless invoke local --function imageUploadProcessor --path src/test-events/external-image-import-event.json"
   },
   "keywords": [],
   "author": "",

@@ -22,6 +22,7 @@ worker:
     - sqs:
         arn:
           Fn::GetAtt: [EligibleImageQueue, Arn]
+        batchSize: 10
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     DEAD_LETTER_QUEUE_URL:
@@ -103,13 +104,14 @@ notificationProcessor:
 # From External Drive
 imageUploadProcessor:
   handler: src/handlers/imageUploader.handler
+  memorySize: 2048
   events:
     - sqs:
         arn:
           Fn::GetAtt: [ImageUploadQueue, Arn]
         batchSize: 10
   environment:
-    BUCKET_NAME: ${self:custom.bucketName}
+    IMAGE_BUCKET: ${self:custom.bucketName}
     GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
     GOOGLE_CLIENT_SECRET: ${env:GOOGLE_CLIENT_SECRET}
   role: ImageUploaderFunctionRole

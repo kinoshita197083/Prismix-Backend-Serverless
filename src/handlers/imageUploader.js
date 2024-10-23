@@ -36,17 +36,22 @@ exports.handler = async (event) => {
                 return; // Continue with other records
             }
 
-            const { userId, projectId, jobId, projectSettingId, driveIds } = parsedBody;
+            const { userId, projectId, jobId, projectSettingId, driveIds, folderIds, provider } = parsedBody;
+
+            console.log('----> Parsed body:', parsedBody);
+            console.log('----> Extracted values:', { userId, projectId, jobId, projectSettingId, driveIds, folderIds, provider });
 
             try {
                 const googleRefreshToken = await fetchGoogleRefreshToken(userId);
+                console.log('----> Has Google refresh token:', !!googleRefreshToken);
+
                 oauth2Client.setCredentials({
-                    refresh_token: googleRefreshToken?.googleDriveRefreshToken
+                    refresh_token: googleRefreshToken
                 });
 
                 const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-                const images = await getAllImagesFromDrive(drive, driveIds);
+                const images = await getAllImagesFromDrive({ drive, driveIds, folderIds });
                 const imageCount = images.length;
 
                 if (imageCount === 0) {
@@ -56,6 +61,8 @@ exports.handler = async (event) => {
                 // Process images in batches of 100
                 const batchSize = 10;
                 const results = [];
+
+                console.log('----> Processing images in batches of', batchSize);
 
                 for (let i = 0; i < images.length; i += batchSize) {
                     const batch = images.slice(i, i + batchSize);
@@ -71,111 +78,201 @@ exports.handler = async (event) => {
                         );
                         results.push(...batchResults);
                     } catch (batchError) {
-                        logger.error('Error processing batch of images', { batchError, batch });
+                        console.error('Error processing batch of images', { batchError, batch });
+                        // logger.error('Error processing batch of images', { batchError, batch });
                     }
                 }
 
                 const successCount = results.filter(r => r.success).length;
                 const failedUploads = results.filter(r => !r.success);
                 const skippedUploads = results.filter(r => r.skipReason);
+                const totalFailed = failedUploads.length + skippedUploads.length;
+
+                console.log('----> Image upload stats:', {
+                    totalFailed,
+                    failedUploads,
+                    skippedUploads
+                });
 
                 // Update DynamoDB if there are failed or skipped uploads
                 if (failedUploads.length > 0 || skippedUploads.length > 0) {
+                    console.log('----> Updating job progress with failed/skipped upload details');
                     const dynamoDb = new DynamoDBClient({ region: process.env.AWS_REGION });
-                    const dynamoDbDocumentClient = DynamoDBDocumentClient.from(dynamoDb);
-
-                    const updateItemCommand = new UpdateCommand({
-                        TableName: process.env.JOB_PROGRESS_TABLE,
-                        Key: { JobId: jobId },
-                        UpdateExpression: 'SET failedImages = :fi, skippedImages = :si, updatedAt = :lut',
-                        ExpressionAttributeValues: {
-                            ':fi': failedUploads.length.toString(),
-                            ':si': skippedUploads.length.toString(),
-                            ':lut': Date.now() // Use a number type for timestamp
+                    const dynamoDbDocumentClient = DynamoDBDocumentClient.from(dynamoDb, {
+                        marshallOptions: {
+                            removeUndefinedValues: true
                         }
                     });
 
-                    await dynamoDbDocumentClient.send(updateItemCommand);
-
-                    console.log('Failed/Skipped uploads:', [...failedUploads, ...skippedUploads].map(f => ({
+                    const failedUploadsDetails = [...failedUploads, ...skippedUploads].map(f => ({
                         fileName: f.fileName,
                         error: f.error,
                         skipReason: f.skipReason,
                         attempts: f.attemptCount
-                    })));
+                    }));
+
+                    let updateExpression = 'SET failedImages = :fi, skippedImages = :si, updatedAt = :lut, failedUploads = :fu, processedImages = :pi';
+                    const expressionAttributeValues = {
+                        ':fi': failedUploads.length.toString(),
+                        ':si': skippedUploads.length.toString(),
+                        ':lut': Date.now(),
+                        ':fu': failedUploadsDetails,
+                        ':pi': totalFailed.toString()
+                    };
+
+                    if (totalFailed >= images.length) {
+                        // logger.info('All images failed to upload', {
+                        //     totalProcessed: images.length,
+                        //     successCount,
+                        //     failedCount: failedUploads.length,
+                        //     skippedCount: skippedUploads.length
+                        // });
+
+                        console.log('----> All images failed to upload');
+
+                        updateExpression += ', #job_status = :job_status';
+                        expressionAttributeValues[':job_status'] = 'FAILED';
+                    }
+
+                    const command = {
+                        TableName: process.env.JOB_PROGRESS_TABLE,
+                        Key: { JobId: jobId },
+                        UpdateExpression: updateExpression,
+                        ExpressionAttributeValues: expressionAttributeValues,
+                        ExpressionAttributeNames: {
+                            '#job_status': 'status'
+                        }
+                    }
+
+                    const updateItemCommand = new UpdateCommand(command);
+
+                    console.log('----> Failed/Skipped uploads:', failedUploadsDetails);
+
+                    try {
+                        await dynamoDbDocumentClient.send(updateItemCommand);
+                        console.log('Successfully updated job progress with failed/skipped upload details');
+                    } catch (error) {
+                        console.error('Error updating job progress table:', error);
+                    }
                 }
 
-                logger.info('Image uploader finished', {
-                    message: `Successfully imported ${successCount} images`,
-                    totalProcessed: images.length,
-                    successCount,
-                    failedCount: failedUploads.length,
-                    skippedCount: skippedUploads.length
-                });
+                // logger.info('Image uploader finished', {
+                //     message: `Successfully imported ${successCount} images`,
+                //     totalProcessed: images.length,
+                //     successCount,
+                //     failedCount: failedUploads.length,
+                //     skippedCount: skippedUploads.length
+                // });
+
+                console.log('----> Image uploader finished');
             } catch (error) {
-                logger.error('Error processing image upload', { error, parsedBody });
+                console.error('Error processing image upload', {
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name
+                    },
+                    parsedBody
+                });
             }
         })
     );
 };
 
-
 const fetchGoogleRefreshToken = async (userId) => {
-    const { data, error } = await supabase
-        .from('User')
-        .select('googleRefreshToken')
-        .eq('id', userId)
-        .single();
 
-    if (error) throw error;
+    try {
+        const { data, error } = await supabase
+            .from('User')
+            .select('googleDriveRefreshToken')
+            .eq('id', userId)
+            .single();
 
-    return data.googleRefreshToken;
+        if (error) throw error;
+
+        return data.googleDriveRefreshToken;
+    } catch (error) {
+        logger.error('Error fetching Google refresh token', { error, userId });
+        throw error;
+    }
 }
 
-async function getAllImagesFromDrive(drive, driveIds) {
+async function getAllImagesFromDrive({ drive, driveIds, folderIds }) {
     const images = [];
 
-    async function fetchImagesRecursively(folderId) {
+    if (!folderIds || folderIds.length === 0) {
+        console.log('No folders specified. Skipping image search.');
+        return images;
+    }
+
+    async function fetchImagesRecursively({ driveId, folderId }) {
+        if (!driveId || !folderId) {
+            console.warn('Skipping null or undefined drive ID or folder ID');
+            return;
+        }
+
         let pageToken = null;
         do {
-            const response = await drive.files.list({
-                q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType = 'application/vnd.google-apps.folder')`,
-                fields: 'nextPageToken, files(id, name, mimeType, capabilities(canDownload), permissionIds)',
-                pageToken: pageToken || undefined,
-            });
+            try {
+                const response = await drive.files.list({
+                    q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType = 'application/vnd.google-apps.folder')`,
+                    fields: 'nextPageToken, files(id, name, mimeType, capabilities(canDownload), permissionIds)',
+                    pageToken: pageToken || undefined,
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true,
+                });
 
-            if (response?.data?.files) {
-                // Process files concurrently using Promise.all for better performance
-                await Promise.all(response.data.files.map(async (file) => {
-                    if (file.mimeType === 'application/vnd.google-apps.folder') {
-                        try {
-                            // Recursively fetch images from subfolders
-                            await fetchImagesRecursively(file.id);
-                        } catch (error) {
-                            console.error(`Error fetching images from folder ${file.name}:`, error);
+                if (response?.data?.files) {
+                    // Process files concurrently using Promise.all for better performance
+                    await Promise.all(response.data.files.map(async (file) => {
+                        if (file.mimeType === 'application/vnd.google-apps.folder') {
+                            try {
+                                // Recursively fetch images from subfolders
+                                await fetchImagesRecursively({ driveId, folderId: file.id });
+                            } catch (error) {
+                                console.error(`Error fetching images from folder ${file.name}:`, error);
+                            }
+                        } else if (file.capabilities?.canDownload !== false) {
+                            images.push(file);
                         }
-                    } else if (file.capabilities?.canDownload !== false) {
-                        images.push(file);
-                    }
-                }));
-            }
+                    }));
+                }
 
-            pageToken = response.data.nextPageToken || null;
+                pageToken = response.data.nextPageToken || null;
+            } catch (error) {
+                console.error(`Error fetching files for drive ${driveId}, folder ${folderId}:`, error);
+                pageToken = null; // Stop pagination on error
+            }
         } while (pageToken);
     }
 
     try {
-        // Process driveIds concurrently using Promise.all
-        await Promise.all(driveIds.map((driveId) => fetchImagesRecursively(driveId)));
+        // Filter out null or undefined driveIds and folderIds
+        const validDriveIds = driveIds.filter(id => id);
+        const validFolderIds = folderIds.filter(id => id);
 
+        if (validDriveIds.length === 0) {
+            console.warn('No valid drive IDs provided');
+            return images;
+        }
+
+        if (validFolderIds.length === 0) {
+            console.warn('No valid folder IDs provided');
+            return images;
+        }
+
+        // Process driveIds and folderIds concurrently using Promise.all
+        await Promise.all(validDriveIds.map(async (driveId) => {
+            await Promise.all(validFolderIds.map(folderId => fetchImagesRecursively({ driveId, folderId })));
+        }));
+
+        console.log(`Total images found: ${images.length}`);
         return images;
     } catch (error) {
         console.error('Error fetching images from Drive:', error);
         throw new Error('Failed to fetch images from Google Drive');
     }
 }
-
-
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -186,17 +283,6 @@ async function uploadImageWithRetry(
     s3Key,
     attempt
 ) {
-    // First check if we still have access to the file
-    const hasAccess = await checkFileAccess(drive, image.id);
-    if (!hasAccess) {
-        return {
-            success: false,
-            fileName: image.name,
-            skipReason: 'No download access to file',
-            attemptCount: attempt
-        };
-    }
-
     try {
         const imageContent = await drive.files.get({
             fileId: image.id,
@@ -205,7 +291,7 @@ async function uploadImageWithRetry(
         }, { responseType: 'arraybuffer' });
 
         const command = new PutObjectCommand({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Bucket: process.env.IMAGE_BUCKET,
             Key: s3Key,
             Body: imageContent.data,
             ContentType: image.mimeType,
@@ -224,18 +310,6 @@ async function uploadImageWithRetry(
             attemptCount: attempt
         };
     } catch (error) {
-        // Check if error is permission-related
-        if (error instanceof Error &&
-            (error.message.includes('insufficient permissions') ||
-                error.message.includes('access denied'))) {
-            return {
-                success: false,
-                fileName: image.name,
-                skipReason: 'Permission denied during download',
-                attemptCount: attempt
-            };
-        }
-
         if (attempt < MAX_RETRIES) {
             console.log(`Retry attempt ${attempt + 1} for ${image.name}`);
             await sleep(RETRY_DELAY * attempt); // Exponential backoff
@@ -268,7 +342,7 @@ async function processImageBatch(
 
             console.log(`Starting upload for ${image.name} to S3 at key: ${s3Key}`);
 
-            return await uploadImageWithRetry(image, drive, s3Client, s3Key);
+            return await uploadImageWithRetry(image, drive, s3Client, s3Key, 1);
         } catch (error) {
             console.error(`Unexpected error processing ${image.name}:`, error);
             return {
