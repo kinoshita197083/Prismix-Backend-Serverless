@@ -40,7 +40,7 @@ exports.handler = async (event) => {
             // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
             console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
 
-            await publishToSNS(jobId);
+            await publishToSNS(JSON.stringify({ jobId }));
             // logger.info('Job completion published to SNS', { jobId });
             console.log('Job completion published to SNS', { jobId });
 
@@ -101,7 +101,7 @@ async function checkAndUpdateJobStatus(jobId) {
             eligibleImages: currentEligibles,
             duplicateImages: currentDuplicates,
             failedImages: currentFailedImages,
-            excludedImages: currentExcludedImages
+            excludedImages: currentExcludedImages,
         } = await getCurrentJobProgress(jobId);
         // logger.debug('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentFailedImages, currentExcludedImages });
         console.log('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentFailedImages, currentExcludedImages, totalImages });
