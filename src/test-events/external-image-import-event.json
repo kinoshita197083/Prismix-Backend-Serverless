@@ -1,14 +1,14 @@
 {
     "Records": [
         {
-            "messageId": "1a2c29f4-5da0-43c7-a1c1-f4a78007eb1a",
-            "receiptHandle": "AQEBa442pQ1yXE6KSwgy/G1ny4uR/s1Cwd3q5AxPM5gsvTkl64XdCt9RHikHvlABN+TxUrbbGI5o6Rmq9HkFLhyivZByPnCk7ljeWO9mjrHgkG6/pQS+OXonjkart8qsHeqotytv/c0V1FkiqwwYU1WeDEQS+wFV9Dr7JPcKPdlOGVgGOiSFLKIpgoLs0tI5OK4vBpn3/mbXzDFKzyF1m2GPUg+9Rgig3jRF5CwZOWDD3rB8fMB4O8Z18U4YqN6ACqPQS+pWUqiSYUkO+oeaQYKc55uxIUPok6mcHIDRWXyiORNFghZgThpT1GBZpPm3LuvO/V1a2kP4fzr1tUqGwgq9yqwNRHfCh55RreIzx5ud7UUgrvUuK4+i0H+3i4L94vhP5McMYtF3r9yn4ZQ38hm8tzqaUdW3y6lNebLdtRVaT8c=",
-            "body": "{\"provider\":\"googleDrive\",\"userId\":\"d552debc-42ba-4610-8146-cd9e75040e32\",\"projectId\":\"62f84bdb-cefa-4e2d-8672-950c51000440\",\"jobId\":\"726d34ff-b2a7-4393-8c29-4eb5503074f1\",\"projectSettingId\":\"f15bd9a9-3dfc-42ec-b750-3de9590345bf\",\"driveIds\":[\"0AIFruhV22ac6Uk9PVA\"]}",
+            "messageId": "dac6ba5e-3836-4f44-a010-c7f44930acaa",
+            "receiptHandle": "AQEBg7nG08OOc/e2GMSQJTuHVFNuw8e8hUtIZAwGSkV9sgleHFtUS2h5Q9Jf3MyOxvi7XYcmkmS3z+JZY6yDaZ5u1EKfB2wZ5J5/WZqW9t2ijnI+c0eTKKrsQB0gU+1L4uzCYwdSLZevipl/3yw9cJQSAVeFPnRAHBHKztAJl+CUgcYwkPc/CP7qWVGueiiPH+V6S14lo6q9TcmGemIY1R32xqgiB19PI5izLqOTn+9lEdu6Y+CfmigIDKv1RbBVelPpZqJ2mMyHWOlF/EumwFL9VRcMGc5SEwdLqGcTW43l0nOJXXXh2r65IKJZqe1Quw8JfGTu4RbzFvwekpeSI+3D2T2AeyFS1Se8WsS/Vcbpw3ZJ8TTlnNWLQbQznLK6RN+Ey1EG9e5WRhpIbsJ+dAVFATmNoyw6Oj91hMJtmZy1Ygg=",
+            "body": "{\"provider\":\"googleDrive\",\"userId\":\"d552debc-42ba-4610-8146-cd9e75040e32\",\"projectId\":\"62f84bdb-cefa-4e2d-8672-950c51000440\",\"jobId\":\"0720fe33-7f63-439f-9ec6-59859f54a730\",\"projectSettingId\":\"f15bd9a9-3dfc-42ec-b750-3de9590345bf\",\"driveIds\":[\"0AIFruhV22ac6Uk9PVA\"],\"folderIds\":[\"1RJT-GbwwondYN69_pVrNl2mt5RKn-acc\",\"1OKDOEA8f-PM5EDq4L9jOp6ZOlm0jzdRu\"]}",
             "attributes": {
-                "ApproximateReceiveCount": "2",
-                "SentTimestamp": "1729596859299",
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1729649347930",
                 "SenderId": "AIDA6IQMT2LFDMPRCRD7O",
-                "ApproximateFirstReceiveTimestamp": "1729596859310"
+                "ApproximateFirstReceiveTimestamp": "1729649347943"
             },
             "messageAttributes": {
                 "MessageType": {
@@ -18,8 +18,8 @@
                     "dataType": "String"
                 }
             },
-            "md5OfBody": "1b2282aa6afe2b711e58cfec7236bd73",
             "md5OfMessageAttributes": "c3bc91bfc21a99f6f91ec89eb1b22e03",
+            "md5OfBody": "ea37f7eac15f22ecec917ed25aad2326",
             "eventSource": "aws:sqs",
             "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-image-upload-queue",
             "awsRegion": "us-east-1"
