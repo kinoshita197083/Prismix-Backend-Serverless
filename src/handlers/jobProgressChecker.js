@@ -40,7 +40,7 @@ exports.handler = async (event) => {
             // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
             console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
 
-            await publishToSNS(JSON.stringify({ jobId }));
+            await publishToSNS(jobId);
             // logger.info('Job completion published to SNS', { jobId });
             console.log('Job completion published to SNS', { jobId });
 

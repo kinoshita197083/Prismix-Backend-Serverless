@@ -7,6 +7,8 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { AppError, handleError } = require('../utils/errorHandler');
 const dynamoService = require('../services/dynamoService');
+const { sleep } = require('../utils/helpers');
+const { MAX_RETRIES, RETRY_DELAY } = require('../utils/googleDrive/config');
 
 const s3Client = new S3Client();
 const rekognitionClient = new RekognitionClient();
@@ -17,19 +19,15 @@ const dynamoDbDocumentClient = DynamoDBDocumentClient.from(dynamoClient, {
     }
 });
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second delay between retries
-
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 async function calculateImageHash(bucket, key) {
+    console.log('Start calculating image hash...');
     try {
-        console.log('Start calculating image hash...');
         const getObjectCommand = new GetObjectCommand({ Bucket: bucket, Key: key });
         const { Body } = await s3Client.send(getObjectCommand);
         console.log('Image retrieved from S3 successfully');
+
         const buffer = await streamToBuffer(Body);
-        console.log('buffer processed successfully');
+        console.log('Buffer processed successfully');
 
         // Resize image to a standard size for consistent hashing
         const resizedBuffer = await sharp(buffer)
@@ -37,32 +35,36 @@ async function calculateImageHash(bucket, key) {
             .grayscale()
             .raw()
             .toBuffer();
-
-        console.log('resizedBuffer: ', resizedBuffer);
+        console.log('Image resized successfully');
 
         // Calculate perceptual hash
         const hash = crypto.createHash('md5').update(resizedBuffer).digest('hex');
-        console.log('hash: ', hash);
+        console.log('Hash calculated:', hash);
+
         return hash;
     } catch (error) {
         logger.error('Error calculating image hash', { error });
-        throw new AppError('Error calculating image hash', 500);
+        if (error instanceof sharp.SharpError) {
+            throw new AppError('Image processing error', 500);
+        } else if (error.name === 'NoSuchKey') {
+            throw new AppError('Image not found in S3', 404);
+        } else {
+            throw new AppError('Unexpected error calculating image hash', 500);
+        }
     }
 }
 
 async function streamToBuffer(stream) {
     console.log('Streaming to buffer...');
-    try {
-        return new Promise((resolve, reject) => {
-            const chunks = [];
-            stream.on('data', (chunk) => chunks.push(chunk));
-            stream.on('error', reject);
-            stream.on('end', () => resolve(Buffer.concat(chunks)));
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('error', (error) => {
+            logger.error('Error streaming to buffer', { error });
+            reject(new AppError('Error streaming to buffer', 500));
         });
-    } catch (error) {
-        logger.error('Error streaming to buffer', { error });
-        throw new AppError('Error streaming to buffer', 500);
-    }
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
 }
 
 async function checkAndStoreImageHash(hash, jobId, imageId, s3Key) {
@@ -114,7 +116,7 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key) {
             };
         }
         logger.error('Error checking and storing image hash', { error });
-        throw error;
+        throw new AppError('Error checking and storing image hash', 500);
     }
 }
 
@@ -126,7 +128,8 @@ function evaluate(labels, projectSettings) {
 
 async function processImageWithRetry(message, attempt = 1) {
     const { bucket, key: s3ObjectKey, projectId, jobId, userId, settingValue } = message;
-    const [type, , , projectSettingId, , imageId] = s3ObjectKey.split('/');
+    const [type, , , projectSettingId, , imageName] = s3ObjectKey.split('/');
+    const imageId = imageName + '-' + crypto.randomBytes(10).toString('hex');
 
     try {
         // Calculate image hash
@@ -151,7 +154,8 @@ async function processImageWithRetry(message, attempt = 1) {
                 duplicateOfS3Key: originalImageS3Key
             });
 
-            return; // Skip further processing for this image
+            // Return a value for duplicate images instead of just returning
+            return { success: true, imageId, s3ObjectKey, isDuplicate: true };
         }
 
         // Perform object detection
@@ -227,56 +231,26 @@ exports.handler = async (event, context) => {
     const { Records } = event;
     logger.info('Processing image batch', { recordCount: Records.length, awsRequestId: context.awsRequestId });
 
-    const results = await Promise.all(Records.map(async (record) => {
+    const results = await Promise.allSettled(Records.map(async (record) => {
         try {
             const body = JSON.parse(record.body);
             const message = JSON.parse(body.Message);
 
             console.log('----> Message:', message);
 
-            return await processImageWithRetry(message);
+            const result = await processImageWithRetry(message);
+            if (result === undefined) {
+                throw new Error('processImageWithRetry returned undefined');
+            }
+            return result;
         } catch (error) {
-            logger.error('Error processing record', { error: error.message, record });
-            return { success: false, error: error.message };
+            logger.error('Error processing record', { error: error.message, stack: error.stack, record });
+            return { success: false, error: error.message, stack: error.stack };
         }
     }));
 
-    const failedProcessing = results.filter(r => !r.success);
-
-    // Update DynamoDB if there are failed processings
-    if (failedProcessing.length > 0) {
-        const failedProcessingDetails = failedProcessing.map(f => ({
-            imageId: f.imageId,
-            s3ObjectKey: f.s3ObjectKey,
-            error: f.error,
-            attempts: f.attempts
-        }));
-
-        const updateItemCommand = new UpdateCommand({
-            TableName: process.env.JOB_PROGRESS_TABLE,
-            Key: { JobId: message.jobId },
-            UpdateExpression: 'SET failedImages = :fi, updatedAt = :lut, failedProcessing = :fp',
-            ExpressionAttributeValues: {
-                ':fi': failedProcessing.length,
-                ':lut': Date.now(),
-                ':fp': failedProcessingDetails
-            }
-        });
-
-        try {
-            await dynamoDbDocumentClient.send(updateItemCommand);
-            console.log('Successfully updated job progress with failed processing details');
-        } catch (error) {
-            console.error('Error updating job progress table:', error);
-        }
-
-        console.log('Failed processings:', failedProcessingDetails);
-    }
-
     logger.info('Image processing finished', {
         message: `Processed ${Records.length} images`,
-        successCount: results.filter(r => r.success).length,
-        failedCount: failedProcessing.length
+        results
     });
-
 };

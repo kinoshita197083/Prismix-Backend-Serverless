@@ -77,9 +77,13 @@ deliveryProcessor:
         arn:
           Fn::GetAtt: [DeliveryQueue, Arn]
   environment:
+    IMAGE_BUCKET: ${self:custom.bucketName}
+    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
+    GOOGLE_CLIENT_SECRET: ${env:GOOGLE_CLIENT_SECRET}
     DELIVERY_QUEUE_URL:
       Ref: DeliveryQueue
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
     BUCKET_NAME: ${self:custom.bucketName}
   role: DeliveryProcessorRole
   layers:

@@ -1,10 +1,10 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, QueryCommand, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const logger = require('../utils/logger');
-const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 const { fetchGoogleRefreshToken, setUpGoogleDriveClient } = require('../utils/googleDrive/googleDrive');
 const { ELIGIBLE } = require('../utils/config');
+const s3Service = require('../services/s3Service');
 
 const dynamoClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -22,7 +22,8 @@ exports.handler = async (event) => {
         const message = JSON.parse(body.Message);
         console.log('message', message);
         const { jobId } = message;
-        console.log('extracted jobId and provider', { jobId });
+
+        console.log('jobId', jobId);
 
         const provider = await fetchProvider(jobId);
         console.log('provider', provider);
@@ -62,32 +63,50 @@ exports.handler = async (event) => {
 
 
             // Create folder in Google Drive
-            const folderId = await createGoogleDriveFolder(jobId, processedDriveIds);
+            const folderId = await createGoogleDriveFolder(drive, jobId, processedDriveIds);
 
-            let processedImages = 0;
-            const failedImages = [];
-
-            for (const task of eligibleTasks) {
+            // Get images from S3 and upload to Google Drive
+            const taskPromises = eligibleTasks.map(async (task) => {
                 try {
                     const imageData = await getImageFromS3(task.ImageS3Key);
                     const fileName = task.ImageS3Key.split('/').pop();
-                    await uploadToGoogleDrive(imageData, fileName, folderId);
-                    processedImages++;
+                    await uploadToGoogleDrive(drive, imageData, fileName, folderId);
                     logger.debug(`Uploaded image to Google Drive: ${fileName}`);
+                    return { status: 'fulfilled', fileName };
                 } catch (error) {
-                    failedImages.push({
+                    return {
+                        status: 'rejected',
+                        fileName: task.ImageS3Key.split('/').pop(),
                         s3ObjectKey: task.ImageS3Key,
-                        error: error.message
-                    });
-                    logger.error(`Failed to process image for task`, { taskId: task.TaskID, imageKey: task.ImageS3Key, error: error.message });
+                        error: error.message,
+                        taskId: task.TaskID
+                    };
                 }
+            });
+
+            const results = await Promise.allSettled(taskPromises);
+
+            const processedImages = results.filter(result => result.status === 'fulfilled').length;
+            const failedImages = results
+                .filter(result => result.status === 'rejected')
+                .map(result => ({
+                    fileName: result.fileName,
+                    s3ObjectKey: result.s3ObjectKey,
+                    error: result.error
+                }));
+
+            if (failedImages.length > 0) {
+                await updateFailedImagesToJobProgress(jobId, failedImages);
+                failedImages.forEach(failedImage => {
+                    logger.error(`Failed to process image for task`, {
+                        taskId: failedImage.taskId,
+                        imageKey: failedImage.s3ObjectKey,
+                        error: failedImage.error
+                    });
+                });
             }
 
             logger.info(`Processed ${processedImages} images, ${failedImages.length} failed`);
-
-            if (processedImages === 0) {
-                throw new Error(`No images were successfully processed for job ${jobId}`);
-            }
 
             logger.info(`Delivery processed for job ${jobId}. Images uploaded to Google Drive folder.`);
         } catch (error) {
@@ -102,13 +121,19 @@ async function fetchProvider(jobId) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        ProjectionExpression: 'inputConnection'
+        ProjectionExpression: 'outputConnection'
     };
 
     try {
         const command = new GetCommand(params);
         const result = await docClient.send(command);
-        return result.Item.inputConnection;
+
+        if (!result.Item || !result.Item.outputConnection) {
+            logger.warn(`No outputConnection found for job ${jobId}`);
+            return null;
+        }
+
+        return result.Item.outputConnection;
     } catch (error) {
         logger.error(`Error fetching provider for job ${jobId}:`, { error: error.message });
         throw error;
@@ -134,6 +159,29 @@ async function fetchEligibleTasks(jobId) {
         return result.Items;
     } catch (error) {
         logger.error(`Error fetching eligible tasks for job ${jobId}:`, { error: error.message, params });
+        throw error;
+    }
+}
+
+async function updateFailedImagesToJobProgress(jobId, failedImages) {
+    if (failedImages.length === 0) return console.log('no failed images to update');
+
+    logger.info(`Updating failed images to job progress for job ${jobId}`);
+    const deliveryDetails = {
+        failedImages
+    }
+    const params = {
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: jobId },
+        UpdateExpression: 'SET deliveryDetails = :deliveryDetails',
+        ExpressionAttributeValues: { ':deliveryDetails': deliveryDetails }
+    };
+
+    try {
+        const command = new UpdateCommand(params);
+        await docClient.send(command);
+    } catch (error) {
+        logger.error(`Error updating failed images to job progress for job ${jobId}:`, { error: error.message });
         throw error;
     }
 }
@@ -167,29 +215,14 @@ function streamToBuffer(stream) {
     });
 }
 
-async function fetchUserIdFromJobProgress(jobId) {
-    const params = {
-        TableName: process.env.JOB_PROGRESS_TABLE,
-        Key: { JobId: jobId },
-        ProjectionExpression: 'UserId'
-    };
-
-    try {
-        const command = new GetCommand(params);
-        const result = await docClient.send(command);
-        return result.Item ? result.Item.UserId : null;
-    } catch (error) {
-        logger.error('Error fetching userId from JobProgress:', { error, jobId });
-        throw error;
-    }
-}
-
-async function createGoogleDriveFolder(jobId, processedDriveIds) {
+async function createGoogleDriveFolder(drive, jobId, processedDriveIds) {
     const folderMetadata = {
         name: `Prismix-Job_${jobId}`,
         mimeType: 'application/vnd.google-apps.folder',
         parents: processedDriveIds
     };
+
+    console.log('folderMetadata', folderMetadata);
 
     try {
         const response = await drive.files.create({
@@ -204,7 +237,7 @@ async function createGoogleDriveFolder(jobId, processedDriveIds) {
     }
 }
 
-async function uploadToGoogleDrive(buffer, fileName, folderId) {
+async function uploadToGoogleDrive(drive, buffer, fileName, folderId) {
     const fileMetadata = {
         name: fileName,
         parents: [folderId]
@@ -235,16 +268,11 @@ function bufferToStream(buffer) {
     return stream;
 }
 
-function getUserRootFolderId(userId) {
-    // Implement logic to get or create a root folder for the user
-    // This might involve storing folder IDs in your database
-}
-
 async function fetchJobProgressData(jobId) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        ProjectionExpression: 'UserId, ProcessedFolderIds, ProcessedDriveIds'
+        ProjectionExpression: 'userId, processedFolderIds, processedDriveIds'
     };
 
     try {
