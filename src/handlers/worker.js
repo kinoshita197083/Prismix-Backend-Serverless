@@ -1,7 +1,7 @@
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { RekognitionClient, DetectLabelsCommand } = require('@aws-sdk/client-rekognition');
-const { DynamoDBClient, PutItemCommand, GetItemCommand, UpdateCommand } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const sharp = require('sharp');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
@@ -81,15 +81,20 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key) {
         const { Item } = await dynamoClient.send(getItemCommand);
 
         if (Item) {
-            console.log('Hash already exists, this is a duplicate');
-            return {
-                isDuplicate: true,
-                originalImageId: Item.ImageId.S,
-                originalImageS3Key: Item.ImageS3Key.S
-            };
+            if (Item.ProcessingStatus?.S === 'COMPLETED') {
+                console.log('Hash already exists, this is a duplicate');
+                return {
+                    isDuplicate: true,
+                    originalImageId: Item.ImageId.S,
+                    originalImageS3Key: Item.ImageS3Key.S
+                };
+            } else {
+                console.log('Hash exists but processing is not completed, treating as in-progress');
+                return { isDuplicate: false };
+            }
         }
 
-        // If no item found, store the new hash
+        // If no item found, store the new hash with processing status
         const putItemCommand = new PutItemCommand({
             TableName: process.env.IMAGE_HASH_TABLE,
             Item: {
@@ -98,7 +103,8 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key) {
                 ImageId: { S: imageId },
                 ImageS3Key: { S: s3Key },
                 Timestamp: { N: Date.now().toString() },
-                ExpirationTime: { N: (Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60)).toString() }
+                ExpirationTime: { N: (Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60)).toString() },
+                ProcessingStatus: { S: 'IN_PROGRESS' }
             },
             ConditionExpression: 'attribute_not_exists(HashValue) AND attribute_not_exists(JobId)'
         });
@@ -189,6 +195,25 @@ async function processImageWithRetry(message, attempt = 1) {
             labels,
             evaluation
         });
+
+        console.log('Updating hash table to mark processing as completed to avoid race condition');
+
+        console.log('Updating hash table to mark processing as completed: ', { imageHash, jobId });
+
+        // Update the hash table to mark processing as completed
+        const updateCommand = new UpdateCommand({
+            TableName: process.env.IMAGE_HASH_TABLE,
+            Key: {
+                HashValue: imageHash,
+                JobId: jobId
+            },
+            UpdateExpression: 'SET ProcessingStatus = :status',
+            ExpressionAttributeValues: {
+                ':status': { S: 'COMPLETED' }
+            }
+        });
+        await dynamoClient.send(updateCommand);
+
         logger.info('Successfully processed image', { imageId, projectId, jobId });
 
         return { success: true, imageId, s3ObjectKey };
