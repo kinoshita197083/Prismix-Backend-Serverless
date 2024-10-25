@@ -72,6 +72,8 @@ jobProgressChecker:
 
 deliveryProcessor:
   handler: src/handlers/deliveryProcessor.handler
+  memorySize: 2048
+  timeout: 900 #15 minutes (15 * 60 = 900 seconds)
   events:
     - sqs:
         arn:
