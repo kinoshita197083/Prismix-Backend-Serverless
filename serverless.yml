@@ -20,12 +20,14 @@ provider:
     ENVIRONMENT: ${self:provider.stage}
     TASKS_TABLE: ${self:service}-${self:provider.stage}-Tasks
     JOB_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-JobProgress
+    IMAGE_HASH_TABLE: ${self:service}-${self:provider.stage}-ImageHashes
     SQS_QUEUE_URL: 
       Ref: EligibleImageQueue
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
     SUPABASE_URL: ${env:SUPABASE_URL}
     SUPABASE_API_KEY: ${env:SUPABASE_API_KEY}
+    DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:service}-${self:provider.stage}-deliveryProcessor
   iam:
     role: BaseCloudWatchRole
   logs:

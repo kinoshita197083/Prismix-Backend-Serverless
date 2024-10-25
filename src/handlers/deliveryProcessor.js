@@ -21,6 +21,10 @@ const BATCH_SIZE = 50; // Adjust based on performance testing
 const TIMEOUT_BUFFER_MS = 30000; // 30 seconds buffer before Lambda timeout
 const LAMBDA_TIMEOUT_MS = 900000; // 15 minutes in milliseconds
 
+// TESTING
+// const TIMEOUT_BUFFER_MS = 1000; // 30 seconds buffer before Lambda timeout
+// const LAMBDA_TIMEOUT_MS = 3000; // 1 minute in milliseconds
+
 // Add configuration constants
 const UPLOAD_CONFIG = {
     maxConcurrency: 10,     // Maximum concurrent uploads
@@ -28,6 +32,13 @@ const UPLOAD_CONFIG = {
     retryDelay: 1000,       // Delay between retries in ms
     chunkDelay: 2000,       // Delay between chunks in ms
     chunkSize: 10           // Number of files per chunk
+};
+
+// Add pagination constants
+const PAGINATION_CONFIG = {
+    dynamoPageSize: 1000,    // Number of items per DynamoDB query
+    s3ListLimit: 1000,       // Number of objects per S3 list request
+    maxPages: 100           // Safety limit for pagination loops
 };
 
 exports.handler = async (event) => {
@@ -47,10 +58,19 @@ exports.handler = async (event) => {
 
         if (provider !== 'google-drive') return console.log('----> provider is not google-drive');
 
+        let currentBatch = [];
+        let lastTaskBatch = null;
+
         try {
-            // Fetch job state including last processed index
+            // Fetch job state including LastEvaluatedKey and folder ID
             const jobState = await fetchJobProgressData(jobId);
-            const { userId, processedFolderIds, processedDriveIds, lastProcessedIndex = 0 } = jobState;
+            const {
+                userId,
+                processedFolderIds,
+                processedDriveIds,
+                lastEvaluatedKey = null,
+                destinationDriveFolderId = null  // Get existing folder ID
+            } = jobState;
             console.log('----> jobState', jobState);
 
             if (!userId) {
@@ -58,66 +78,53 @@ exports.handler = async (event) => {
                 continue;
             }
 
-            // Fetch eligible tasks starting from lastProcessedIndex
-            const eligibleTasks = await fetchEligibleTasks(jobId);
-            console.log('----> eligibleTasks', eligibleTasks);
-
-            if (eligibleTasks.length === 0) {
-                logger.warn(`No eligible tasks found for job ${jobId}`);
-                continue;
-            }
-
-            // Get or create Google Drive folder
+            // Get or create Google Drive folder, passing existing folder ID
             const drive = await setupGoogleDrive(userId);
-            const folderId = await getOrCreateFolder(drive, jobId, processedDriveIds);
+            const folderId = await getOrCreateFolder(drive, jobId, processedDriveIds, destinationDriveFolderId);
             console.log('----> folderId', folderId);
-            // Process tasks in batches
-            const remainingTasks = eligibleTasks.slice(lastProcessedIndex);
-            const tasksToProcess = remainingTasks.slice(0, BATCH_SIZE);
-            console.log('----> tasksToProcess', tasksToProcess);
 
-            if (tasksToProcess.length === 0) {
-                logger.info(`All tasks completed for job ${jobId}`);
-                continue;
-            }
+            // Fetch eligible tasks using LastEvaluatedKey for pagination
+            const taskGenerator = fetchAllEligibleTasks(jobId, lastEvaluatedKey);
 
-            logger.info(`Processing batch of ${tasksToProcess.length} tasks`, {
-                jobId,
-                startIndex: lastProcessedIndex,
-                totalTasks: eligibleTasks.length
-            });
+            for await (const taskBatch of taskGenerator) {
+                lastTaskBatch = taskBatch;
 
-            // Use rateLimitedProcessBatch instead of processBatch
-            const results = await rateLimitedProcessBatch(
-                drive,
-                tasksToProcess,
-                folderId,
-                startTime,
-                UPLOAD_CONFIG
-            );
+                // Add tasks to current batch
+                for (const task of taskBatch.items) {
+                    currentBatch.push(task);
 
-            console.log('----> results', results);
+                    // Process batch when it reaches BATCH_SIZE or it's the last batch
+                    if (currentBatch.length >= BATCH_SIZE ||
+                        (!taskBatch.lastEvaluatedKey && task === taskBatch.items[taskBatch.items.length - 1])) {
 
-            // Handle failed uploads
-            if (results.failed.length > 0) {
-                logger.warn(`Failed to upload ${results.failed.length} images`, {
-                    jobId,
-                    failedCount: results.failed.length
-                });
+                        const results = await rateLimitedProcessBatch(
+                            drive,
+                            currentBatch,
+                            folderId,
+                            startTime,
+                            UPLOAD_CONFIG
+                        );
 
-                await updateFailedImagesToJobProgress(jobId, results.failed);
-            }
+                        // Handle results and update progress
+                        await handleBatchResults(
+                            jobId,
+                            results,
+                            lastTaskBatch.lastEvaluatedKey
+                        );
 
-            // Update job progress with results
-            await updateJobProgress(jobId, {
-                lastProcessedIndex: lastProcessedIndex + tasksToProcess.length,
-                processedResults: results,
-                folderId
-            });
+                        // Check if we hit timeout
+                        if (results.timeoutReached) {
+                            logger.warn('Timeout reached, invoking next batch', {
+                                remainingTasks: results.remainingTasks.length
+                            });
+                            await invokeNextBatch(event, jobId);
+                            return;
+                        }
 
-            // Check if we need to continue processing
-            if (lastProcessedIndex + tasksToProcess.length < eligibleTasks.length) {
-                await invokeNextBatch(event, jobId);
+                        // Reset batch
+                        currentBatch = [];
+                    }
+                }
             }
 
         } catch (error) {
@@ -126,15 +133,16 @@ exports.handler = async (event) => {
                 stack: error.stack
             });
 
-            // Update failed images even if the batch processing fails
-            const failedTasks = tasksToProcess.map(task => ({
-                taskId: task.TaskID,
-                fileName: task.ImageS3Key.split('/').pop(),
-                s3Key: task.ImageS3Key,
-                error: 'Batch processing failed: ' + error.message
-            }));
-
-            await updateFailedImagesToJobProgress(jobId, failedTasks);
+            // Update failed images if batch processing fails
+            if (currentBatch.length > 0) {
+                const failedTasks = currentBatch.map(task => ({
+                    taskId: task.TaskID,
+                    fileName: task.ImageS3Key.split('/').pop(),
+                    s3Key: task.ImageS3Key,
+                    error: 'Batch processing failed: ' + error.message
+                }));
+                await updateFailedImagesToJobProgress(jobId, failedTasks);
+            }
         }
     }
 
@@ -164,8 +172,11 @@ async function fetchProvider(jobId) {
     }
 }
 
-async function fetchEligibleTasks(jobId) {
-    logger.info(`Fetching eligible tasks for job ${jobId}`);
+async function fetchEligibleTasks(jobId, lastEvaluatedKey = null) {
+    logger.info(`Fetching eligible tasks for job ${jobId}`, {
+        lastEvaluatedKey: lastEvaluatedKey ? JSON.stringify(lastEvaluatedKey) : null
+    });
+
     const params = {
         TableName: process.env.TASKS_TABLE,
         KeyConditionExpression: 'JobID = :jobId',
@@ -173,18 +184,61 @@ async function fetchEligibleTasks(jobId) {
         ExpressionAttributeValues: {
             ':jobId': jobId,
             ':evaluation': ELIGIBLE
-        }
+        },
+        Limit: PAGINATION_CONFIG.dynamoPageSize
     };
+
+    // Only add ExclusiveStartKey if it's a valid DynamoDB key
+    if (lastEvaluatedKey && typeof lastEvaluatedKey === 'object') {
+        params.ExclusiveStartKey = lastEvaluatedKey;
+    }
 
     try {
         const command = new QueryCommand(params);
         const result = await docClient.send(command);
-        logger.info(`Fetched ${result.Items.length} eligible tasks for job ${jobId}`);
-        return result.Items;
+
+        logger.info(`Fetched batch of eligible tasks`, {
+            count: result.Items.length,
+            hasMore: !!result.LastEvaluatedKey,
+            lastEvaluatedKey: result.LastEvaluatedKey
+        });
+
+        return {
+            items: result.Items,
+            lastEvaluatedKey: result.LastEvaluatedKey
+        };
     } catch (error) {
-        logger.error(`Error fetching eligible tasks for job ${jobId}:`, { error: error.message, params });
+        logger.error(`Error fetching eligible tasks for job ${jobId}:`, {
+            error: error.message,
+            params
+        });
         throw error;
     }
+}
+
+async function* fetchAllEligibleTasks(jobId, lastEvaluatedKey) {
+    let pageCount = 0;
+
+    do {
+        if (pageCount >= PAGINATION_CONFIG.maxPages) {
+            logger.warn(`Reached maximum page limit for job ${jobId}`);
+            break;
+        }
+
+        const result = await fetchEligibleTasks(jobId, lastEvaluatedKey);
+        lastEvaluatedKey = result.lastEvaluatedKey;
+        pageCount++;
+
+        yield {
+            items: result.items,
+            lastEvaluatedKey  // Include this in the yield to save progress
+        };
+    } while (lastEvaluatedKey);
+
+    logger.info(`Completed fetching all eligible tasks`, {
+        jobId,
+        totalPages: pageCount
+    });
 }
 
 async function updateFailedImagesToJobProgress(jobId, failedImages) {
@@ -207,10 +261,10 @@ async function updateFailedImagesToJobProgress(jobId, failedImages) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        UpdateExpression: 'SET deliveryDetails = if_not_exists(deliveryDetails, :empty_list) ADD totalFailedUploads :failedCount',
+        UpdateExpression: 'SET deliveryDetails = :details',
         ExpressionAttributeValues: {
-            ':empty_list': deliveryDetails,
-            ':failedCount': failedImages.length
+            ':details': deliveryDetails,
+            // ':failedCount': failedImages.length
         },
         ReturnValues: 'UPDATED_NEW'
     };
@@ -296,7 +350,7 @@ async function fetchJobProgressData(jobId) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        ProjectionExpression: 'userId, processedFolderIds, processedDriveIds, lastProcessedIndex'
+        ProjectionExpression: 'userId, processedFolderIds, processedDriveIds, lastEvaluatedKey, destinationDriveFolderId'
     };
 
     try {
@@ -312,7 +366,8 @@ async function fetchJobProgressData(jobId) {
             userId: result.Item.userId,
             processedFolderIds: result.Item.processedFolderIds || [],
             processedDriveIds: result.Item.processedDriveIds || [],
-            lastProcessedIndex: result.Item.lastProcessedIndex || 0
+            lastEvaluatedKey: result.Item.lastEvaluatedKey || null,
+            destinationDriveFolderId: result.Item.destinationDriveFolderId || null  // Include folder ID
         };
     } catch (error) {
         logger.error('Error fetching job progress data:', { error, jobId });
@@ -330,7 +385,13 @@ async function setupGoogleDrive(userId) {
     return drive;
 }
 
-async function getOrCreateFolder(drive, jobId, processedDriveIds) {
+async function getOrCreateFolder(drive, jobId, processedDriveIds, existingFolderId = null) {
+    // If we already have a folder ID, use it
+    if (existingFolderId) {
+        logger.info(`Using existing folder for job ${jobId}`, { folderId: existingFolderId });
+        return existingFolderId;
+    }
+
     const folderMetadata = {
         name: `Prismix-Job_${jobId}`,
         mimeType: 'application/vnd.google-apps.folder',
@@ -342,25 +403,59 @@ async function getOrCreateFolder(drive, jobId, processedDriveIds) {
             resource: folderMetadata,
             fields: 'id'
         });
-        logger.info(`Created Google Drive folder for job ${jobId}`);
-        return response.data.id;
+        const folderId = response.data.id;
+
+        // Store the folder ID in JobProgress
+        await updateJobFolderId(jobId, folderId);
+
+        logger.info(`Created Google Drive folder for job ${jobId}`, { folderId });
+        return folderId;
     } catch (error) {
         logger.error(`Error creating Google Drive folder for job ${jobId}:`, { error: error.message });
         throw error;
     }
 }
 
+async function updateJobFolderId(jobId, folderId) {
+    const params = {
+        TableName: process.env.JOB_PROGRESS_TABLE,
+        Key: { JobId: jobId },
+        UpdateExpression: 'SET destinationDriveFolderId = :folderId',
+        ExpressionAttributeValues: {
+            ':folderId': folderId
+        }
+    };
+
+    try {
+        const command = new UpdateCommand(params);
+        await docClient.send(command);
+        logger.info(`Updated drive folder ID for job ${jobId}`, { folderId });
+    } catch (error) {
+        logger.error(`Error updating drive folder ID for job ${jobId}:`, { error: error.message });
+        throw error;
+    }
+}
+
 async function rateLimitedProcessBatch(drive, tasks, folderId, startTime, config = UPLOAD_CONFIG) {
+    const results = {
+        failed: [],
+        timeoutReached: false,
+        remainingTasks: []  // Add this to track unprocessed tasks
+    };
+
     logger.info('Starting rate-limited batch processing', {
         totalTasks: tasks.length,
         concurrency: config.maxConcurrency,
         chunkSize: config.chunkSize
     });
 
-    const results = {
-        successful: [],
-        failed: []
-    };
+    // Check timeout before starting
+    if (Date.now() - startTime > LAMBDA_TIMEOUT_MS - TIMEOUT_BUFFER_MS) {
+        logger.warn('Approaching Lambda timeout before processing batch');
+        results.timeoutReached = true;
+        results.remainingTasks = tasks;  // Store tasks for next invocation
+        return results;
+    }
 
     // Split tasks into chunks
     const chunks = [];
@@ -397,7 +492,6 @@ async function rateLimitedProcessBatch(drive, tasks, folderId, startTime, config
             config
         );
 
-        results.successful.push(...chunkResults.successful);
         results.failed.push(...chunkResults.failed);
 
         // Add delay between chunks to prevent rate limiting
@@ -409,7 +503,7 @@ async function rateLimitedProcessBatch(drive, tasks, folderId, startTime, config
 
     logger.info('Rate-limited batch processing completed', {
         totalProcessed: tasks.length,
-        successful: results.successful.length,
+        // successful: results.successful.length,
         failed: results.failed.length,
         timeElapsed: Date.now() - startTime
     });
@@ -419,7 +513,7 @@ async function rateLimitedProcessBatch(drive, tasks, folderId, startTime, config
 
 async function processChunkWithRetry(drive, tasks, folderId, config) {
     const results = {
-        successful: [],
+        // successful: [], // Commented out successful tracking
         failed: []
     };
 
@@ -435,7 +529,7 @@ async function processChunkWithRetry(drive, tasks, folderId, config) {
                 .then(result => {
                     pool.delete(promise);
                     if (result.status === 'fulfilled') {
-                        results.successful.push(result.value);
+                        // results.successful.push(result.value);
                     } else {
                         results.failed.push(result.reason);
                     }
@@ -508,10 +602,12 @@ async function processTaskWithRetry(drive, task, folderId, config) {
 
 async function invokeNextBatch(originalEvent, jobId) {
     const command = new InvokeCommand({
-        FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
+        FunctionName: process.env.DELIVERY_LAMBDA_PROCESSOR_NAME,
         InvocationType: 'Event',
         Payload: JSON.stringify(originalEvent)
     });
+
+    console.log('----> FunctionName', process.env.DELIVERY_LAMBDA_PROCESSOR_NAME);
 
     try {
         await lambdaClient.send(command);
@@ -522,25 +618,72 @@ async function invokeNextBatch(originalEvent, jobId) {
     }
 }
 
-async function updateJobProgress(jobId, { lastProcessedIndex, processedResults, folderId }) {
+async function handleBatchResults(jobId, results, lastEvaluatedKey) {
+    // Don't update failed tasks if we hit a timeout
+    if (results.timeoutReached) {
+        // Only update the lastEvaluatedKey if we have one
+        if (lastEvaluatedKey) {
+            const params = {
+                TableName: process.env.JOB_PROGRESS_TABLE,
+                Key: { JobId: jobId },
+                UpdateExpression: 'SET lastEvaluatedKey = :key',
+                ExpressionAttributeValues: {
+                    ':key': lastEvaluatedKey
+                }
+            };
+
+            try {
+                const command = new UpdateCommand(params);
+                await docClient.send(command);
+                logger.info(`Updated lastEvaluatedKey for job ${jobId}`, {
+                    lastEvaluatedKey,
+                    remainingTasks: results.remainingTasks.length
+                });
+            } catch (error) {
+                logger.error(`Error updating lastEvaluatedKey for job ${jobId}:`, {
+                    error: error.message
+                });
+                throw error;
+            }
+        }
+        return;
+    }
+
+    // Normal case - update failed tasks
+    let updateExpression = 'SET deliveryDetails = :details';
+    let expressionAttributeValues = {
+        ':details': {
+            failedImages: results.failed,
+            lastUpdated: new Date().toISOString(),
+            totalFailures: results.failed.length
+        }
+    };
+
+    if (lastEvaluatedKey) {
+        updateExpression += ', lastEvaluatedKey = :key';
+        expressionAttributeValues[':key'] = lastEvaluatedKey;
+    }
+
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        UpdateExpression: 'SET lastProcessedIndex = :idx, processedResults = list_append(if_not_exists(processedResults, :empty_list), :results), folderId = :folderId',
-        ExpressionAttributeValues: {
-            ':idx': lastProcessedIndex,
-            ':results': [processedResults],
-            ':empty_list': [],
-            ':folderId': folderId
-        }
+        UpdateExpression: updateExpression,
+        ExpressionAttributeValues: expressionAttributeValues
     };
 
     try {
         const command = new UpdateCommand(params);
-        await docClient.send(command);
-        logger.info(`Updated job progress for ${jobId}`, { lastProcessedIndex, resultsCount: processedResults.successful.length });
+        const result = await docClient.send(command);
+        logger.info(`Updated batch results for job ${jobId}`, {
+            lastEvaluatedKey: lastEvaluatedKey || 'none',
+            failedCount: results.failed.length,
+            updatedAttributes: result.Attributes
+        });
     } catch (error) {
-        logger.error(`Error updating job progress for ${jobId}:`, { error: error.message });
+        logger.error(`Error updating batch results for job ${jobId}:`, {
+            error: error.message,
+            params: JSON.stringify(params)
+        });
         throw error;
     }
 }

@@ -349,6 +349,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource:
                   Fn::GetAtt: [JobProgressTable, Arn]
               - Effect: Allow
