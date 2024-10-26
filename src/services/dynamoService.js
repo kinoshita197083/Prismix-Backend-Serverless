@@ -2,7 +2,6 @@ const { DynamoDBClient, GetItemCommand, UpdateItemCommand } = require('@aws-sdk/
 const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
-const { marshall } = require('@aws-sdk/util-dynamodb');
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -77,69 +76,79 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key }) {
-        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key });
+    async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key, reason }) {
+        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key, reason });
 
         const updateExpression = ['SET TaskStatus = :status, ImageS3Key = :imageS3Key, UpdatedAt = :updatedAt'];
         const expressionAttributeValues = {
-            ':status': { S: status },
-            ':imageS3Key': { S: imageS3Key },
-            ':updatedAt': { S: new Date().toISOString() }
+            ':status': status,
+            ':imageS3Key': imageS3Key,
+            ':updatedAt': new Date().toISOString()
         };
 
         if (labels && Array.isArray(labels) && labels.length > 0) {
             try {
                 const flattenedLabels = labels.map(label => ({
                     name: label.Name || '',
-                    Confidence: label.Confidence ? `${label.Confidence.toFixed(2)}%` : '0%',
-                    Categories: Array.isArray(label.Categories) ? label.Categories.map(cat => cat.Name).join(', ') : '',
-                    Parents: Array.isArray(label.Parents) && label.Parents.length > 0 ? label.Parents.map(parent => parent.Name).join(', ') : 'None',
-                    Aliases: Array.isArray(label.Aliases) && label.Aliases.length > 0 ? label.Aliases.map(alias => alias.Name).join(', ') : 'None'
+                    confidence: label.Confidence ? `${label.Confidence.toFixed(2)}%` : '0%',
+                    categories: Array.isArray(label.Categories) ? label.Categories.map(cat => cat.Name).join(', ') : '',
+                    parents: Array.isArray(label.Parents) && label.Parents.length > 0 ? label.Parents.map(parent => parent.Name).join(', ') : 'None',
+                    aliases: Array.isArray(label.Aliases) && label.Aliases.length > 0 ? label.Aliases.map(alias => alias.Name).join(', ') : 'None'
                 }));
 
                 updateExpression.push('ProcessingResult = :labels');
-                expressionAttributeValues[':labels'] = {
-                    L: flattenedLabels.map(label => ({
-                        M: Object.entries(label).reduce((acc, [key, value]) => {
-                            acc[key] = { S: value.toString() };
-                            return acc;
-                        }, {})
-                    }))
-                };
+                // expressionAttributeValues[':labels'] = {
+                //     L: flattenedLabels.map(label => ({
+                //         M: Object.entries(label).reduce((acc, [key, value]) => {
+                //             acc[key] = value.toString();
+                //             return acc;
+                //         }, {})
+                //     }))
+                // };
+                expressionAttributeValues[':labels'] = flattenedLabels;
             } catch (error) {
-                console.error('Error processing labels:', error);
+                console.error('Error storing labels:', error);
                 // If there's an error processing labels, we'll skip adding them to the update
             }
         }
 
         if (evaluation) {
             updateExpression.push('Evaluation = :evaluation');
-            expressionAttributeValues[':evaluation'] = { S: evaluation };
+            expressionAttributeValues[':evaluation'] = evaluation;
         }
 
         if (duplicateOf) {
             updateExpression.push('DuplicateOf = :duplicateOf');
-            expressionAttributeValues[':duplicateOf'] = { S: duplicateOf };
+            expressionAttributeValues[':duplicateOf'] = duplicateOf;
         }
 
         if (duplicateOfS3Key) {
             updateExpression.push('DuplicateOfS3Key = :duplicateOfS3Key');
-            expressionAttributeValues[':duplicateOfS3Key'] = { S: duplicateOfS3Key };
+            expressionAttributeValues[':duplicateOfS3Key'] = duplicateOfS3Key;
+        }
+
+        if (reason) {
+            updateExpression.push('Reason = :reason');
+            expressionAttributeValues[':reason'] = reason;
         }
 
         const params = {
             TableName: process.env.TASKS_TABLE,
-            Key: { JobID: { S: jobId }, TaskID: { S: taskId } },
+            Key: { JobID: jobId, TaskID: taskId },
             UpdateExpression: updateExpression.join(', '),
-            ExpressionAttributeValues: expressionAttributeValues,
+            ExpressionAttributeValues: {
+                ...expressionAttributeValues,
+                ':completed': 'COMPLETED'  // Add this value for the condition
+            },
+            ConditionExpression: '(attribute_not_exists(Evaluation) OR Evaluation <> :completed)',
             ReturnValues: 'ALL_NEW'
         };
 
-        console.log('DynamoDB update params:', JSON.stringify(params, null, 2));
+        // console.log('DynamoDB update params:', JSON.stringify(params, null, 2));
 
         try {
-            const command = new UpdateItemCommand(params);
-            const result = await client.send(command);
+            const command = new UpdateCommand(params);
+            const result = await docClient.send(command);
             logger.info('Task status updated successfully', { jobId, taskId, status });
             return result.Attributes;
         } catch (error) {
@@ -151,7 +160,7 @@ const dynamoService = {
                 status,
                 params: JSON.stringify(params)
             });
-            throw new Error('Failed to update task status');
+            throw new Error('DynamoService: Failed to update task status');
         }
     },
 

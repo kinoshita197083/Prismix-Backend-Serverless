@@ -2,6 +2,7 @@ const { sleep } = require('../helpers');
 const { MAX_RETRIES, RETRY_DELAY } = require('./config');
 const logger = require('../logger');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
+const crypto = require('crypto');
 
 
 const { google } = require('googleapis');
@@ -183,13 +184,15 @@ async function processImageBatch(
     jobId,
     bucket
 ) {
-    const uploadPromises = batch.map(async (image) => {
+    const uploadPromises = batch.map(async (image, index) => {
         try {
             const suffix = image.name.split('.').pop() || '';
-            const imageName = image.name.split('.').slice(0, -1).join('.');
-            const s3Key = `uploads/${userId}/${projectId}/${projectSettingId}/${jobId}/${imageName}.${suffix}`;
+            const imageId = crypto.createHash('md5')
+                .update(`${image.id}_${index}`)  // Using Drive's file ID and position in batch
+                .digest('hex');
+            const s3Key = `uploads/${userId}/${projectId}/${projectSettingId}/${jobId}/${imageId}.${suffix}`;
 
-            console.log(`Starting upload for ${image.name} to S3 at key: ${s3Key}`);
+            console.log(`*** Starting upload for ${image.name} with id: ${imageId} to S3 at key: ${s3Key}`);
 
             return await uploadImageWithRetry(image, drive, s3Client, s3Key, 1, bucket);
         } catch (error) {

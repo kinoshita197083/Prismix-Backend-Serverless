@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const { EventBridgeClient, DisableRuleCommand, DeleteRuleCommand,
     ListTargetsByRuleCommand, RemoveTargetsCommand
 } = require("@aws-sdk/client-eventbridge");
+const { COMPLETED } = require('../utils/config');
 
 const client = new DynamoDBClient({});
 const dynamoDB = DynamoDBDocumentClient.from(client);
@@ -86,56 +87,83 @@ async function checkAndUpdateJobStatus(jobId) {
     console.log('Starting job status check and update', { jobId });
 
     try {
-        const { processedImages,
+        const {
+            processedImages,
             eligibleImages,
             duplicateImages,
-            failedImages,
-            excludedImages } = await getJobStats(jobId);
+            processingDetails,
+            excludedImages,
+        } = await getJobStats(jobId);
         // logger.debug('Retrieved job stats', { jobId, processedImages, eligibles, duplicates, failedImages, excludedImages });
-        console.log('Retrieved job stats', { jobId, processedImages, eligibleImages, duplicateImages, failedImages, excludedImages });
+        console.log('Retrieved job stats', { jobId, processedImages, eligibleImages, duplicateImages, processingDetails, excludedImages });
 
-        const { version,
+        const {
+            version,
             status,
             totalImages,
             processedImages: currentProcessedImages,
             eligibleImages: currentEligibles,
             duplicateImages: currentDuplicates,
-            failedImages: currentFailedImages,
+            processingDetails: currentProcessingDetails,
             excludedImages: currentExcludedImages,
         } = await getCurrentJobProgress(jobId);
         // logger.debug('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentFailedImages, currentExcludedImages });
-        console.log('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentFailedImages, currentExcludedImages, totalImages });
+        console.log('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentProcessingDetails, currentExcludedImages, totalImages });
+
+        const { failedProcessedImages: previousfailedProcessedImages } = processingDetails;
+        const { failedProcessedImages: currentFailedProcessedImages } = currentProcessingDetails || { failedProcessedImages: [] };
 
         // Only update if there's real progress
         if (
             processedImages !== currentProcessedImages ||
             eligibleImages !== currentEligibles ||
-            failedImages !== currentFailedImages ||
+            previousfailedProcessedImages?.length !== currentFailedProcessedImages?.length ||
             excludedImages !== currentExcludedImages ||
             duplicateImages !== currentDuplicates ||
-            status !== 'COMPLETED'
+            (processedImages === totalImages && status !== COMPLETED) // Only check status when job should be complete
         ) {
             // logger.info('Progress detected, updating job status', { jobId });
             console.log('Progress detected, updating job status', { jobId });
 
             // Update job progress with optimistic locking based on version
-            if (processedImages < totalImages) {
-                console.log('Job not completed yet, updating progress');
-                await updateJobProgress(jobId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, 'IN_PROGRESS', version);
-                // logger.info('Job progress updated', { jobId, status: 'IN_PROGRESS' });
-                console.log('Job progress updated', { jobId, status: 'IN_PROGRESS' });
+            if (processedImages > totalImages) {
+                console.log('!!! Warning: Processed images exceed total images', { processedImages, totalImages });
+                console.log('*** This should not happen, please check the job ${jobId} ***');
                 return false;
             } else if (processedImages === totalImages) {
                 console.log('Job completed, updating progress to COMPLETED');
-                await updateJobProgress(jobId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, 'COMPLETED', version);
+                await updateJobProgress(
+                    jobId,
+                    processedImages,
+                    eligibleImages,
+                    processingDetails,
+                    excludedImages,
+                    duplicateImages,
+                    'COMPLETED',
+                    version
+                );
                 // logger.info('Job completed, progress updated', { jobId, status: 'COMPLETED' });
                 console.log('Job completed, progress updated', { jobId, status: 'COMPLETED' });
                 return true;
+            } else {
+                console.log('Job not completed yet, updating progress');
+                await updateJobProgress(
+                    jobId,
+                    processedImages,
+                    eligibleImages,
+                    processingDetails,
+                    excludedImages,
+                    duplicateImages,
+                    'IN_PROGRESS',
+                    version
+                );
+                // logger.info('Job progress updated', { jobId, status: 'IN_PROGRESS' });
+                console.log('Job progress updated', { jobId, status: 'IN_PROGRESS' });
+                return false;
             }
         } else {
-            // logger.info('No progress detected, skipping update', { jobId });
             console.log('No progress detected, skipping update', { jobId });
-            return false;
+            return status === COMPLETED; // Return true if already completed
         }
     } catch (error) {
         // logger.error('Error in checkAndUpdateJobStatus', {
@@ -179,10 +207,19 @@ async function getJobStats(jobId) {
             acc.processedImages += task.TaskStatus === 'COMPLETED' ? 1 : 0;
             acc.eligibleImages += task.Evaluation === 'ELIGIBLE' ? 1 : 0;
             acc.duplicateImages += task.Evaluation === 'DUPLICATE' ? 1 : 0;
-            acc.failedImages += task.TaskStatus === 'FAILED' ? 1 : 0;
             acc.excludedImages += task.Evaluation === 'EXCLUDED' ? 1 : 0;
+
+            if (task.TaskStatus === 'FAILED') {
+                acc.processingDetails.failedProcessedImages = acc.processingDetails.failedProcessedImages || [];
+
+                acc.processingDetails.failedProcessedImages.push({
+                    imageS3Key: task.imageS3Key,
+                    reason: task.reason ? task.reason : 'Unknown'
+                });
+            }
+
             return acc;
-        }, { processedImages: 0, eligibleImages: 0, duplicateImages: 0, failedImages: 0, excludedImages: 0 });
+        }, { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0 });
     } catch (error) {
         // logger.error('Error in getJobStats', { error: error.message, stack: error.stack });
         console.log('777 ', error);
@@ -198,45 +235,46 @@ async function getCurrentJobProgress(jobId) {
     };
 
     const result = await dynamoDB.send(new GetCommand(params));
-    return result.Item || { processedImages: 0, eligibleImages: 0, duplicateImages: 0, failedImages: 0, excludedImages: 0, status: 'IN_PROGRESS', version: 1 };
+    return result.Item || { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0, status: 'IN_PROGRESS', version: 1 };
 }
 
 // Update job progress with version check (optimistic locking)
-async function updateJobProgress(jobId, processedImages, eligibleImages, failedImages, excludedImages, duplicateImages, status, currentVersion) {
+async function updateJobProgress(jobId, processedImages, eligibleImages, processingDetails, excludedImages, duplicateImages, status, currentVersion) {
+
     const params = {
         TableName: JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
         UpdateExpression: 'SET ' + [
             'processedImages = :processedImages',
             'eligibleImages = :eligibleImages',
-            'failedImages = :failedImages',
-            'excludedImages = :excludedImages',
             'duplicateImages = :duplicateImages',
-            '#status = :status',
+            'excludedImages = :excludedImages',
+            'processingDetails = :processingDetails',
             'version = :newVersion',
-            'updatedAt = :updatedAt'
+            'updatedAt = :updatedAt',
+            '#status = :status'
         ].join(', '),
-        ConditionExpression: 'version = :currentVersion', // Optimistic locking
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
             ':processedImages': processedImages,
             ':eligibleImages': eligibleImages,
-            ':failedImages': failedImages,
-            ':excludedImages': excludedImages,
             ':duplicateImages': duplicateImages,
+            ':excludedImages': excludedImages,
+            ':processingDetails': processingDetails,
             ':status': status,
-            ':newVersion': currentVersion + 1, // Increment version
+            ':newVersion': currentVersion + 1,
             ':currentVersion': currentVersion,
             ':updatedAt': new Date().toISOString()
-        }
-    };
+        },
+        ConditionExpression: 'version = :currentVersion', // Optimistic locking
+    }
 
     try {
         const result = await dynamoDB.send(new UpdateCommand(params));
         console.log('Job progress updated', { result });
     } catch (error) {
         if (error.name === 'ConditionalCheckFailedException') {
-            console.log(`Version mismatch for jobId: ${jobId}, retrying update...`);
+            console.log(`Job progress version mismatch for jobId: ${jobId}, retrying update...`);
             throw error;
         }
         throw error;
