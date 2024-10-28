@@ -48,6 +48,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
+                  - s3:ListObjectVersions
                 Resource: 
                   - Fn::Join:
                     - ""

@@ -1,6 +1,6 @@
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const s3 = new S3Client();
@@ -72,6 +72,31 @@ const s3Service = {
         } catch (error) {
             logger.error('Error getting signed URL for S3 operation', { error, operation, params });
             throw new AppError('Failed to generate signed URL', 500);
+        }
+    },
+
+    async isObjectUpdate(bucketName, objectKey, eventName) {
+        // Option 1: Check version history
+        try {
+            const command = new ListObjectVersionsCommand({
+                Bucket: bucketName,
+                Prefix: objectKey,
+                MaxKeys: 2  // We only need to check if there's more than one version
+            });
+
+            const response = await s3.send(command);
+
+            // If there are multiple versions, it's an update
+            return response.Versions && response.Versions.length > 1;
+
+        } catch (error) {
+            logger.error('Error checking object versions', {
+                error: error.message,
+                bucket: bucketName,
+                key: objectKey
+            });
+            // If we can't check versions, fall back to event name check
+            return false;
         }
     }
 };
