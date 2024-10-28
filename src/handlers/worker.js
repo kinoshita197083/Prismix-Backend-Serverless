@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const { AppError, handleError } = require('../utils/errorHandler');
 const dynamoService = require('../services/dynamoService');
 const s3Service = require('../services/s3Service');
+const { COMPLETED, DUPLICATE } = require('../utils/config');
 
 const rekognitionClient = new RekognitionClient();
 const dynamoClient = new DynamoDBClient();
@@ -128,6 +129,67 @@ function evaluate(labels, projectSettings) {
     return 'ELIGIBLE';
 }
 
+async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId }) {
+    // Calculate image hash
+    const imageHash = await calculateImageHash(bucket, s3ObjectKey);
+    console.log('Calculated image hash:', imageHash);
+
+    // Check and store the hash
+    const {
+        isDuplicate,
+        originalImageId,
+        originalImageS3Key
+    } = await checkAndStoreImageHash(imageHash, jobId, imageId, s3ObjectKey);
+
+    if (isDuplicate) {
+        logger.info('Duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
+        const response = await updateTaskStatusAsDuplicate({ jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key });
+        console.log('Task status updated to COMPLETED and marked as duplicate', response);
+        return true;
+    } else {
+        logger.info('No duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
+        return false;
+    }
+}
+
+async function updateTaskStatusAsDuplicate({ jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key }) {
+    console.log('Updating task status to COMPLETED and marking as duplicate...',
+        { jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key });
+
+    // Update task status to COMPLETED and mark as duplicate
+    return await dynamoService.updateTaskStatus({
+        jobId,
+        taskId: imageId,
+        status: COMPLETED,
+        evaluation: DUPLICATE,
+        imageS3Key: s3ObjectKey,
+        duplicateOf: originalImageId,
+        duplicateOfS3Key: originalImageS3Key,
+        updatedAt: new Date().toISOString(),
+    });
+}
+
+async function labelDetection({ bucket, s3ObjectKey, jobId, imageId, settingValue }) {
+    // Perform object detection
+    console.log('Performing object detection...');
+    const detectLabelsCommand = new DetectLabelsCommand({
+        Image: {
+            S3Object: {
+                Bucket: bucket,
+                Name: s3ObjectKey,
+            },
+        },
+        MaxLabels: 10,
+        MinConfidence: 70,
+    });
+
+    const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
+    const labels = rekognitionResult.Labels || [];
+    console.log('Object detection labels:', labels);
+
+    return labels;
+}
+
 exports.handler = async (event, context) => {
     console.log('----> Event:', event);
     const { Records } = event;
@@ -143,45 +205,25 @@ exports.handler = async (event, context) => {
         const [type, , , projectSettingId, , imageId] = s3ObjectKey.split('/');
 
         try {
-            // Calculate image hash
-            const imageHash = await calculateImageHash(bucket, s3ObjectKey);
-            console.log('Calculated image hash:', imageHash);
+            // Fetch project setting rules to see what task the worker is supposed to do
+            const projectSettingRules = await fetchProjectSettingRules(jobId);
+            console.log('Project setting rules:', projectSettingRules);
 
-            // Check and store the hash
-            const { isDuplicate, originalImageId, originalImageS3Key } = await checkAndStoreImageHash(imageHash, jobId, imageId, s3ObjectKey);
+            const isDuplicate = await duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId });
 
             if (isDuplicate) {
-                logger.info('Duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
-
-                // Update task status to COMPLETED and mark as duplicate
-                await dynamoService.updateTaskStatus({
-                    jobId,
-                    taskId: imageId,
-                    imageS3Key: s3ObjectKey,
-                    status: 'COMPLETED',
-                    evaluation: 'DUPLICATE',
-                    updatedAt: new Date().toISOString(),
-                    duplicateOf: originalImageId,
-                    duplicateOfS3Key: originalImageS3Key
-                });
-
+                logger.info('Duplicate image found, skipping further processing', { originalImageId, originalImageS3Key, currentImageId: imageId });
                 return; // Skip further processing for this image
             }
 
-            // Perform object detection
-            const detectLabelsCommand = new DetectLabelsCommand({
-                Image: {
-                    S3Object: {
-                        Bucket: bucket,
-                        Name: s3ObjectKey,
-                    },
-                },
-                MaxLabels: 10,
-                MinConfidence: 70,
+            const labels = await labelDetection({
+                bucket,
+                s3ObjectKey,
+                jobId,
+                imageId,
+                settingValue
             });
 
-            const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);
-            const labels = rekognitionResult.Labels || [];
             console.log('Rekognition labels:', JSON.stringify(labels, null, 2));
 
             console.log('Updating task status to COMPLETED and storing results...');
@@ -236,3 +278,16 @@ exports.handler = async (event, context) => {
         }
     }));
 };
+
+async function fetchProjectSettingRules(jobId) {
+    console.log('Fetching project setting rules...', { jobId });
+    try {
+        const response = await dynamoService.getItem(process.env.JOB_PROGRESS_TABLE, { JobId: jobId });
+        console.log('Fetch project setting rules response:', response);
+        return response?.projectSetting;
+    } catch (error) {
+        // logger.error('Error fetching project setting rules', { error, jobId });
+        console.log('dynamoService.getItem() failed', { error, jobId });
+        throw error;
+    }
+}

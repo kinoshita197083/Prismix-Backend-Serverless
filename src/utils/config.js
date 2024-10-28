@@ -6,6 +6,7 @@ const EXCLUDED = 'EXCLUDED';
 const PENDING = 'PENDING';
 const IN_PROGRESS = 'IN_PROGRESS';
 const COMPLETED = 'COMPLETED';
+const DUPLICATE = 'DUPLICATE';
 const CANCELLED = 'CANCELLED';
 
 // Share constants
@@ -19,5 +20,6 @@ module.exports = {
     PENDING,
     IN_PROGRESS,
     COMPLETED,
+    DUPLICATE,
     CANCELLED
 };
