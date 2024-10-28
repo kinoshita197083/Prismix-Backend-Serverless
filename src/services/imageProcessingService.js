@@ -1,8 +1,14 @@
 const sharp = require('sharp');
 const s3Service = require('./s3Service');
+const { validFitOptions } = require('../utils/config');
 
 exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
-    const { maxWidth, maxHeight, resizeMode, quality, outputFormat } = settings;
+    const { maxWidth, maxHeight, resizeMode, quality, outputFormat = 'original' } = settings;
+
+    // If the output format is original and no dimensions are specified, return the original image
+    if (outputFormat === 'original' && !maxWidth && !maxHeight) {
+        return s3ObjectKey;
+    }
 
     // Get original image
     const imageBuffer = await s3Service.getFileBuffer(bucket, s3ObjectKey);
@@ -12,8 +18,11 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
     // Apply resize if dimensions are specified
     if (maxWidth || maxHeight) {
+        // Validate and map resizeMode to Sharp's supported fit options
+        const fit = validFitOptions[resizeMode] || 'contain'; // Default to 'contain' if invalid
+
         pipeline = pipeline.resize(maxWidth, maxHeight, {
-            fit: resizeMode,
+            fit,
             withoutEnlargement: true
         });
     }
@@ -39,7 +48,10 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
         Bucket: bucket,
         Key: newKey,
         Body: processedBuffer,
-        ContentType: `image/${outputFormat}`
+        ContentType: `image/${outputFormat}`,
+        Metadata: {
+            resized: "true"  // When upload to S3, it does not trigger subsequent processing
+        }
     });
 
     return newKey;

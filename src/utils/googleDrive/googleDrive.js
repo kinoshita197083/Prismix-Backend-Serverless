@@ -1,10 +1,6 @@
 const { sleep } = require('../helpers');
 const { MAX_RETRIES, RETRY_DELAY } = require('./config');
 const logger = require('../logger');
-const { PutObjectCommand } = require('@aws-sdk/client-s3');
-const crypto = require('crypto');
-
-
 const { google } = require('googleapis');
 
 const oauth2Client = new google.auth.OAuth2(
@@ -123,6 +119,8 @@ async function uploadImageWithRetry(
     attempt,
     bucket
 ) {
+    const { PutObjectCommand } = require('@aws-sdk/client-s3');
+
     try {
         const imageContent = await drive.files.get({
             fileId: image.id,
@@ -185,6 +183,7 @@ async function processImageBatch(
     bucket
 ) {
     const uploadPromises = batch.map(async (image, index) => {
+        const crypto = require('crypto');
         try {
             const suffix = image.name.split('.').pop() || '';
             const imageId = crypto.createHash('md5')

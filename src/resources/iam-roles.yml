@@ -48,7 +48,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                  - s3:ListObjectVersions
                 Resource: 
                   - Fn::Join:
                     - ""
@@ -56,6 +55,29 @@ Resources:
                       - ${self:custom.bucketName}
                       - "/*"
                   - "arn:aws:s3:::prismix-lambda-layers/*"
+              - Effect: Allow
+                Action:
+                  - s3:HeadObject
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListObjectVersions
+                  - s3:GetObjectVersion
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
               - Effect: Allow
                 Action:
                   - sns:Publish

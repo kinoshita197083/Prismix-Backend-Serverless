@@ -1,10 +1,9 @@
 const { DetectLabelsCommand, RekognitionClient } = require('@aws-sdk/client-rekognition');
 const dynamoService = require('../../services/dynamoService');
-const { RANDOM_TIME_DELAY_MAX_EIGHT_SECONDS } = require('../config');
 
 const rekognitionClient = new RekognitionClient({ region: process.env.AWS_REGION });
 
-async function labelDetection({ bucket, s3ObjectKey, jobId, imageId, settingValue }) {
+async function labelDetection({ bucket, s3ObjectKey }) {
     // Perform object detection
     console.log('Performing object detection...');
     const detectLabelsCommand = new DetectLabelsCommand({
@@ -27,7 +26,7 @@ async function labelDetection({ bucket, s3ObjectKey, jobId, imageId, settingValu
 
 async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 3) {
     console.log('Checking and storing image hash...', { hash, jobId, imageId, s3Key });
-    let retryCount = 0;
+    let retryCount = 2;
     let lastError;
 
     while (retryCount <= maxRetries) {
@@ -67,7 +66,7 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 
             retryCount++;
 
             if (retryCount <= maxRetries) {
-                const delay = RANDOM_TIME_DELAY_MAX_EIGHT_SECONDS; // Exponential backoff with max 8s delay
+                const delay = Math.min(1000 * Math.pow(2, retryCount), 8000); // Exponential backoff with max 8s delay
                 console.log(`Retry attempt ${retryCount}/${maxRetries} after ${delay}ms delay`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
@@ -75,7 +74,7 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 
         }
     }
 
-    logger.error('Error checking and storing image hash after retries', {
+    console.log('Error checking and storing image hash after retries', {
         error: lastError,
         retryAttempts: retryCount
     });
@@ -84,6 +83,8 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 
 
 
 async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId }) {
+    const { calculateImageHash } = require('../helpers');
+
     // Calculate image hash
     const imageHash = await calculateImageHash(bucket, s3ObjectKey);
     console.log('Calculated image hash:', imageHash);
@@ -96,12 +97,12 @@ async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId }) 
     } = await checkAndStoreImageHash(imageHash, jobId, imageId, s3ObjectKey);
 
     if (isDuplicate) {
-        logger.info('Duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
+        console.log('Duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
         const response = await dynamoService.updateTaskStatusAsDuplicate({ jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key });
         console.log('Task status updated to COMPLETED and marked as duplicate', response);
         return true;
     } else {
-        logger.info('No duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
+        console.log('No duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
         return false;
     }
 }

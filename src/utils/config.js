@@ -14,8 +14,15 @@ const FAILED = 'FAILED';
 
 // Expiration time for image hash in seconds
 const IMAGE_HASH_EXPIRATION_TIME = (Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60)).toString() // 3 days
-const RANDOM_TIME_DELAY_MAX_EIGHT_SECONDS = Math.min(1000 * Math.pow(2, retryCount), 8000);
-const NOW = Date.now().toString()
+
+// Validate and map resizeMode to Sharp's supported fit options
+const validFitOptions = {
+    'cover': 'cover',
+    'contain': 'contain',
+    'fill': 'fill',
+    'inside': 'inside',
+    'outside': 'outside'
+};
 
 // Resolution thresholds for image quality
 const RESOLUTION_THRESHOLDS = {
@@ -29,13 +36,13 @@ module.exports = {
     ELIGIBLE,
     FAILED,
     EXCLUDED,
+    ELIGIBLE,
     PENDING,
     IN_PROGRESS,
     COMPLETED,
     DUPLICATE,
     CANCELLED,
     IMAGE_HASH_EXPIRATION_TIME,
-    RANDOM_TIME_DELAY_MAX_EIGHT_SECONDS,
-    NOW,
-    RESOLUTION_THRESHOLDS
+    RESOLUTION_THRESHOLDS,
+    validFitOptions
 };

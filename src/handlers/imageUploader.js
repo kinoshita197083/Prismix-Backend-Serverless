@@ -2,7 +2,6 @@ const { S3Client } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { createClient } = require('@supabase/supabase-js')
-const { google } = require('googleapis');
 const logger = require('../utils/logger');
 const { fetchGoogleRefreshToken, getAllImagesFromDrive, processImageBatch, setUpGoogleDriveClient } = require('../utils/googleDrive/googleDrive');
 
@@ -13,11 +12,6 @@ const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_API_KEY
 )
-
-// const oauth2Client = new google.auth.OAuth2(
-//     process.env.GOOGLE_CLIENT_ID,
-//     process.env.GOOGLE_CLIENT_SECRET,
-// );
 
 const dynamoDb = new DynamoDBClient({ region: process.env.AWS_REGION });
 const dynamoDbDocumentClient = DynamoDBDocumentClient.from(dynamoDb, {

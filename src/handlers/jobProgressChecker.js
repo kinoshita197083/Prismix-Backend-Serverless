@@ -9,7 +9,12 @@ const { EventBridgeClient, DisableRuleCommand, DeleteRuleCommand,
 const { COMPLETED } = require('../utils/config');
 
 const client = new DynamoDBClient({});
-const dynamoDB = DynamoDBDocumentClient.from(client);
+const dynamoDB = DynamoDBDocumentClient.from(client, {
+    marshallOptions: {
+        removeUndefinedValues: true,
+        convertEmptyValues: true
+    }
+});
 const snsClient = new SNSClient();
 const eventBridgeClient = new EventBridgeClient();
 
@@ -22,6 +27,11 @@ const supabase = createClient(
 const TASKS_TABLE = process.env.TASKS_TABLE;
 const JOB_PROGRESS_TABLE = process.env.JOB_PROGRESS_TABLE;
 
+const MAX_JOB_RUNTIME_HOURS = 24; // Configure maximum runtime in hours
+
+// Add constant for maximum inactivity time (15 minutes)
+const MAX_INACTIVITY_MINUTES = 15;
+
 exports.handler = async (event) => {
     try {
         console.log('----> Event received: ', event);
@@ -32,11 +42,33 @@ exports.handler = async (event) => {
             throw new Error('Invalid event structure');
         }
 
+        // Check for job inactivity
+        const isInactive = await checkJobInactivity(jobId);
+        if (isInactive) {
+            await updateJobStatusRDS(jobId, 'TIMEOUT');
+            await disableEventBridgeRule(jobId);
+            return {
+                statusCode: 200,
+                body: 'Job terminated due to inactivity'
+            };
+        }
+
+        // Add check for job runtime
+        const shouldTerminate = await checkJobRuntime(jobId);
+        if (shouldTerminate) {
+            await updateJobStatusRDS(jobId, 'TIMEOUT');
+            await disableEventBridgeRule(jobId);
+            return {
+                statusCode: 200,
+                body: 'Job terminated due to timeout'
+            };
+        }
+
         // Check job status and update progress
-        const jobCompleted = await checkAndUpdateJobStatus(jobId);
+        const jobStatus = await checkAndUpdateJobStatus(jobId);
 
         // If job is completed, update RDS and SNS and disable the EventBridge rule
-        if (jobCompleted) {
+        if (jobStatus === 'completed') {
             await updateJobStatusRDS(jobId, 'COMPLETED');
             // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
             console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
@@ -47,6 +79,10 @@ exports.handler = async (event) => {
 
             await disableEventBridgeRule(jobId);
             console.log(`Job completed, disabling EventBridge rule for job ${jobId}`);
+        } else if (jobStatus === 'timeout') {
+            console.log(`Job terminated due to timeout, disabling EventBridge rule for job ${jobId}`);
+        } else if (jobStatus === 'in_progress') {
+            console.log(`Job is still in progress, no action needed`);
         }
 
         console.log(`Successfully processed event for jobId: ${jobId}`);
@@ -129,7 +165,7 @@ async function checkAndUpdateJobStatus(jobId) {
             if (processedImages > totalImages) {
                 console.log('!!! Warning: Processed images exceed total images', { processedImages, totalImages });
                 console.log('*** This should not happen, please check the job ${jobId} ***');
-                return false;
+                return 'timeout';
             } else if (processedImages === totalImages) {
                 console.log('Job completed, updating progress to COMPLETED');
                 await updateJobProgress(
@@ -144,7 +180,7 @@ async function checkAndUpdateJobStatus(jobId) {
                 );
                 // logger.info('Job completed, progress updated', { jobId, status: 'COMPLETED' });
                 console.log('Job completed, progress updated', { jobId, status: 'COMPLETED' });
-                return true;
+                return 'completed';
             } else {
                 console.log('Job not completed yet, updating progress');
                 await updateJobProgress(
@@ -159,11 +195,11 @@ async function checkAndUpdateJobStatus(jobId) {
                 );
                 // logger.info('Job progress updated', { jobId, status: 'IN_PROGRESS' });
                 console.log('Job progress updated', { jobId, status: 'IN_PROGRESS' });
-                return false;
+                return 'in_progress';
             }
         } else {
             console.log('No progress detected, skipping update', { jobId });
-            return status === COMPLETED; // Return true if already completed
+            return status === COMPLETED ? 'completed' : 'in_progress'; // Return true if already completed
         }
     } catch (error) {
         // logger.error('Error in checkAndUpdateJobStatus', {
@@ -201,7 +237,7 @@ async function getJobStats(jobId) {
     try {
         const result = await dynamoDB.send(new QueryCommand(params));
 
-        // console.log('Query result for Task Table: ', result);
+        console.log('Query result for Task Table: ', result);
 
         return result.Items.reduce((acc, task) => {
             acc.processedImages += task.TaskStatus === 'COMPLETED' ? 1 : 0;
@@ -209,15 +245,17 @@ async function getJobStats(jobId) {
             acc.duplicateImages += task.Evaluation === 'DUPLICATE' ? 1 : 0;
             acc.excludedImages += task.Evaluation === 'EXCLUDED' ? 1 : 0;
 
-            if (task.TaskStatus === 'FAILED') {
+            if (task.Evaluation === 'FAILED') {
                 acc.processingDetails.failedProcessedImages = acc.processingDetails.failedProcessedImages || [];
 
                 acc.processingDetails.failedProcessedImages.push({
-                    imageS3Key: task.imageS3Key,
-                    reason: task.reason ? task.reason : 'Unknown'
+                    imageS3Key: task.ImageS3Key,
+                    reason: task.Reason || 'Unknown'
                 });
+
             }
 
+            console.log('FAILED: ', acc.processingDetails.failedProcessedImages);
             return acc;
         }, { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0 });
     } catch (error) {
@@ -239,35 +277,66 @@ async function getCurrentJobProgress(jobId) {
 }
 
 // Update job progress with version check (optimistic locking)
-async function updateJobProgress(jobId, processedImages, eligibleImages, processingDetails, excludedImages, duplicateImages, status, currentVersion) {
+async function updateJobProgress(
+    jobId,
+    processedImages,
+    eligibleImages,
+    processingDetails,
+    excludedImages,
+    duplicateImages,
+    status,
+    currentVersion
+) {
+    console.log('Updating job progress', { jobId, processedImages, eligibleImages, duplicateImages, excludedImages, processingDetails, status, currentVersion });
+
+    // Create a clean object with only defined values
+    const updateValues = {
+        ':status': status,
+        ':processedImages': processedImages || 0,
+        ':newVersion': currentVersion + 1,
+        ':currentVersion': currentVersion,
+        ':updatedAt': new Date().toISOString()
+    };
+
+    const updateExpressions = [
+        '#status = :status',
+        'processedImages = :processedImages',
+        'version = :newVersion',
+        'updatedAt = :updatedAt'
+    ];
+
+    if (eligibleImages) {
+        updateValues[':eligibleImages'] = eligibleImages;
+        updateExpressions.push('eligibleImages = :eligibleImages');
+    }
+
+    if (duplicateImages) {
+        updateValues[':duplicateImages'] = duplicateImages;
+        updateExpressions.push('duplicateImages = :duplicateImages');
+    }
+
+    if (excludedImages) {
+        updateValues[':excludedImages'] = excludedImages;
+        updateExpressions.push('excludedImages = :excludedImages');
+    }
+
+    if (processingDetails && Object.keys(processingDetails).length > 0) {
+        // Ensure processingDetails has no undefined values
+        const cleanProcessingDetails = {
+            failedProcessedImages: processingDetails.failedProcessedImages || []
+        };
+        updateValues[':processingDetails'] = cleanProcessingDetails;
+        updateExpressions.push('processingDetails = :processingDetails');
+    }
 
     const params = {
         TableName: JOB_PROGRESS_TABLE,
         Key: { JobId: jobId },
-        UpdateExpression: 'SET ' + [
-            'processedImages = :processedImages',
-            'eligibleImages = :eligibleImages',
-            'duplicateImages = :duplicateImages',
-            'excludedImages = :excludedImages',
-            'processingDetails = :processingDetails',
-            'version = :newVersion',
-            'updatedAt = :updatedAt',
-            '#status = :status'
-        ].join(', '),
+        UpdateExpression: 'SET ' + updateExpressions.join(', '),
         ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-            ':processedImages': processedImages,
-            ':eligibleImages': eligibleImages,
-            ':duplicateImages': duplicateImages,
-            ':excludedImages': excludedImages,
-            ':processingDetails': processingDetails,
-            ':status': status,
-            ':newVersion': currentVersion + 1,
-            ':currentVersion': currentVersion,
-            ':updatedAt': new Date().toISOString()
-        },
-        ConditionExpression: 'version = :currentVersion', // Optimistic locking
-    }
+        ExpressionAttributeValues: updateValues,
+        ConditionExpression: 'version = :currentVersion'
+    };
 
     try {
         const result = await dynamoDB.send(new UpdateCommand(params));
@@ -354,4 +423,67 @@ async function disableEventBridgeRule(jobId) {
     const ruleName = `JobProgressCheck-${jobId}`;
     await disableAndDeleteEventBridgeRule(ruleName);
     console.log(`Disabled and deleted EventBridge rule for job ${jobId}`);
+}
+
+// Add new function to check job runtime
+async function checkJobRuntime(jobId) {
+    try {
+        const { data: job, error } = await supabase
+            .from('Job')
+            .select('createdAt')
+            .eq('id', jobId)
+            .single();
+
+        if (error) throw error;
+
+        const createdAt = new Date(job.createdAt);
+        const now = new Date();
+        const runningTimeHours = (now - createdAt) / (1000 * 60 * 60);
+
+        console.log(`Job ${jobId} has been running for ${runningTimeHours.toFixed(2)} hours`);
+
+        if (runningTimeHours > MAX_JOB_RUNTIME_HOURS) {
+            console.log(`Job ${jobId} exceeded maximum runtime of ${MAX_JOB_RUNTIME_HOURS} hours. Terminating.`);
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error(`Error checking job runtime for job ${jobId}:`, error);
+        throw error;
+    }
+}
+
+// Add new function to check job inactivity
+async function checkJobInactivity(jobId) {
+    try {
+        const params = {
+            TableName: JOB_PROGRESS_TABLE,
+            Key: { JobId: jobId }
+        };
+
+        const result = await dynamoDB.send(new GetCommand(params));
+        const jobProgress = result.Item;
+
+        if (!jobProgress || !jobProgress.updatedAt) {
+            console.log(`No job progress or updatedAt found for job ${jobId}`);
+            return true;
+        }
+
+        const lastUpdateTime = new Date(jobProgress.updatedAt);
+        const now = new Date();
+        const inactiveMinutes = (now - lastUpdateTime) / (1000 * 60);
+
+        console.log(`Job ${jobId} last updated ${inactiveMinutes.toFixed(2)} minutes ago`);
+
+        if (inactiveMinutes > MAX_INACTIVITY_MINUTES) {
+            console.log(`Job ${jobId} has been inactive for more than ${MAX_INACTIVITY_MINUTES} minutes. Terminating.`);
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error(`Error checking job inactivity for job ${jobId}:`, error);
+        throw error;
+    }
 }

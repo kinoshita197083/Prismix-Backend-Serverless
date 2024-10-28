@@ -1,8 +1,10 @@
-const dynamoService = require('../services/dynamoService');
+const dynamoService = require("../../services/dynamoService");
+
 
 async function fetchProjectSettingRules(jobId) {
     console.log('Fetching project setting rules...', { jobId });
     try {
+        dynamoService
         const response = await dynamoService.getItem(process.env.JOB_PROGRESS_TABLE, { JobId: jobId });
         console.log('Fetch project setting rules response:', response);
         return response?.projectSetting;

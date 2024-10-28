@@ -7,28 +7,27 @@ const sns = new SNSClient();
 exports.handler = async (event) => {
     const { Records } = event;
 
-    console.log('----> Event: ', event);
+    // console.log('----> Event: ', event);
+    logger.info('Enqueue image event:', event);
 
     for (const record of Records) {
         const { bucket, object } = record.s3;
-        const eventName = record.eventName; // Get the event name
 
-        console.log(`Processing image ${object.key} from bucket ${bucket.name} and record: `, record.s3);
-        console.log(`Event type: ${eventName}`);
+        // Get object metadata
+        const metadata = await s3Service.getObjectMetadata(bucket.name, object.key);
 
         // Check if this is an update or new creation
-        // eventName will be something like "ObjectCreated:Put" or "ObjectCreated:CompleteMultipartUpload"
-        const isUpdate = await s3Service.isObjectUpdate(bucket.name, object.key, eventName);
-
-        if (isUpdate) {
-            logger.info(`Object ${object.key} is being updated - skipping processing`);
-            continue; // Skip processing if it's an update
+        // Skip if this is a processed image
+        if (metadata.resized || metadata.resized === "true") {
+            logger.info(`Object ${object.key} is already processed - skipping`);
+            continue;
         }
+
+        console.log(`Processing image ${object.key} from bucket ${bucket.name} and record: `, record.s3);
 
         try {
             // Extract userId, projectId, and jobId from the object key
             // Key format: uploads/${userId}/${projectId}/${projectSettingId}/${jobId}/${Date.now()}-${i + index}
-
             const [type, userId, projectId, projectSettingId, jobId, imageId] = object.key.split('/');
             logger.info(`type: ${type}, userId: ${userId}, projectId: ${projectId}, projectSettingId: ${projectSettingId}, jobId: ${jobId}`);
 
@@ -42,7 +41,7 @@ exports.handler = async (event) => {
                 userId,
                 projectId,
                 jobId,
-                settingValue: projectSetting.settingValue
+                projectSettingId
             };
 
             const publishCommand = new PublishCommand({

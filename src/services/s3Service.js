@@ -1,7 +1,8 @@
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const { streamToBuffer } = require('../utils/helpers');
 
 const s3 = new S3Client();
 
@@ -75,30 +76,34 @@ const s3Service = {
         }
     },
 
-    async isObjectUpdate(bucketName, objectKey, eventName) {
-        // Option 1: Check version history
+    async getFileBuffer(bucket, key) {
         try {
-            const command = new ListObjectVersionsCommand({
-                Bucket: bucketName,
-                Prefix: objectKey,
-                MaxKeys: 2  // We only need to check if there's more than one version
-            });
-
-            const response = await s3.send(command);
-
-            // If there are multiple versions, it's an update
-            return response.Versions && response.Versions.length > 1;
-
+            logger.info('Getting file buffer from S3', { bucket, key });
+            const params = {
+                Bucket: bucket,
+                Key: key
+            };
+            const response = await this.getFile(params);
+            const buffer = await streamToBuffer(response);
+            return buffer;
         } catch (error) {
-            logger.error('Error checking object versions', {
-                error: error.message,
-                bucket: bucketName,
-                key: objectKey
-            });
-            // If we can't check versions, fall back to event name check
-            return false;
+            logger.error('Error getting file buffer from S3', { error, bucket, key });
+            throw new AppError('Failed to get file buffer', 500);
         }
-    }
+    },
+
+    async getObjectMetadata(bucket, key) {
+        try {
+            const { Metadata } = await s3.send(new HeadObjectCommand({
+                Bucket: bucket,
+                Key: key
+            }));
+            return Metadata || {};
+        } catch (error) {
+            logger.error('Error getting object metadata', { error, bucket, key });
+            return {};
+        }
+    },
 };
 
 module.exports = s3Service;

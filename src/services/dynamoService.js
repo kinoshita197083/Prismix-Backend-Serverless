@@ -1,11 +1,15 @@
-const { DynamoDBClient, GetItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
-const { IMAGE_HASH_EXPIRATION_TIME, NOW, DUPLICATE, COMPLETED, FAILED } = require('../utils/config');
+const { IMAGE_HASH_EXPIRATION_TIME, DUPLICATE, COMPLETED, FAILED, EXCLUDED, ELIGIBLE } = require('../utils/config');
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const client = new DynamoDBClient();
+const docClient = DynamoDBDocumentClient.from(client, {
+    marshallOptions: {
+        removeUndefinedValues: true
+    }
+});
 
 const dynamoService = {
     async getItem(tableName, key) {
@@ -89,32 +93,47 @@ const dynamoService = {
         reason,
         processingDetails
     }) {
-        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key, reason });
+        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, processingDetails, evaluation, duplicateOf, duplicateOfS3Key, reason });
 
         const updateExpression = [
             'TaskStatus = :status',
-            'ImageS3Key = :imageS3Key',
             'Evaluation = :evaluation',
-            'ProcessingDetails = :processingDetails',
-            'DuplicateOf = :duplicateOf',
-            'DuplicateOfS3Key = :duplicateOfS3Key',
-            'Reason = :reason',
             'UpdatedAt = :updatedAt'
         ];
         const expressionAttributeValues = {
             ':status': status,
-            ':imageS3Key': imageS3Key,
             ':evaluation': evaluation,
-            ':processingDetails': {
-                ...processingDetails,
-                processedAt: NOW,
-                originalS3Key: imageS3Key
-            },
-            ':duplicateOf': duplicateOf,
-            ':duplicateOfS3Key': duplicateOfS3Key,
-            ':reason': reason,
-            ':updatedAt': NOW
+            ':updatedAt': Date.now().toString()
         };
+
+        if (imageS3Key) {
+            updateExpression.push('ImageS3Key = :imageS3Key')
+            expressionAttributeValues[':imageS3Key'] = imageS3Key;
+        }
+
+        if (duplicateOf) {
+            updateExpression.push('DuplicateOf = :duplicateOf')
+            expressionAttributeValues[':duplicateOf'] = duplicateOf;
+        }
+
+        if (duplicateOfS3Key) {
+            updateExpression.push('DuplicateOfS3Key = :duplicateOfS3Key')
+            expressionAttributeValues[':duplicateOfS3Key'] = duplicateOfS3Key;
+        }
+
+        if (processingDetails) {
+            updateExpression.push('ProcessingDetails = :processingDetails')
+            expressionAttributeValues[':processingDetails'] = {
+                ...processingDetails,
+                processedAt: Date.now().toString(),
+                originalS3Key: imageS3Key
+            };
+        }
+
+        if (reason) {
+            updateExpression.push('Reason = :reason')
+            expressionAttributeValues[':reason'] = reason;
+        }
 
         const params = {
             TableName: process.env.TASKS_TABLE,
@@ -124,7 +143,7 @@ const dynamoService = {
                 ...expressionAttributeValues,
                 ':completed': COMPLETED  // For conditional expression
             },
-            ConditionExpression: '(attribute_not_exists(Evaluation) OR Evaluation <> :completed)',
+            ConditionExpression: 'attribute_not_exists(Evaluation) OR (TaskStatus <> :completed)',
             ReturnValues: 'ALL_NEW'
         };
 
@@ -136,6 +155,19 @@ const dynamoService = {
             logger.info('Task status updated successfully', { jobId, taskId, status });
             return result.Attributes;
         } catch (error) {
+            // Ignore ConditionalCheckFailedException as it may be due to race conditions
+            if (error.name === 'ConditionalCheckFailedException') {
+                logger.warn('Conditional check failed while updating task status - likely due to race condition', {
+                    jobId,
+                    taskId,
+                    status,
+                    evaluation
+                });
+                // Fetch and return the current state of the item
+                const currentItem = await this.getItem(process.env.TASKS_TABLE, { JobID: jobId, TaskID: taskId });
+                return currentItem;
+            }
+
             logger.error('Error updating task status', {
                 error: error.message,
                 stack: error.stack,
@@ -166,7 +198,7 @@ const dynamoService = {
                 JobId: jobId,
                 ImageId: imageId,
                 ImageS3Key: imageS3Key,
-                Timestamp: NOW,
+                Timestamp: Date.now().toString(),
                 ExpirationTime: IMAGE_HASH_EXPIRATION_TIME // 3 days
             },
             ConditionExpression: 'attribute_not_exists(HashValue) AND attribute_not_exists(JobId)'
@@ -174,15 +206,14 @@ const dynamoService = {
         await docClient.send(command);
     },
 
-    async updateTaskStatusAsFailed({ jobId, imageId, s3ObjectKey, reason }) {
+    async updateTaskStatusAsFailed({ jobId, taskId, imageS3Key, reason }) {
         return await this.updateTaskStatus({
             jobId,
-            taskId: imageId,
+            taskId,
             status: COMPLETED,
             evaluation: FAILED,
-            imageS3Key: s3ObjectKey,
-            reason,
-            updatedAt: NOW
+            imageS3Key,
+            reason
         });
     },
 
@@ -205,7 +236,7 @@ const dynamoService = {
             imageS3Key: s3ObjectKey,
             duplicateOf: originalImageId,
             duplicateOfS3Key: originalImageS3Key,
-            updatedAt: NOW,
+            updatedAt: Date.now().toString(),
         });
     },
 
@@ -224,7 +255,7 @@ const dynamoService = {
             evaluation: FAILED,
             imageS3Key: s3ObjectKey,
             reason: qualityIssues,
-            updatedAt: NOW,
+            updatedAt: Date.now().toString(),
         });
     }
 };
