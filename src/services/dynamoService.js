@@ -2,6 +2,7 @@ const { DynamoDBClient, GetItemCommand, UpdateItemCommand } = require('@aws-sdk/
 const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
+const { IMAGE_HASH_EXPIRATION_TIME, NOW, DUPLICATE, COMPLETED, FAILED } = require('../utils/config');
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -76,69 +77,52 @@ const dynamoService = {
         }
     },
 
-    async updateTaskStatus({ jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key, reason }) {
+    async updateTaskStatus({
+        jobId,
+        taskId,
+        imageS3Key,
+        status,
+        labels,
+        evaluation,
+        duplicateOf,
+        duplicateOfS3Key,
+        reason,
+        processingDetails
+    }) {
         console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, evaluation, duplicateOf, duplicateOfS3Key, reason });
 
-        const updateExpression = ['SET TaskStatus = :status, ImageS3Key = :imageS3Key, UpdatedAt = :updatedAt'];
+        const updateExpression = [
+            'TaskStatus = :status',
+            'ImageS3Key = :imageS3Key',
+            'Evaluation = :evaluation',
+            'ProcessingDetails = :processingDetails',
+            'DuplicateOf = :duplicateOf',
+            'DuplicateOfS3Key = :duplicateOfS3Key',
+            'Reason = :reason',
+            'UpdatedAt = :updatedAt'
+        ];
         const expressionAttributeValues = {
             ':status': status,
             ':imageS3Key': imageS3Key,
-            ':updatedAt': new Date().toISOString()
+            ':evaluation': evaluation,
+            ':processingDetails': {
+                ...processingDetails,
+                processedAt: NOW,
+                originalS3Key: imageS3Key
+            },
+            ':duplicateOf': duplicateOf,
+            ':duplicateOfS3Key': duplicateOfS3Key,
+            ':reason': reason,
+            ':updatedAt': NOW
         };
-
-        if (labels && Array.isArray(labels) && labels.length > 0) {
-            try {
-                const flattenedLabels = labels.map(label => ({
-                    name: label.Name || '',
-                    confidence: label.Confidence ? `${label.Confidence.toFixed(2)}%` : '0%',
-                    categories: Array.isArray(label.Categories) ? label.Categories.map(cat => cat.Name).join(', ') : '',
-                    parents: Array.isArray(label.Parents) && label.Parents.length > 0 ? label.Parents.map(parent => parent.Name).join(', ') : 'None',
-                    aliases: Array.isArray(label.Aliases) && label.Aliases.length > 0 ? label.Aliases.map(alias => alias.Name).join(', ') : 'None'
-                }));
-
-                updateExpression.push('ProcessingResult = :labels');
-                // expressionAttributeValues[':labels'] = {
-                //     L: flattenedLabels.map(label => ({
-                //         M: Object.entries(label).reduce((acc, [key, value]) => {
-                //             acc[key] = value.toString();
-                //             return acc;
-                //         }, {})
-                //     }))
-                // };
-                expressionAttributeValues[':labels'] = flattenedLabels;
-            } catch (error) {
-                console.error('Error storing labels:', error);
-                // If there's an error processing labels, we'll skip adding them to the update
-            }
-        }
-
-        if (evaluation) {
-            updateExpression.push('Evaluation = :evaluation');
-            expressionAttributeValues[':evaluation'] = evaluation;
-        }
-
-        if (duplicateOf) {
-            updateExpression.push('DuplicateOf = :duplicateOf');
-            expressionAttributeValues[':duplicateOf'] = duplicateOf;
-        }
-
-        if (duplicateOfS3Key) {
-            updateExpression.push('DuplicateOfS3Key = :duplicateOfS3Key');
-            expressionAttributeValues[':duplicateOfS3Key'] = duplicateOfS3Key;
-        }
-
-        if (reason) {
-            updateExpression.push('Reason = :reason');
-            expressionAttributeValues[':reason'] = reason;
-        }
 
         const params = {
             TableName: process.env.TASKS_TABLE,
             Key: { JobID: jobId, TaskID: taskId },
-            UpdateExpression: updateExpression.join(', '),
+            UpdateExpression: 'SET ' + updateExpression.join(', '),
             ExpressionAttributeValues: {
                 ...expressionAttributeValues,
-                ':completed': 'COMPLETED'  // Add this value for the condition
+                ':completed': COMPLETED  // For conditional expression
             },
             ConditionExpression: '(attribute_not_exists(Evaluation) OR Evaluation <> :completed)',
             ReturnValues: 'ALL_NEW'
@@ -164,38 +148,84 @@ const dynamoService = {
         }
     },
 
-    async updateJobProgress(jobId, evaluation) {
-        const key = { JobId: jobId };
-        let updateExpression = 'SET ProcessedImages = ProcessedImages + :inc, #LastUpdateTime = :now';
-        let expressionAttributeValues = {
-            ':inc': 1,
-            ':now': Date.now()
-        };
-        let expressionAttributeNames = {
-            '#LastUpdateTime': 'LastUpdateTime'
-        };
+    async getImageHash(hash, jobId) {
+        const command = new GetCommand({
+            TableName: process.env.IMAGE_HASH_TABLE,
+            Key: { HashValue: hash, JobId: jobId },
+            ConsistentRead: true
+        });
+        const result = await docClient.send(command);
+        return result.Item;
+    },
 
-        switch (evaluation) {
-            case 'ELIGIBLE':
-                updateExpression += ', EligibleImages = EligibleImages + :inc';
-                break;
-            case 'EXCLUDED':
-                updateExpression += ', ExcludedImages = ExcludedImages + :inc';
-                break;
-            case 'DUPLICATE':
-                updateExpression += ', DuplicateImages = DuplicateImages + :inc';
-                break;
-            case 'FAILED':
-                updateExpression += ', FailedImages = FailedImages + :inc';
-                break;
-        }
+    async putImageHash(hash, jobId, imageId, imageS3Key) {
+        const command = new PutCommand({
+            TableName: process.env.IMAGE_HASH_TABLE,
+            Item: {
+                HashValue: hash,
+                JobId: jobId,
+                ImageId: imageId,
+                ImageS3Key: imageS3Key,
+                Timestamp: NOW,
+                ExpirationTime: IMAGE_HASH_EXPIRATION_TIME // 3 days
+            },
+            ConditionExpression: 'attribute_not_exists(HashValue) AND attribute_not_exists(JobId)'
+        });
+        await docClient.send(command);
+    },
 
-        try {
-            return await this.updateItem(process.env.JOB_PROGRESS_TABLE, key, updateExpression, expressionAttributeValues, expressionAttributeNames);
-        } catch (error) {
-            logger.error('Error updating job progress', { error: error.message, jobId, evaluation });
-            throw new AppError('Failed to update job progress', 500);
-        }
+    async updateTaskStatusAsFailed({ jobId, imageId, s3ObjectKey, reason }) {
+        return await this.updateTaskStatus({
+            jobId,
+            taskId: imageId,
+            status: COMPLETED,
+            evaluation: FAILED,
+            imageS3Key: s3ObjectKey,
+            reason,
+            updatedAt: NOW
+        });
+    },
+
+    async updateTaskStatusAsDuplicate({
+        jobId,
+        imageId,
+        s3ObjectKey,
+        originalImageId,
+        originalImageS3Key
+    }) {
+        console.log('Updating task status to COMPLETED and marking as duplicate...',
+            { jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key });
+
+        // Update task status to COMPLETED and mark as duplicate
+        return await this.updateTaskStatus({
+            jobId,
+            taskId: imageId,
+            status: COMPLETED,
+            evaluation: DUPLICATE,
+            imageS3Key: s3ObjectKey,
+            duplicateOf: originalImageId,
+            duplicateOfS3Key: originalImageS3Key,
+            updatedAt: NOW,
+        });
+    },
+
+    async updateTaskStatusWithQualityIssues({
+        jobId,
+        imageId,
+        s3ObjectKey,
+        qualityIssues
+    }) {
+        console.log('Updating task status with quality issues...', { jobId, imageId, s3ObjectKey, qualityIssues });
+
+        return await this.updateTaskStatus({
+            jobId,
+            taskId: imageId,
+            status: COMPLETED,
+            evaluation: FAILED,
+            imageS3Key: s3ObjectKey,
+            reason: qualityIssues,
+            updatedAt: NOW,
+        });
     }
 };
 
