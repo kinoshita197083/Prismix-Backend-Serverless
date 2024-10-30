@@ -8,6 +8,7 @@ const IN_PROGRESS = 'IN_PROGRESS';
 const COMPLETED = 'COMPLETED';
 const DUPLICATE = 'DUPLICATE';
 const CANCELLED = 'CANCELLED';
+const WAITING_FOR_REVIEW = 'WAITING_FOR_REVIEW';
 
 // Share constants
 const FAILED = 'FAILED';
@@ -42,6 +43,7 @@ module.exports = {
     COMPLETED,
     DUPLICATE,
     CANCELLED,
+    WAITING_FOR_REVIEW,
     IMAGE_HASH_EXPIRATION_TIME,
     RESOLUTION_THRESHOLDS,
     validFitOptions

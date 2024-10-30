@@ -121,6 +121,11 @@ const dynamoService = {
             expressionAttributeValues[':duplicateOfS3Key'] = duplicateOfS3Key;
         }
 
+        if (reason) {
+            updateExpression.push('Reason = :reason')
+            expressionAttributeValues[':reason'] = reason;
+        }
+
         if (processingDetails) {
             updateExpression.push('ProcessingDetails = :processingDetails')
             expressionAttributeValues[':processingDetails'] = {
@@ -128,11 +133,6 @@ const dynamoService = {
                 processedAt: Date.now().toString(),
                 originalS3Key: imageS3Key
             };
-        }
-
-        if (reason) {
-            updateExpression.push('Reason = :reason')
-            expressionAttributeValues[':reason'] = reason;
         }
 
         const params = {
@@ -147,8 +147,6 @@ const dynamoService = {
             ReturnValues: 'ALL_NEW'
         };
 
-        // console.log('DynamoDB update params:', JSON.stringify(params, null, 2));
-
         try {
             const command = new UpdateCommand(params);
             const result = await docClient.send(command);
@@ -157,7 +155,7 @@ const dynamoService = {
         } catch (error) {
             // Ignore ConditionalCheckFailedException as it may be due to race conditions
             if (error.name === 'ConditionalCheckFailedException') {
-                logger.warn('Conditional check failed while updating task status - likely due to race condition', {
+                logger.warn('Conditional check failed while updating task status - likely due to race condition or this task has already been processed', {
                     jobId,
                     taskId,
                     status,
@@ -252,7 +250,7 @@ const dynamoService = {
             jobId,
             taskId: imageId,
             status: COMPLETED,
-            evaluation: FAILED,
+            evaluation: EXCLUDED,
             imageS3Key: s3ObjectKey,
             reason: qualityIssues,
             updatedAt: Date.now().toString(),

@@ -321,11 +321,31 @@ async function updateJobProgress(
     }
 
     if (processingDetails && Object.keys(processingDetails).length > 0) {
-        // Ensure processingDetails has no undefined values
-        const cleanProcessingDetails = {
-            failedProcessedImages: processingDetails.failedProcessedImages || []
+        // First, get the current processing details
+        const currentJob = await getCurrentJobProgress(jobId);
+        const currentProcessingDetails = currentJob.processingDetails || { failedProcessedImages: [] };
+
+        // Merge the failed processed images arrays, avoiding duplicates
+        const mergedFailedImages = [
+            ...(currentProcessingDetails.failedProcessedImages || []),
+            ...(processingDetails.failedProcessedImages || [])
+        ].reduce((unique, item) => {
+            const exists = unique.some(existing =>
+                existing.imageS3Key === item.imageS3Key
+            );
+            if (!exists) {
+                unique.push(item);
+            }
+            return unique;
+        }, []);
+
+        // Create merged processing details
+        const mergedProcessingDetails = {
+            ...currentProcessingDetails,
+            failedProcessedImages: mergedFailedImages
         };
-        updateValues[':processingDetails'] = cleanProcessingDetails;
+
+        updateValues[':processingDetails'] = mergedProcessingDetails;
         updateExpressions.push('processingDetails = :processingDetails');
     }
 
