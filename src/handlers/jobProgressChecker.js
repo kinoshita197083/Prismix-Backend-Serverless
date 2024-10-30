@@ -73,7 +73,7 @@ exports.handler = async (event) => {
             // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
             console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
 
-            await publishToSNS(jobId);
+            await publishToSNS(jobId, 'COMPLETED');
             // logger.info('Job completion published to SNS', { jobId });
             console.log('Job completion published to SNS', { jobId });
 
@@ -81,6 +81,11 @@ exports.handler = async (event) => {
             console.log(`Job completed, disabling EventBridge rule for job ${jobId}`);
         } else if (jobStatus === 'timeout') {
             console.log(`Job terminated due to timeout, disabling EventBridge rule for job ${jobId}`);
+        } else if (jobStatus === 'waiting_for_review') {
+            console.log(`Job completed, updating progress to WAITING_FOR_REVIEW`);
+            await updateJobStatusRDS(jobId, 'WAITING_FOR_REVIEW');
+            await publishToSNS(jobId, 'WAITING_FOR_REVIEW');
+            await disableEventBridgeRule(jobId);
         } else if (jobStatus === 'in_progress') {
             console.log(`Job is still in progress, no action needed`);
         }
@@ -129,6 +134,7 @@ async function checkAndUpdateJobStatus(jobId) {
             duplicateImages,
             processingDetails,
             excludedImages,
+            requiredManualReview
         } = await getJobStats(jobId);
         // logger.debug('Retrieved job stats', { jobId, processedImages, eligibles, duplicates, failedImages, excludedImages });
         console.log('Retrieved job stats', { jobId, processedImages, eligibleImages, duplicateImages, processingDetails, excludedImages });
@@ -142,6 +148,7 @@ async function checkAndUpdateJobStatus(jobId) {
             duplicateImages: currentDuplicates,
             processingDetails: currentProcessingDetails,
             excludedImages: currentExcludedImages,
+            requiredManualReview: currentRequiredManualReview
         } = await getCurrentJobProgress(jobId);
         // logger.debug('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentFailedImages, currentExcludedImages });
         console.log('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentProcessingDetails, currentExcludedImages, totalImages });
@@ -156,6 +163,7 @@ async function checkAndUpdateJobStatus(jobId) {
             previousfailedProcessedImages?.length !== currentFailedProcessedImages?.length ||
             excludedImages !== currentExcludedImages ||
             duplicateImages !== currentDuplicates ||
+            requiredManualReview !== currentRequiredManualReview ||
             (processedImages === totalImages && status !== COMPLETED) // Only check status when job should be complete
         ) {
             // logger.info('Progress detected, updating job status', { jobId });
@@ -167,20 +175,35 @@ async function checkAndUpdateJobStatus(jobId) {
                 console.log('*** This should not happen, please check the job ${jobId} ***');
                 return 'timeout';
             } else if (processedImages === totalImages) {
-                console.log('Job completed, updating progress to COMPLETED');
-                await updateJobProgress(
-                    jobId,
-                    processedImages,
-                    eligibleImages,
-                    processingDetails,
-                    excludedImages,
-                    duplicateImages,
-                    'COMPLETED',
-                    version
-                );
-                // logger.info('Job completed, progress updated', { jobId, status: 'COMPLETED' });
-                console.log('Job completed, progress updated', { jobId, status: 'COMPLETED' });
-                return 'completed';
+                if (requiredManualReview) {
+                    console.log('Job completed, updating progress to WAITING_FOR_REVIEW');
+                    await updateJobProgress(
+                        jobId,
+                        processedImages,
+                        eligibleImages,
+                        processingDetails,
+                        excludedImages,
+                        duplicateImages,
+                        'WAITING_FOR_REVIEW',
+                        version
+                    );
+                    return 'waiting_for_review';
+                } else {
+                    console.log('Job completed, updating progress to COMPLETED');
+                    await updateJobProgress(
+                        jobId,
+                        processedImages,
+                        eligibleImages,
+                        processingDetails,
+                        excludedImages,
+                        duplicateImages,
+                        'COMPLETED',
+                        version
+                    );
+                    // logger.info('Job completed, progress updated', { jobId, status: 'COMPLETED' });
+                    console.log('Job completed, progress updated', { jobId, status: 'COMPLETED' });
+                    return 'completed';
+                }
             } else {
                 console.log('Job not completed yet, updating progress');
                 await updateJobProgress(
@@ -245,6 +268,10 @@ async function getJobStats(jobId) {
             acc.duplicateImages += task.Evaluation === 'DUPLICATE' ? 1 : 0;
             acc.excludedImages += task.Evaluation === 'EXCLUDED' ? 1 : 0;
 
+            if (task.TaskStatus === 'WAITING_FOR_REVIEW') {
+                acc.requiredManualReview = true;
+            }
+
             if (task.Evaluation === 'FAILED') {
                 acc.processingDetails.failedProcessedImages = acc.processingDetails.failedProcessedImages || [];
 
@@ -257,7 +284,7 @@ async function getJobStats(jobId) {
 
             console.log('FAILED: ', acc.processingDetails.failedProcessedImages);
             return acc;
-        }, { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0 });
+        }, { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0, requiredManualReview: false });
     } catch (error) {
         // logger.error('Error in getJobStats', { error: error.message, stack: error.stack });
         console.log('777 ', error);
@@ -273,7 +300,7 @@ async function getCurrentJobProgress(jobId) {
     };
 
     const result = await dynamoDB.send(new GetCommand(params));
-    return result.Item || { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0, status: 'IN_PROGRESS', version: 1 };
+    return result.Item || { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0, status: 'IN_PROGRESS', version: 1, requiredManualReview: false };
 }
 
 // Update job progress with version check (optimistic locking)
@@ -285,12 +312,13 @@ async function updateJobProgress(
     excludedImages,
     duplicateImages,
     status,
-    currentVersion
+    currentVersion,
+    requiredManualReview
 ) {
-    console.log('Updating job progress', { jobId, processedImages, eligibleImages, duplicateImages, excludedImages, processingDetails, status, currentVersion });
+    console.log('Updating job progress', { jobId, processedImages, eligibleImages, duplicateImages, excludedImages, processingDetails, status, currentVersion, requiredManualReview });
 
-    // Create a clean object with only defined values
-    const updateValues = {
+    // First, update all fields except requiredManualReview
+    const regularUpdateValues = {
         ':status': status,
         ':processedImages': processedImages || 0,
         ':newVersion': currentVersion + 1,
@@ -298,34 +326,34 @@ async function updateJobProgress(
         ':updatedAt': new Date().toISOString()
     };
 
-    const updateExpressions = [
+    const regularUpdateExpressions = [
         '#status = :status',
         'processedImages = :processedImages',
         'version = :newVersion',
         'updatedAt = :updatedAt'
     ];
 
-    if (eligibleImages) {
-        updateValues[':eligibleImages'] = eligibleImages;
-        updateExpressions.push('eligibleImages = :eligibleImages');
+    // Add optional fields
+    if (eligibleImages !== undefined) {
+        regularUpdateValues[':eligibleImages'] = eligibleImages;
+        regularUpdateExpressions.push('eligibleImages = :eligibleImages');
     }
 
-    if (duplicateImages) {
-        updateValues[':duplicateImages'] = duplicateImages;
-        updateExpressions.push('duplicateImages = :duplicateImages');
+    if (duplicateImages !== undefined) {
+        regularUpdateValues[':duplicateImages'] = duplicateImages;
+        regularUpdateExpressions.push('duplicateImages = :duplicateImages');
     }
 
-    if (excludedImages) {
-        updateValues[':excludedImages'] = excludedImages;
-        updateExpressions.push('excludedImages = :excludedImages');
+    if (excludedImages !== undefined) {
+        regularUpdateValues[':excludedImages'] = excludedImages;
+        regularUpdateExpressions.push('excludedImages = :excludedImages');
     }
 
+    // Handle processing details merge
     if (processingDetails && Object.keys(processingDetails).length > 0) {
-        // First, get the current processing details
         const currentJob = await getCurrentJobProgress(jobId);
         const currentProcessingDetails = currentJob.processingDetails || { failedProcessedImages: [] };
 
-        // Merge the failed processed images arrays, avoiding duplicates
         const mergedFailedImages = [
             ...(currentProcessingDetails.failedProcessedImages || []),
             ...(processingDetails.failedProcessedImages || [])
@@ -339,40 +367,64 @@ async function updateJobProgress(
             return unique;
         }, []);
 
-        // Create merged processing details
         const mergedProcessingDetails = {
             ...currentProcessingDetails,
             failedProcessedImages: mergedFailedImages
         };
 
-        updateValues[':processingDetails'] = mergedProcessingDetails;
-        updateExpressions.push('processingDetails = :processingDetails');
+        regularUpdateValues[':processingDetails'] = mergedProcessingDetails;
+        regularUpdateExpressions.push('processingDetails = :processingDetails');
     }
 
-    const params = {
-        TableName: JOB_PROGRESS_TABLE,
-        Key: { JobId: jobId },
-        UpdateExpression: 'SET ' + updateExpressions.join(', '),
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: updateValues,
-        ConditionExpression: 'version = :currentVersion'
-    };
-
+    // Update regular fields
     try {
-        const result = await dynamoDB.send(new UpdateCommand(params));
-        console.log('Job progress updated', { result });
-    } catch (error) {
-        if (error.name === 'ConditionalCheckFailedException') {
-            console.log(`Job progress version mismatch for jobId: ${jobId}, retrying update...`);
-            throw error;
+        const regularParams = {
+            TableName: JOB_PROGRESS_TABLE,
+            Key: { JobId: jobId },
+            UpdateExpression: 'SET ' + regularUpdateExpressions.join(', '),
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: regularUpdateValues,
+            ConditionExpression: 'version = :currentVersion'
+        };
+
+        await dynamoDB.send(new UpdateCommand(regularParams));
+        console.log('Regular fields updated successfully');
+
+        // If requiredManualReview is provided, attempt to update it separately
+        if (requiredManualReview) {
+            try {
+                const manualReviewParams = {
+                    TableName: JOB_PROGRESS_TABLE,
+                    Key: { JobId: jobId },
+                    UpdateExpression: 'SET requiredManualReview = :requiredManualReview',
+                    ExpressionAttributeValues: {
+                        ':requiredManualReview': requiredManualReview,
+                        ':false': false
+                    },
+                    ConditionExpression: '(attribute_not_exists(requiredManualReview) OR requiredManualReview = :false)'
+                };
+
+                await dynamoDB.send(new UpdateCommand(manualReviewParams));
+                console.log('requiredManualReview updated successfully');
+            } catch (error) {
+                if (error.name === 'ConditionalCheckFailedException') {
+                    console.log('Could not update requiredManualReview as it is already set to true');
+                    // Don't throw error, just log it as this is expected behavior
+                } else {
+                    console.error('Error updating requiredManualReview:', error);
+                    // Don't throw error as main update was successful
+                }
+            }
         }
+    } catch (error) {
+        console.error('Error in updateJobProgress:', error);
         throw error;
     }
 }
 
-async function publishToSNS(jobId) {
+async function publishToSNS(jobId, status) {
     const params = {
-        Message: JSON.stringify({ jobId }),
+        Message: JSON.stringify({ jobId, status }),
         TopicArn: process.env.JOB_COMPLETION_TOPIC_ARN
     };
 

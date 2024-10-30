@@ -13,9 +13,9 @@ exports.handler = async (event, context) => {
     logger.info('Processing image batch', { recordCount: Records.length, awsRequestId: context.awsRequestId });
 
     await Promise.all(Records.map(async (record) => {
-        // const body = JSON.parse(record.body);
-        // const message = JSON.parse(body.Message);
-        const message = record.body.Message; // FOR TESTING
+        const body = JSON.parse(record.body);
+        const message = JSON.parse(body.Message);
+        // const message = record.body.Message; // FOR TESTING
         const { bucket, key: s3ObjectKey, jobId } = message;
         const imageId = createHash(s3ObjectKey.split('/').pop());
 
@@ -96,6 +96,7 @@ exports.handler = async (event, context) => {
             const evaluation = await evaluate(formattedLabels, projectSettings);
             let finalEvaluation = evaluationMapper[evaluation];
             let status = COMPLETED;
+            let reason = finalEvaluation === 'EXCLUDED' ? 'Labels excluded by project settings' : undefined;
 
             // If manual review is required and the evaluation would be EXCLUDED,
             // change status to WAITING_FOR_REVIEW instead
@@ -110,6 +111,7 @@ exports.handler = async (event, context) => {
                 status,
                 labels,
                 evaluation: finalEvaluation,
+                reason,
                 processingDetails: {
                     wasResized: processedImageKey !== s3ObjectKey,
                     qualityChecked: projectSettings.blurryImages || projectSettings.lowResolution,
