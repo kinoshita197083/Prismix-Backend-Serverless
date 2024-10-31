@@ -39,45 +39,41 @@ async function processJobProgress(jobId) {
         const currentProgress = await jobProgressService.getCurrentJobProgress(jobId);
         console.log('[processJobProgress] Current progress:', currentProgress);
 
-        // Check retry count for errors
-        const retryCount = currentProgress.errorRetryCount || 0;
-        const lastErrorTime = currentProgress.lastErrorTime ? new Date(currentProgress.lastErrorTime).getTime() : 0;
-        const currentTime = new Date().getTime();
-
-        if (retryCount >= MAX_RETRY_COUNT) {
-            console.warn('[processJobProgress] Max retry count reached, marking job as stale:', {
-                jobId,
-                retryCount,
-                maxRetries: MAX_RETRY_COUNT
-            });
-            await jobProgressService.markJobAsStale(jobId);
-            await eventBridgeService.disableAndDeleteRule(jobId);
-            return 'STALE';
-        }
-
         // Get current job stats from tasks table
         console.log('[processJobProgress] Fetching job stats...');
         const jobStats = await jobProgressService.getJobStats(jobId);
         console.log('[processJobProgress] Job stats retrieved:', jobStats);
 
-        // Determine job status
-        const isComplete = jobStats.processedImages === (
-            jobStats.eligibleImages +
+        // Check if all images are processed
+        const totalProcessed = jobStats.eligibleImages +
             jobStats.duplicateImages +
-            jobStats.excludedImages
-        );
+            jobStats.excludedImages;
 
-        console.log('[processJobProgress] Job completion check:', {
+        const isComplete = jobStats.processedImages === totalProcessed;
+
+        console.log('[processJobProgress] Processing status:', {
             isComplete,
             processedImages: jobStats.processedImages,
-            eligibleImages: jobStats.eligibleImages,
-            duplicateImages: jobStats.duplicateImages,
-            excludedImages: jobStats.excludedImages,
-            requiredManualReview: jobStats.requiredManualReview
+            totalProcessed,
+            manualReviewRequired: currentProgress.manualReviewRequired
         });
 
-        const status = determineJobStatus(isComplete, jobStats.requiredManualReview);
-        console.log('[processJobProgress] Determined status:', status);
+        let status;
+        // If manual review is required and not completed yet
+        if (currentProgress.manualReviewRequired === true) {
+            status = 'WAITING_FOR_REVIEW';
+            console.log('[processJobProgress] Job requires manual review');
+        }
+        // If manual review was required but now completed (manualReviewRequired set to false by API)
+        else if (currentProgress.manualReviewRequired === false && isComplete) {
+            status = 'COMPLETED';
+            console.log('[processJobProgress] Manual review completed, job is complete');
+        }
+        // Normal processing flow
+        else {
+            status = isComplete ? 'COMPLETED' : 'IN_PROGRESS';
+            console.log('[processJobProgress] Normal flow status:', status);
+        }
 
         // Prepare update data
         const updateData = {
@@ -88,7 +84,6 @@ async function processJobProgress(jobId) {
         console.log('[processJobProgress] Prepared update data:', updateData);
 
         // Update job progress
-        console.log('[processJobProgress] Updating job progress...');
         await jobProgressService.updateJobProgress(jobId, updateData, currentProgress.version);
         console.log('[processJobProgress] Job progress updated successfully');
 
@@ -106,39 +101,17 @@ async function processJobProgress(jobId) {
 
     } catch (error) {
         console.error('[processJobProgress] Error processing job:', error);
-
-        if (error.message === 'Job appears to be inactive') {
-            console.log('[processJobProgress] Job is inactive, marking as stale');
-            await jobProgressService.markJobAsStale(jobId);
-            await eventBridgeService.disableAndDeleteRule(jobId);
-            return 'STALE';
-        }
-
-        // For other errors, increment retry count
-        await jobProgressService.updateJobProgress(jobId, {
-            errorRetryCount: (currentProgress?.errorRetryCount || 0) + 1,
-            lastErrorTime: new Date().toISOString(),
-            lastError: error.message
-        }, currentProgress?.version || 0);
-
         throw error;
     }
-}
-
-function determineJobStatus(isComplete, requiredManualReview) {
-    console.log('[determineJobStatus] Determining status:', { isComplete, requiredManualReview });
-    if (requiredManualReview) {
-        return 'WAITING_FOR_REVIEW';
-    }
-    return isComplete ? 'COMPLETED' : 'IN_PROGRESS';
 }
 
 async function handleJobStatus(jobId, status) {
     console.log('[handleJobStatus] Handling job status:', { jobId, status });
 
-    // Handle completed, review required, or stale states
-    if (status === 'COMPLETED' || status === 'WAITING_FOR_REVIEW' || status === 'STALE') {
-        console.log('[handleJobStatus] Job completed/requires review/stale, cleaning up...');
+    // Only cleanup EventBridge rule when job is truly completed
+    // Do not cleanup for WAITING_FOR_REVIEW status
+    if (status === 'COMPLETED') {
+        console.log('[handleJobStatus] Job completed, cleaning up...');
 
         try {
             await Promise.all([
