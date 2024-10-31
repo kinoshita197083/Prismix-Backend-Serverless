@@ -1,561 +1,199 @@
-const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-const { createClient } = require('@supabase/supabase-js');
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
-const logger = require('../utils/logger');
-const { EventBridgeClient, DisableRuleCommand, DeleteRuleCommand,
-    ListTargetsByRuleCommand, RemoveTargetsCommand
-} = require("@aws-sdk/client-eventbridge");
-const { COMPLETED } = require('../utils/config');
+const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+const { SNSClient } = require('@aws-sdk/client-sns');
+const { EventBridgeClient } = require("@aws-sdk/client-eventbridge");
+const { createClient } = require('@supabase/supabase-js');
+const JobProgressService = require('../services/jobProgressService');
+const NotificationService = require('../services/notificationService');
+const EventBridgeService = require('../services/eventBridgeService');
 
-const client = new DynamoDBClient({});
-const dynamoDB = DynamoDBDocumentClient.from(client, {
+// Initialize services
+const dynamoDBClient = new DynamoDBClient();
+const documentClient = DynamoDBDocumentClient.from(dynamoDBClient, {
     marshallOptions: {
         removeUndefinedValues: true,
-        convertEmptyValues: true
-    }
+    },
 });
-const snsClient = new SNSClient();
-const eventBridgeClient = new EventBridgeClient();
 
-// Initialize Supabase client
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_API_KEY
-)
+const jobProgressService = new JobProgressService(
+    documentClient,
+    createClient(process.env.SUPABASE_URL, process.env.SUPABASE_API_KEY),
+    {
+        tasksTable: process.env.TASKS_TABLE,
+        jobProgressTable: process.env.JOB_PROGRESS_TABLE
+    }
+);
 
-const TASKS_TABLE = process.env.TASKS_TABLE;
-const JOB_PROGRESS_TABLE = process.env.JOB_PROGRESS_TABLE;
+const notificationService = new NotificationService(new SNSClient(), process.env.JOB_COMPLETION_TOPIC_ARN);
+const eventBridgeService = new EventBridgeService(new EventBridgeClient());
 
-const MAX_JOB_RUNTIME_HOURS = 24; // Configure maximum runtime in hours
+const MAX_RETRY_COUNT = 3;
+const RETRY_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-// Add constant for maximum inactivity time (15 minutes)
-const MAX_INACTIVITY_MINUTES = 15;
+async function processJobProgress(jobId) {
+    console.log('[processJobProgress] Starting job progress check for jobId:', jobId);
+
+    try {
+        // Get current job progress first to check for inactivity
+        console.log('[processJobProgress] Fetching current job progress...');
+        const currentProgress = await jobProgressService.getCurrentJobProgress(jobId);
+        console.log('[processJobProgress] Current progress:', currentProgress);
+
+        // Check retry count for errors
+        const retryCount = currentProgress.errorRetryCount || 0;
+        const lastErrorTime = currentProgress.lastErrorTime ? new Date(currentProgress.lastErrorTime).getTime() : 0;
+        const currentTime = new Date().getTime();
+
+        if (retryCount >= MAX_RETRY_COUNT) {
+            console.warn('[processJobProgress] Max retry count reached, marking job as stale:', {
+                jobId,
+                retryCount,
+                maxRetries: MAX_RETRY_COUNT
+            });
+            await jobProgressService.markJobAsStale(jobId);
+            await eventBridgeService.disableAndDeleteRule(jobId);
+            return 'STALE';
+        }
+
+        // Get current job stats from tasks table
+        console.log('[processJobProgress] Fetching job stats...');
+        const jobStats = await jobProgressService.getJobStats(jobId);
+        console.log('[processJobProgress] Job stats retrieved:', jobStats);
+
+        // Determine job status
+        const isComplete = jobStats.processedImages === (
+            jobStats.eligibleImages +
+            jobStats.duplicateImages +
+            jobStats.excludedImages
+        );
+
+        console.log('[processJobProgress] Job completion check:', {
+            isComplete,
+            processedImages: jobStats.processedImages,
+            eligibleImages: jobStats.eligibleImages,
+            duplicateImages: jobStats.duplicateImages,
+            excludedImages: jobStats.excludedImages,
+            requiredManualReview: jobStats.requiredManualReview
+        });
+
+        const status = determineJobStatus(isComplete, jobStats.requiredManualReview);
+        console.log('[processJobProgress] Determined status:', status);
+
+        // Prepare update data
+        const updateData = {
+            ...jobStats,
+            status,
+            version: currentProgress.version + 1
+        };
+        console.log('[processJobProgress] Prepared update data:', updateData);
+
+        // Update job progress
+        console.log('[processJobProgress] Updating job progress...');
+        await jobProgressService.updateJobProgress(jobId, updateData, currentProgress.version);
+        console.log('[processJobProgress] Job progress updated successfully');
+
+        // Update RDS if status changed
+        if (status !== currentProgress.status) {
+            console.log('[processJobProgress] Status changed, updating RDS...', {
+                previousStatus: currentProgress.status,
+                newStatus: status
+            });
+            await jobProgressService.updateJobStatusRDS(jobId, status);
+            console.log('[processJobProgress] RDS status updated successfully');
+        }
+
+        return status;
+
+    } catch (error) {
+        console.error('[processJobProgress] Error processing job:', error);
+
+        if (error.message === 'Job appears to be inactive') {
+            console.log('[processJobProgress] Job is inactive, marking as stale');
+            await jobProgressService.markJobAsStale(jobId);
+            await eventBridgeService.disableAndDeleteRule(jobId);
+            return 'STALE';
+        }
+
+        // For other errors, increment retry count
+        await jobProgressService.updateJobProgress(jobId, {
+            errorRetryCount: (currentProgress?.errorRetryCount || 0) + 1,
+            lastErrorTime: new Date().toISOString(),
+            lastError: error.message
+        }, currentProgress?.version || 0);
+
+        throw error;
+    }
+}
+
+function determineJobStatus(isComplete, requiredManualReview) {
+    console.log('[determineJobStatus] Determining status:', { isComplete, requiredManualReview });
+    if (requiredManualReview) {
+        return 'WAITING_FOR_REVIEW';
+    }
+    return isComplete ? 'COMPLETED' : 'IN_PROGRESS';
+}
+
+async function handleJobStatus(jobId, status) {
+    console.log('[handleJobStatus] Handling job status:', { jobId, status });
+
+    // Handle completed, review required, or stale states
+    if (status === 'COMPLETED' || status === 'WAITING_FOR_REVIEW' || status === 'STALE') {
+        console.log('[handleJobStatus] Job completed/requires review/stale, cleaning up...');
+
+        try {
+            await Promise.all([
+                notificationService.publishJobStatus(jobId, status),
+                eventBridgeService.disableAndDeleteRule(jobId)
+            ]);
+            console.log('[handleJobStatus] Cleanup completed successfully');
+        } catch (error) {
+            console.error('[handleJobStatus] Error during cleanup:', error);
+            // Continue execution even if cleanup fails
+        }
+    }
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            jobId,
+            status,
+            message: `Job progress check completed. Status: ${status}`
+        })
+    };
+}
+
+function handleError(error) {
+    console.error('[handleError] Error in job progress checker:', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+    });
+
+    return {
+        statusCode: 500,
+        body: JSON.stringify({
+            message: 'Error processing job progress',
+            error: error.message
+        })
+    };
+}
 
 exports.handler = async (event) => {
+    console.log('[handler] Received event:', JSON.stringify(event, null, 2));
+
     try {
-        console.log('----> Event received: ', event);
-
         const { jobId } = event;
-
         if (!jobId) {
+            console.error('[handler] Invalid event structure - missing jobId');
             throw new Error('Invalid event structure');
         }
 
-        // Check for job inactivity
-        const isInactive = await checkJobInactivity(jobId);
-        if (isInactive) {
-            await updateJobStatusRDS(jobId, 'TIMEOUT');
-            await disableEventBridgeRule(jobId);
-            return {
-                statusCode: 200,
-                body: 'Job terminated due to inactivity'
-            };
-        }
+        console.log('[handler] Processing job:', jobId);
+        const jobStatus = await processJobProgress(jobId);
+        console.log('[handler] Job processing completed with status:', jobStatus);
 
-        // Add check for job runtime
-        const shouldTerminate = await checkJobRuntime(jobId);
-        if (shouldTerminate) {
-            await updateJobStatusRDS(jobId, 'TIMEOUT');
-            await disableEventBridgeRule(jobId);
-            return {
-                statusCode: 200,
-                body: 'Job terminated due to timeout'
-            };
-        }
-
-        // Check job status and update progress
-        const jobStatus = await checkAndUpdateJobStatus(jobId);
-
-        // If job is completed, update RDS and SNS and disable the EventBridge rule
-        if (jobStatus === 'completed') {
-            await updateJobStatusRDS(jobId, 'COMPLETED');
-            // logger.info('Job status updated in RDS', { jobId, status: 'COMPLETED' });
-            console.log('Job status updated in RDS', { jobId, status: 'COMPLETED' });
-
-            await publishToSNS(jobId, 'COMPLETED');
-            // logger.info('Job completion published to SNS', { jobId });
-            console.log('Job completion published to SNS', { jobId });
-
-            await disableEventBridgeRule(jobId);
-            console.log(`Job completed, disabling EventBridge rule for job ${jobId}`);
-        } else if (jobStatus === 'timeout') {
-            console.log(`Job terminated due to timeout, disabling EventBridge rule for job ${jobId}`);
-        } else if (jobStatus === 'waiting_for_review') {
-            console.log(`Job completed, updating progress to WAITING_FOR_REVIEW`);
-            await updateJobStatusRDS(jobId, 'WAITING_FOR_REVIEW');
-            await publishToSNS(jobId, 'WAITING_FOR_REVIEW');
-            await disableEventBridgeRule(jobId);
-        } else if (jobStatus === 'in_progress') {
-            console.log(`Job is still in progress, no action needed`);
-        }
-
-        console.log(`Successfully processed event for jobId: ${jobId}`);
-        return { statusCode: 200, body: 'Event processed successfully' };
+        return await handleJobStatus(jobId, jobStatus);
     } catch (error) {
-        console.error('Error processing event:', error);
-
-        // Determine if the error is retryable
-        if (isRetryableError(error)) {
-            // For retryable errors, we throw the error to trigger a retry
-            throw error;
-        } else {
-            // For non-retryable errors, we log the error and return a failure response
-            return {
-                statusCode: 500,
-                body: 'Error processing event: ' + error.message
-            };
-        }
+        return handleError(error);
     }
 };
-
-function isRetryableError(error) {
-    // List of error types that are typically transient and benefit from retries
-    const retryableErrors = [
-        'ProvisionedThroughputExceededException',
-        'ThrottlingException',
-        'RequestLimitExceeded',
-        'InternalServerError',
-        'ServiceUnavailable'
-    ];
-
-    return retryableErrors.includes(error.name);
-}
-
-// Check job status and update it with version control
-async function checkAndUpdateJobStatus(jobId) {
-    // logger.info('Starting job status check and update', { jobId });
-    console.log('Starting job status check and update', { jobId });
-
-    try {
-        const {
-            processedImages,
-            eligibleImages,
-            duplicateImages,
-            processingDetails,
-            excludedImages,
-            requiredManualReview
-        } = await getJobStats(jobId);
-        // logger.debug('Retrieved job stats', { jobId, processedImages, eligibles, duplicates, failedImages, excludedImages });
-        console.log('Retrieved job stats', { jobId, processedImages, eligibleImages, duplicateImages, processingDetails, excludedImages });
-
-        const {
-            version,
-            status,
-            totalImages,
-            processedImages: currentProcessedImages,
-            eligibleImages: currentEligibles,
-            duplicateImages: currentDuplicates,
-            processingDetails: currentProcessingDetails,
-            excludedImages: currentExcludedImages,
-            requiredManualReview: currentRequiredManualReview
-        } = await getCurrentJobProgress(jobId);
-        // logger.debug('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentFailedImages, currentExcludedImages });
-        console.log('Retrieved current job progress', { jobId, currentProcessedImages, currentEligibles, currentDuplicates, currentProcessingDetails, currentExcludedImages, totalImages });
-
-        const { failedProcessedImages: previousfailedProcessedImages } = processingDetails;
-        const { failedProcessedImages: currentFailedProcessedImages } = currentProcessingDetails || { failedProcessedImages: [] };
-
-        // Only update if there's real progress
-        if (
-            processedImages !== currentProcessedImages ||
-            eligibleImages !== currentEligibles ||
-            previousfailedProcessedImages?.length !== currentFailedProcessedImages?.length ||
-            excludedImages !== currentExcludedImages ||
-            duplicateImages !== currentDuplicates ||
-            requiredManualReview !== currentRequiredManualReview ||
-            (processedImages === totalImages && status !== COMPLETED) // Only check status when job should be complete
-        ) {
-            // logger.info('Progress detected, updating job status', { jobId });
-            console.log('Progress detected, updating job status', { jobId });
-
-            // Update job progress with optimistic locking based on version
-            if (processedImages > totalImages) {
-                console.log('!!! Warning: Processed images exceed total images', { processedImages, totalImages });
-                console.log('*** This should not happen, please check the job ${jobId} ***');
-                return 'timeout';
-            } else if (processedImages === totalImages) {
-                if (requiredManualReview) {
-                    console.log('Job completed, updating progress to WAITING_FOR_REVIEW');
-                    await updateJobProgress(
-                        jobId,
-                        processedImages,
-                        eligibleImages,
-                        processingDetails,
-                        excludedImages,
-                        duplicateImages,
-                        'WAITING_FOR_REVIEW',
-                        version
-                    );
-                    return 'waiting_for_review';
-                } else {
-                    console.log('Job completed, updating progress to COMPLETED');
-                    await updateJobProgress(
-                        jobId,
-                        processedImages,
-                        eligibleImages,
-                        processingDetails,
-                        excludedImages,
-                        duplicateImages,
-                        'COMPLETED',
-                        version
-                    );
-                    // logger.info('Job completed, progress updated', { jobId, status: 'COMPLETED' });
-                    console.log('Job completed, progress updated', { jobId, status: 'COMPLETED' });
-                    return 'completed';
-                }
-            } else {
-                console.log('Job not completed yet, updating progress');
-                await updateJobProgress(
-                    jobId,
-                    processedImages,
-                    eligibleImages,
-                    processingDetails,
-                    excludedImages,
-                    duplicateImages,
-                    'IN_PROGRESS',
-                    version
-                );
-                // logger.info('Job progress updated', { jobId, status: 'IN_PROGRESS' });
-                console.log('Job progress updated', { jobId, status: 'IN_PROGRESS' });
-                return 'in_progress';
-            }
-        } else {
-            console.log('No progress detected, skipping update', { jobId });
-            return status === COMPLETED ? 'completed' : 'in_progress'; // Return true if already completed
-        }
-    } catch (error) {
-        // logger.error('Error in checkAndUpdateJobStatus', {
-        console.log('Error in checkAndUpdateJobStatus', {
-            jobId,
-            error: error.message,
-            stack: error.stack
-        });
-
-        if (error.name === 'ConditionalCheckFailedException') {
-            // logger.warn('Version conflict detected, job update will be retried', { jobId });
-            console.log('Version conflict detected, job update will be retried', { jobId });
-            throw error; // Rethrow to trigger retry
-        }
-
-        // Handle other specific errors as needed
-        if (error.name === 'ResourceNotFoundException') {
-            // logger.error('Job or related resource not found', { jobId });
-            console.log('Job or related resource not found', { jobId });
-            // Handle accordingly (e.g., mark job as failed, notify user)
-        }
-
-        throw error; // Rethrow other errors for general error handling
-    }
-}
-
-// Fetch job stats from tasks table
-async function getJobStats(jobId) {
-    const params = {
-        TableName: TASKS_TABLE,
-        KeyConditionExpression: "JobID = :jobId",
-        ExpressionAttributeValues: { ':jobId': jobId }
-    };
-
-    try {
-        const result = await dynamoDB.send(new QueryCommand(params));
-
-        console.log('Query result for Task Table: ', result);
-
-        return result.Items.reduce((acc, task) => {
-            acc.processedImages += task.TaskStatus === 'COMPLETED' ? 1 : 0;
-            acc.eligibleImages += task.Evaluation === 'ELIGIBLE' ? 1 : 0;
-            acc.duplicateImages += task.Evaluation === 'DUPLICATE' ? 1 : 0;
-            acc.excludedImages += task.Evaluation === 'EXCLUDED' ? 1 : 0;
-
-            if (task.TaskStatus === 'WAITING_FOR_REVIEW') {
-                acc.requiredManualReview = true;
-            }
-
-            if (task.Evaluation === 'FAILED') {
-                acc.processingDetails.failedProcessedImages = acc.processingDetails.failedProcessedImages || [];
-
-                acc.processingDetails.failedProcessedImages.push({
-                    imageS3Key: task.ImageS3Key,
-                    reason: task.Reason || 'Unknown'
-                });
-
-            }
-
-            console.log('FAILED: ', acc.processingDetails.failedProcessedImages);
-            return acc;
-        }, { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0, requiredManualReview: false });
-    } catch (error) {
-        // logger.error('Error in getJobStats', { error: error.message, stack: error.stack });
-        console.log('777 ', error);
-        throw error;
-    }
-}
-
-// Fetch the current job progress including the version
-async function getCurrentJobProgress(jobId) {
-    const params = {
-        TableName: JOB_PROGRESS_TABLE,
-        Key: { JobId: jobId }
-    };
-
-    const result = await dynamoDB.send(new GetCommand(params));
-    return result.Item || { processedImages: 0, eligibleImages: 0, duplicateImages: 0, processingDetails: { failedProcessedImages: [] }, excludedImages: 0, status: 'IN_PROGRESS', version: 1, requiredManualReview: false };
-}
-
-// Update job progress with version check (optimistic locking)
-async function updateJobProgress(
-    jobId,
-    processedImages,
-    eligibleImages,
-    processingDetails,
-    excludedImages,
-    duplicateImages,
-    status,
-    currentVersion,
-    requiredManualReview
-) {
-    console.log('Updating job progress', { jobId, processedImages, eligibleImages, duplicateImages, excludedImages, processingDetails, status, currentVersion, requiredManualReview });
-
-    // First, update all fields except requiredManualReview
-    const regularUpdateValues = {
-        ':status': status,
-        ':processedImages': processedImages || 0,
-        ':newVersion': currentVersion + 1,
-        ':currentVersion': currentVersion,
-        ':updatedAt': new Date().toISOString()
-    };
-
-    const regularUpdateExpressions = [
-        '#status = :status',
-        'processedImages = :processedImages',
-        'version = :newVersion',
-        'updatedAt = :updatedAt'
-    ];
-
-    // Add optional fields
-    if (eligibleImages !== undefined) {
-        regularUpdateValues[':eligibleImages'] = eligibleImages;
-        regularUpdateExpressions.push('eligibleImages = :eligibleImages');
-    }
-
-    if (duplicateImages !== undefined) {
-        regularUpdateValues[':duplicateImages'] = duplicateImages;
-        regularUpdateExpressions.push('duplicateImages = :duplicateImages');
-    }
-
-    if (excludedImages !== undefined) {
-        regularUpdateValues[':excludedImages'] = excludedImages;
-        regularUpdateExpressions.push('excludedImages = :excludedImages');
-    }
-
-    // Handle processing details merge
-    if (processingDetails && Object.keys(processingDetails).length > 0) {
-        const currentJob = await getCurrentJobProgress(jobId);
-        const currentProcessingDetails = currentJob.processingDetails || { failedProcessedImages: [] };
-
-        const mergedFailedImages = [
-            ...(currentProcessingDetails.failedProcessedImages || []),
-            ...(processingDetails.failedProcessedImages || [])
-        ].reduce((unique, item) => {
-            const exists = unique.some(existing =>
-                existing.imageS3Key === item.imageS3Key
-            );
-            if (!exists) {
-                unique.push(item);
-            }
-            return unique;
-        }, []);
-
-        const mergedProcessingDetails = {
-            ...currentProcessingDetails,
-            failedProcessedImages: mergedFailedImages
-        };
-
-        regularUpdateValues[':processingDetails'] = mergedProcessingDetails;
-        regularUpdateExpressions.push('processingDetails = :processingDetails');
-    }
-
-    // Update regular fields
-    try {
-        const regularParams = {
-            TableName: JOB_PROGRESS_TABLE,
-            Key: { JobId: jobId },
-            UpdateExpression: 'SET ' + regularUpdateExpressions.join(', '),
-            ExpressionAttributeNames: { '#status': 'status' },
-            ExpressionAttributeValues: regularUpdateValues,
-            ConditionExpression: 'version = :currentVersion'
-        };
-
-        await dynamoDB.send(new UpdateCommand(regularParams));
-        console.log('Regular fields updated successfully');
-
-        // If requiredManualReview is provided, attempt to update it separately
-        if (requiredManualReview) {
-            try {
-                const manualReviewParams = {
-                    TableName: JOB_PROGRESS_TABLE,
-                    Key: { JobId: jobId },
-                    UpdateExpression: 'SET requiredManualReview = :requiredManualReview',
-                    ExpressionAttributeValues: {
-                        ':requiredManualReview': requiredManualReview,
-                        ':false': false
-                    },
-                    ConditionExpression: '(attribute_not_exists(requiredManualReview) OR requiredManualReview = :false)'
-                };
-
-                await dynamoDB.send(new UpdateCommand(manualReviewParams));
-                console.log('requiredManualReview updated successfully');
-            } catch (error) {
-                if (error.name === 'ConditionalCheckFailedException') {
-                    console.log('Could not update requiredManualReview as it is already set to true');
-                    // Don't throw error, just log it as this is expected behavior
-                } else {
-                    console.error('Error updating requiredManualReview:', error);
-                    // Don't throw error as main update was successful
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error in updateJobProgress:', error);
-        throw error;
-    }
-}
-
-async function publishToSNS(jobId, status) {
-    const params = {
-        Message: JSON.stringify({ jobId, status }),
-        TopicArn: process.env.JOB_COMPLETION_TOPIC_ARN
-    };
-
-    // logger.info(`Publishing job completion to SNS for job ${jobId}`, { params });
-    console.log(`Publishing job completion to SNS for job ${jobId}`, { params });
-
-    try {
-        const command = new PublishCommand(params);
-        const result = await snsClient.send(command);
-        // logger.info(`Successfully published job completion for ${jobId} to SNS`, { messageId: result.MessageId });
-        console.log(`Successfully published job completion for ${jobId} to SNS`, { messageId: result.MessageId });
-    } catch (error) {
-        // logger.error(`Error publishing to SNS for job ${jobId}:`, { error: error.message, params });
-        console.log(`Error publishing to SNS for job ${jobId}:`, { error: error.message, params });
-        throw error;
-    }
-}
-
-async function updateJobStatusRDS(jobId, status) {
-    console.log(`Updating job status in RDS to ${status} for Job ID: ${jobId}`);
-    try {
-        const { data, error } = await supabase
-            .from('Job')
-            .update({ jobStatus: status })
-            .eq('id', jobId)
-            .single();
-
-        if (error) throw error;
-
-        console.log(`Successfully updated job status in RDS to ${status} for Job ID: ${jobId}`);
-        return data;
-    } catch (error) {
-        console.error(`Error updating job status in RDS for Job ID ${jobId}:`, error);
-        throw error;
-    }
-}
-
-async function disableAndDeleteEventBridgeRule(ruleName) {
-    try {
-        // Disable the rule
-        await eventBridgeClient.send(new DisableRuleCommand({ Name: ruleName }));
-        console.log(`Disabled EventBridge rule: ${ruleName}`);
-
-        // List targets for the rule
-        const listTargetsResponse = await eventBridgeClient.send(new ListTargetsByRuleCommand({ Rule: ruleName }));
-        const targets = listTargetsResponse.Targets;
-
-        if (targets && targets.length > 0) {
-            // Remove all targets
-            const targetIds = targets.map(target => target.Id);
-            await eventBridgeClient.send(new RemoveTargetsCommand({
-                Rule: ruleName,
-                Ids: targetIds
-            }));
-            console.log(`Removed ${targetIds.length} targets from rule: ${ruleName}`);
-        }
-
-        // Delete the rule
-        await eventBridgeClient.send(new DeleteRuleCommand({ Name: ruleName }));
-        console.log(`Deleted EventBridge rule: ${ruleName}`);
-    } catch (error) {
-        console.error(`Error disabling and deleting EventBridge rule ${ruleName}:`, error);
-        throw error;
-    }
-}
-
-async function disableEventBridgeRule(jobId) {
-    const ruleName = `JobProgressCheck-${jobId}`;
-    await disableAndDeleteEventBridgeRule(ruleName);
-    console.log(`Disabled and deleted EventBridge rule for job ${jobId}`);
-}
-
-// Add new function to check job runtime
-async function checkJobRuntime(jobId) {
-    try {
-        const { data: job, error } = await supabase
-            .from('Job')
-            .select('createdAt')
-            .eq('id', jobId)
-            .single();
-
-        if (error) throw error;
-
-        const createdAt = new Date(job.createdAt);
-        const now = new Date();
-        const runningTimeHours = (now - createdAt) / (1000 * 60 * 60);
-
-        console.log(`Job ${jobId} has been running for ${runningTimeHours.toFixed(2)} hours`);
-
-        if (runningTimeHours > MAX_JOB_RUNTIME_HOURS) {
-            console.log(`Job ${jobId} exceeded maximum runtime of ${MAX_JOB_RUNTIME_HOURS} hours. Terminating.`);
-            return true;
-        }
-
-        return false;
-    } catch (error) {
-        console.error(`Error checking job runtime for job ${jobId}:`, error);
-        throw error;
-    }
-}
-
-// Add new function to check job inactivity
-async function checkJobInactivity(jobId) {
-    try {
-        const params = {
-            TableName: JOB_PROGRESS_TABLE,
-            Key: { JobId: jobId }
-        };
-
-        const result = await dynamoDB.send(new GetCommand(params));
-        const jobProgress = result.Item;
-
-        if (!jobProgress || !jobProgress.updatedAt) {
-            console.log(`No job progress or updatedAt found for job ${jobId}`);
-            return true;
-        }
-
-        const lastUpdateTime = new Date(jobProgress.updatedAt);
-        const now = new Date();
-        const inactiveMinutes = (now - lastUpdateTime) / (1000 * 60);
-
-        console.log(`Job ${jobId} last updated ${inactiveMinutes.toFixed(2)} minutes ago`);
-
-        if (inactiveMinutes > MAX_INACTIVITY_MINUTES) {
-            console.log(`Job ${jobId} has been inactive for more than ${MAX_INACTIVITY_MINUTES} minutes. Terminating.`);
-            return true;
-        }
-
-        return false;
-    } catch (error) {
-        console.error(`Error checking job inactivity for job ${jobId}:`, error);
-        throw error;
-    }
-}
