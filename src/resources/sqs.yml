@@ -142,3 +142,32 @@ Resources:
               - sqs:DeleteMessage
               - sqs:GetQueueAttributes
             Resource: !GetAtt ImageUploadQueue.Arn
+
+  JobProgressQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-job-progress-queue
+      VisibilityTimeout: 960  # 16 minutes (longer than Lambda timeout)
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt JobProgressDLQ.Arn
+        maxReceiveCount: 3
+
+  JobProgressDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-job-progress-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  JobProgressQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref JobProgressQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt JobProgressQueue.Arn

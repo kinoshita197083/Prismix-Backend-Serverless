@@ -241,6 +241,85 @@ class JobProgressService {
         await this.dynamoDB.send(new UpdateCommand(params));
         console.log('[JobProgressService.markJobAsStale] Job marked as stale successfully');
     }
+
+    async getJobStatistics(jobId) {
+        const params = {
+            TableName: this.tasksTable,
+            KeyConditionExpression: 'JobID = :jobId',
+            ExpressionAttributeValues: {
+                ':jobId': jobId
+            }
+        };
+
+        const result = await this.dynamoDB.send(new QueryCommand(params));
+        const tasks = result.Items || [];
+
+        return tasks.reduce((stats, task) => {
+            stats.totalProcessed++;
+
+            switch (task.Evaluation) {
+                case 'ELIGIBLE':
+                    stats.eligible++;
+                    break;
+                case 'EXCLUDED':
+                    stats.excluded++;
+                    break;
+                case 'WAITING_FOR_REVIEW':
+                    stats.waitingForReview++;
+                    break;
+            }
+
+            // Count duplicates if present
+            if (task.isDuplicate) {
+                stats.duplicates++;
+            }
+
+            return stats;
+        }, {
+            totalProcessed: 0,
+            eligible: 0,
+            excluded: 0,
+            waitingForReview: 0,
+            duplicates: 0
+        });
+    }
+
+    async updateJobProgress(jobId, updates) {
+        const updateExpressions = [];
+        const expressionAttributeNames = {};
+        const expressionAttributeValues = {};
+
+        // Build dynamic update expression
+        Object.entries(updates).forEach(([key, value]) => {
+            const attributeName = `#${key}`;
+            const attributeValue = `:${key}`;
+            updateExpressions.push(`${attributeName} = ${attributeValue}`);
+            expressionAttributeNames[attributeName] = key;
+            expressionAttributeValues[attributeValue] = value;
+        });
+
+        // Always update the timestamp
+        updateExpressions.push('#updatedAt = :updatedAt');
+        expressionAttributeNames['#updatedAt'] = 'updatedAt';
+        expressionAttributeValues[':updatedAt'] = new Date().toISOString();
+
+        const params = {
+            TableName: this.jobProgressTable,
+            Key: { JobId: jobId },
+            UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+            ExpressionAttributeNames: expressionAttributeNames,
+            ExpressionAttributeValues: expressionAttributeValues,
+            ReturnValues: 'ALL_NEW'
+        };
+
+        try {
+            const result = await this.dynamoDB.send(new UpdateCommand(params));
+            return result.Attributes;
+        } catch (error) {
+            console.error('Failed to update job progress', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = JobProgressService; 
