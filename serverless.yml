@@ -28,6 +28,7 @@ provider:
     SUPABASE_URL: ${env:SUPABASE_URL}
     SUPABASE_API_KEY: ${env:SUPABASE_API_KEY}
     DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:service}-${self:provider.stage}-deliveryProcessor
+    JOB_PROGRESS_QUEUE_URL: ${env:JOB_PROGRESS_QUEUE_URL}
   iam:
     role: BaseCloudWatchRole
   logs:
@@ -56,6 +57,8 @@ custom:
   dotenv:
     path: .env.${self:provider.stage}
   deadLetterQueueName: ${self:service}-${self:provider.stage}-dlq
+  serverless-offline:
+    region: ${self:provider.region}
   # serverless-layers:
   #   dependenciesPath: ./package.json
   #   layersDeploymentBucket: prismix-lambda-layers

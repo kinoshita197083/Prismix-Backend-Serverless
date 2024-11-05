@@ -8,53 +8,27 @@ Resources:
       Principal: "events.amazonaws.com"
       SourceArn: 
         !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*"
-  # EventBridge rule to trigger job progress checker on job creation
-  # JobEventRule:
+
+
+  # EventBridge rule for job cleanup (runs every day)
+  # JobCleanupEventsRuleSchedule:
   #   Type: AWS::Events::Rule
   #   Properties:
-  #     Description: "Rule to trigger job progress checker on job creation"
-  #     EventPattern:
-  #       source:
-  #         - "com.yourapp.jobcreation"
-  #       detail-type:
-  #         - "JobCreated"
-  #         - "JobUpdated"
+  #     Name: !Sub "${AWS::StackName}-job-cleanup-schedule"
+  #     Description: "Schedule for job cleanup lambda"
+  #     ScheduleExpression: "rate(1 day)"
   #     State: "ENABLED"
   #     Targets:
-  #       - Arn:
-  #           Fn::GetAtt: [jobProgressChecker, Arn]
+  #       - Arn: !GetAtt JobCleanupLambdaFunction.Arn
+  #         Id: "JobCleanupTarget"
 
-  # EventBridge rule for periodic job progress checks (every 1 minute)
-  # JobProgressPeriodicCheckRule:
-  #   Type: AWS::Events::Rule
-  #   Properties:
-  #     Description: "Rule to trigger job progress checker periodically"
-  #     ScheduleExpression: "rate(1 minute)" # Adjust schedule as necessary
-  #     State: "ENABLED"
-  #     Targets:
-  #       - Arn:
-  #           Fn::GetAtt: [jobProgressChecker, Arn]
-
-  # Permissions to allow EventBridge to invoke the Lambda function on job creation
-  # JobProgressCheckerInvokePermission:
+  # # Lambda permission for EventBridge to invoke job cleanup
+  # JobCleanupLambdaPermissionEventsRuleSchedule:
   #   Type: AWS::Lambda::Permission
   #   Properties:
-  #     FunctionName:
-  #       Fn::GetAtt: [jobProgressChecker, Arn]
+  #     FunctionName: !GetAtt JobCleanupLambdaFunction.Arn
   #     Action: "lambda:InvokeFunction"
   #     Principal: "events.amazonaws.com"
-  #     SourceArn:
-  #       Fn::GetAtt: [JobEventRule, Arn]
-
-  # Permissions to allow EventBridge to invoke the Lambda function periodically
-  # JobProgressPeriodicCheckInvokePermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName:
-  #       Fn::GetAtt: [jobProgressChecker, Arn]
-  #     Action: "lambda:InvokeFunction"
-  #     Principal: "events.amazonaws.com"
-  #     SourceArn:
-  #       Fn::GetAtt: [JobProgressPeriodicCheckRule, Arn]
+  #     SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${AWS::StackName}-job-cleanup-schedule"
 
 

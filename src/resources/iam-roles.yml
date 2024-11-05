@@ -258,10 +258,17 @@ Resources:
                   - Fn::GetAtt: [JobProgressDLQ, Arn]
               - Effect: Allow
                 Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+              - Effect: Allow
+                Action:
                   - events:DisableRule
                   - events:DeleteRule
                   - events:ListTargetsByRule
                   - events:RemoveTargets
+                  - events:DescribeRule
+                  - events:PutRule
+                  - events:PutTargets
                 Resource: 
                   Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
 

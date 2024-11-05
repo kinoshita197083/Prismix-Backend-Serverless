@@ -1,6 +1,8 @@
+const { EXCLUDED, ELIGIBLE } = require("../config");
+
 const evaluationMapper = {
-    false: 'ELIGIBLE',
-    true: 'EXCLUDED'
+    false: ELIGIBLE,
+    true: EXCLUDED
 };
 
 async function evaluate(labels, projectSettings) {

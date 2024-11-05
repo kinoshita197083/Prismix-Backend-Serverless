@@ -1,3 +1,28 @@
 {
-    "jobId": "d10c0bd2-cbed-498f-9ba0-159bda8d5c6e"
+    "Records": [
+        {
+            "messageId": "50b55b88-0526-4bfb-97dd-182a8d88d42e",
+            "receiptHandle": "AQEB1yFRyEM6kHAkCvynE1aVctqOwkDNbRq3CQydX8e0XlfYo4jg8MNfUOrtjPnoASURIpJzaak2DIor1dez02H92zfIHAklYBZI1KBrNvtiLiCyc5R60LtCvBoCIZBgKT6fPjlvXz6viKwfLkPDrgXegocxyxZ3Syee2gxiQAaMSSa/9cejOCsM+S8uf9TgFYQelO6AgSw4QZ+gZKfNukTAm++8qp4edcKNYXx0LJxQKUqB2pVZsxcUhVpj/ohcj2548YtlG3fWoVN1+ZQwgkiwh+dZxs8kk3lrrIBzHwIq5b7jlcuSh8WQcmlcKrH9hfo6jQZQNSdJlfus1kIMw0QoMBAa2r9qg1/f/MgAXmJpb/k+yNBqOG74DxkvcE1401K10SuCk+6M2KNfuSLvpuGMBvY3ZZcI+gkaVa0ESAkdsIs=",
+            "body": "{\"jobId\":\"4c317ae9-5ab4-4302-ae0b-6cadf430065f\",\"action\":\"START_PROGRESS_CHECK\",\"timestamp\":\"2024-11-06T04:02:15.451Z\"}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1730865736343",
+                "SenderId": "AIDA6IQMT2LFDMPRCRD7O",
+                "ApproximateFirstReceiveTimestamp": "1730865766343"
+            },
+            "messageAttributes": {
+                "eventType": {
+                    "stringValue": "PROGRESS_CHECK",
+                    "stringListValues": [],
+                    "binaryListValues": [],
+                    "dataType": "String"
+                }
+            },
+            "md5OfMessageAttributes": "8986d3e170a2db4e17397b0118e0f860",
+            "md5OfBody": "c037c799a076eca67e298d4f001ba252",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-job-progress-queue",
+            "awsRegion": "us-east-1"
+        }
+    ]
 }

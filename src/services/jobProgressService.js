@@ -2,13 +2,16 @@ const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = requ
 const { createClient } = require('@supabase/supabase-js');
 
 class JobProgressService {
-    constructor(dynamoDB, supabase, config) {
+    constructor(dynamoDB, config) {
         this.dynamoDB = DynamoDBDocumentClient.from(dynamoDB, {
             marshallOptions: {
                 removeUndefinedValues: true,
             }
         });
-        this.supabase = supabase;
+        this.supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_API_KEY
+        );
         this.tasksTable = config.tasksTable;
         this.jobProgressTable = config.jobProgressTable;
     }
@@ -44,20 +47,6 @@ class JobProgressService {
         if (!result.Item) {
             console.warn('[JobProgressService.getCurrentJobProgress] No progress found for jobId:', jobId);
             throw new Error('Job progress not found');
-        }
-
-        // Add last activity check
-        const lastUpdated = new Date(result.Item.updatedAt || result.Item.createdAt).getTime();
-        const currentTime = new Date().getTime();
-        const inactiveThreshold = 30 * 60 * 1000; // 30 minutes in milliseconds
-
-        if (currentTime - lastUpdated > inactiveThreshold) {
-            console.warn('[JobProgressService.getCurrentJobProgress] Job appears to be inactive:', {
-                jobId,
-                lastUpdated: new Date(lastUpdated).toISOString(),
-                timeSinceLastUpdate: Math.floor((currentTime - lastUpdated) / 1000 / 60) + ' minutes'
-            });
-            throw new Error('Job appears to be inactive');
         }
 
         console.log('[JobProgressService.getCurrentJobProgress] Returning progress:', result.Item);
@@ -317,6 +306,53 @@ class JobProgressService {
             return result.Attributes;
         } catch (error) {
             console.error('Failed to update job progress', error);
+            throw error;
+        }
+    }
+
+    async getCircuitBreakerState(jobId) {
+        console.log('[JobProgressService.getCircuitBreakerState] Fetching circuit breaker state for jobId:', jobId);
+
+        const result = await this.dynamoDB.send(new GetCommand({
+            TableName: this.jobProgressTable,
+            Key: { JobId: jobId },
+            ProjectionExpression: 'circuitBreakerState'
+        }));
+
+        if (!result.Item?.circuitBreakerState) {
+            return {
+                state: 'CLOSED',
+                failures: 0,
+                lastFailure: null
+            };
+        }
+
+        return result.Item.circuitBreakerState;
+    }
+
+    async updateCircuitBreakerState(jobId, newState) {
+        console.log('[JobProgressService.updateCircuitBreakerState] Updating circuit breaker state:', {
+            jobId,
+            newState
+        });
+
+        const params = {
+            TableName: this.jobProgressTable,
+            Key: { JobId: jobId },
+            UpdateExpression: 'SET circuitBreakerState = :state, updatedAt = :updatedAt',
+            ExpressionAttributeValues: {
+                ':state': newState,
+                ':updatedAt': new Date().toISOString()
+            },
+            ReturnValues: 'ALL_NEW'
+        };
+
+        try {
+            const result = await this.dynamoDB.send(new UpdateCommand(params));
+            console.log('[JobProgressService.updateCircuitBreakerState] Update successful:', result.Attributes);
+            return result.Attributes.circuitBreakerState;
+        } catch (error) {
+            console.error('[JobProgressService.updateCircuitBreakerState] Update failed:', error);
             throw error;
         }
     }

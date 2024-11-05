@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { COMPLETED, WAITING_FOR_REVIEW } = require('../utils/config');
+const { COMPLETED, WAITING_FOR_REVIEW, EXCLUDED } = require('../utils/config');
 const { processImageProperties } = require('../services/imageProcessingService');
 const { validateImageQuality } = require('../services/qualityService');
 const { formatLabels, createHash } = require('../utils/helpers');
@@ -26,6 +26,7 @@ exports.handler = async (event, context) => {
             console.log('projectSettings', projectSettings);
 
             const manualReviewRequired = projectSettings.manualReviewRequired;
+            console.log('manualReviewRequired', manualReviewRequired);
 
             // Step 1: Check for duplicates if enabled
             if (projectSettings.detectDuplicates) {
@@ -96,12 +97,13 @@ exports.handler = async (event, context) => {
             const evaluation = await evaluate(formattedLabels, projectSettings);
             let finalEvaluation = evaluationMapper[evaluation];
             let status = COMPLETED;
-            let reason = finalEvaluation === 'EXCLUDED' ? 'Labels excluded by project settings' : undefined;
+            let reason = finalEvaluation === EXCLUDED ? 'Labels excluded by project settings' : undefined;
 
             // If manual review is required and the evaluation would be EXCLUDED,
             // change status to WAITING_FOR_REVIEW instead
-            if (manualReviewRequired && finalEvaluation === 'EXCLUDED') {
+            if (manualReviewRequired && finalEvaluation === EXCLUDED) {
                 status = WAITING_FOR_REVIEW;
+                console.log('----> manualReviewRequired && finalEvaluation === EXCLUDED', status);
             }
 
             await dynamoService.updateTaskStatus({
@@ -149,7 +151,11 @@ async function fetchProjectSettingRules(jobId) {
     try {
         const response = await dynamoService.getItem(process.env.JOB_PROGRESS_TABLE, { JobId: jobId });
         console.log('Fetch project setting rules response:', response);
-        return response?.projectSetting;
+        const projectSettingsWithManualReview = {
+            ...response?.projectSetting,
+            manualReviewRequired: response?.manualReviewRequired
+        };
+        return projectSettingsWithManualReview;
     } catch (error) {
         // logger.error('Error fetching project setting rules', { error, jobId });
         console.log('dynamoService.getItem() failed', { error, jobId });

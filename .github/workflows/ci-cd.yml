@@ -56,6 +56,7 @@ jobs:
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_DEV }}" >> $GITHUB_ENV
           echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_DEV }}" >> $GITHUB_ENV
           echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_DEV}}" >> $GITHUB_ENV
+          echo "JOB_PROGRESS_QUEUE_URL=${{ secrets.JOB_PROGRESS_QUEUE_URL_DEV }}" >> $GITHUB_ENV
         elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
@@ -67,6 +68,7 @@ jobs:
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_PROD }}" >> $GITHUB_ENV
           echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_PROD}}" >> $GITHUB_ENV
+          echo "JOB_PROGRESS_QUEUE_URL=${{ secrets.JOB_PROGRESS_QUEUE_URL_PROD }}" >> $GITHUB_ENV
         else
           echo "Unsupported branch for deployment"
           exit 1

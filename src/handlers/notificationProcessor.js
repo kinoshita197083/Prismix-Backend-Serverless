@@ -142,6 +142,7 @@ exports.handler = async (event) => {
             const data = await fetchDataFromJobProgress(jobId);
             const userId = data.userId; // Ensure userId is defined here
             const isEmailSent = data.EmailSent;
+            console.log('----> data: ', data);
             console.log('----> isEmailSent: ', isEmailSent);
 
             console.log('userId: ', userId);
@@ -250,8 +251,7 @@ async function sendEmailNotification(email, name, jobId, status) {
 async function fetchDataFromJobProgress(jobId) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
-        Key: { JobId: jobId },
-        ProjectionExpression: 'userId'
+        Key: { JobId: jobId }
     };
 
     try {
