@@ -173,7 +173,9 @@ const handleRegularProgressCheck = async (jobId) => {
         // Get job progress and check timeout
         const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
         const timeoutStatus = jobTimeoutService.isJobTimedOut(jobProgress);
+        console.log('Job timeout status:', timeoutStatus);
 
+        // TODO: implement event bridge timeout event to periodically check job progress, otherwise this handleJobTimeout will be only be called when a user triggers a review
         if (timeoutStatus.timedOut) {
             console.log('Job timed out for jobId:', jobId);
             await jobTimeoutService.handleJobTimeout(jobId, jobProgress, timeoutStatus);

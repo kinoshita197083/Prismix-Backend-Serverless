@@ -143,6 +143,7 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
             if (currentStatus === WAITING_FOR_REVIEW) {
                 console.log('[JobSchedulingService.scheduleNextCheck] Job is waiting for review');
                 await jobProgressService.updateJobStatusRDS(jobId, WAITING_FOR_REVIEW);
+                // TODO: schedule a review every 6 hours
                 return;
             }
 

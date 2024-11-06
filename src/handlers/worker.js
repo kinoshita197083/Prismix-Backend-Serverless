@@ -22,6 +22,7 @@ exports.handler = async (event, context) => {
         console.log('999 Processing image:', { bucket, s3ObjectKey, jobId, imageId });
 
         try {
+            throw new Error('Test error');
             const projectSettings = await fetchProjectSettingRules(jobId);
             console.log('projectSettings', projectSettings);
 
