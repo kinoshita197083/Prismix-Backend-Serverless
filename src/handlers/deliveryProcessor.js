@@ -3,9 +3,10 @@ const { DynamoDBDocumentClient, QueryCommand, GetCommand, UpdateCommand } = requ
 const logger = require('../utils/logger');
 const { createClient } = require('@supabase/supabase-js');
 const { fetchGoogleRefreshToken, setUpGoogleDriveClient } = require('../utils/googleDrive/googleDrive');
-const { ELIGIBLE } = require('../utils/config');
+const { ELIGIBLE, COMPLETED, FAILED } = require('../utils/config');
 const s3Service = require('../services/s3Service');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const dynamoService = require('../services/dynamoService');
 const lambdaClient = new LambdaClient();
 
 const dynamoClient = new DynamoDBClient();
@@ -139,9 +140,22 @@ exports.handler = async (event) => {
                     taskId: task.TaskID,
                     fileName: task.ImageS3Key.split('/').pop(),
                     s3Key: task.ImageS3Key,
-                    error: 'Batch processing failed: ' + error.message
+                    error: 'Delivery failed: ' + error.message
                 }));
-                await updateFailedImagesToJobProgress(jobId, failedTasks);
+                // await updateFailedImagesToJobProgress(jobId, failedTasks);
+
+                // Update task status as COMPLETED with FAILED evaluation for downstream aggregation in job summary
+                const updatePromises = failedTasks.map(async (task) => {
+                    return dynamoService.updateTaskStatus({
+                        jobId,
+                        taskId: task.taskId,
+                        status: COMPLETED,
+                        evaluation: FAILED,
+                        s3ObjectKey: task.s3Key,
+                        reason: `${task.error}`
+                    });
+                });
+                await Promise.all(updatePromises);
             }
         }
     }

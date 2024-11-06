@@ -230,7 +230,10 @@ const handleRegularProgressCheck = async (jobId) => {
                     eligible: stats.eligible,
                     excluded: stats.excluded,
                     duplicates: stats.duplicates,
-                    waitingForReview: stats.waitingForReview
+                    failed: stats.failed,
+                    waitingForReview: stats.waitingForReview,
+                    failedLogs: stats.failedLogs,
+                    lastEvaluatedKey: stats.lastEvaluatedKey
                 },
                 ':updatedAt': Date.now().toString(),
                 ':currentVersion': currentVersion,

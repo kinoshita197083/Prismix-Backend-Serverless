@@ -302,6 +302,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
+                  - dynamodb:UpdateItem
                 Resource:
                   Fn::GetAtt: [TasksTable, Arn]
               - Effect: Allow
@@ -395,6 +396,7 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
               - Effect: Allow
                 Action:
                   - s3:PutObject

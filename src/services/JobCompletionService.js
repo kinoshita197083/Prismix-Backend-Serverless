@@ -88,7 +88,7 @@ const createJobCompletionService = (
         }
 
         const allImagesProcessed = stats.totalProcessed === jobProgress.totalImages;
-        const allImagesAccounted = (stats.eligible + stats.excluded + stats.duplicates) === jobProgress.totalImages;
+        const allImagesAccounted = (stats.eligible + stats.excluded + stats.duplicates + stats.failed) === jobProgress.totalImages;
 
         if (!allImagesProcessed || !allImagesAccounted) {
             console.log('[determineJobStatus] Not all images processed:', {
@@ -96,7 +96,8 @@ const createJobCompletionService = (
                 total: jobProgress.totalImages,
                 eligible: stats.eligible,
                 excluded: stats.excluded,
-                duplicates: stats.duplicates
+                duplicates: stats.duplicates,
+                failed: stats.failed
             });
             return 'IN_PROGRESS';
         }

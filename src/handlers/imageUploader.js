@@ -4,6 +4,8 @@ const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb
 const { createClient } = require('@supabase/supabase-js')
 const logger = require('../utils/logger');
 const { fetchGoogleRefreshToken, getAllImagesFromDrive, processImageBatch, setUpGoogleDriveClient } = require('../utils/googleDrive/googleDrive');
+const dynamoService = require('../services/dynamoService');
+const { FAILED, COMPLETED } = require('../utils/config');
 
 const s3Client = new S3Client();
 
@@ -45,10 +47,21 @@ async function processRecord(record) {
         const results = await processImageBatches(images, drive, s3Client, userId, projectId, projectSettingId, jobId, bucketName);
         const { successCount, failedUploads, skippedUploads } = analyzeResults(results);
 
-        await updateJobProgress(jobId, failedUploads, skippedUploads, images.length);
+        // await updateJobProgress(jobId, failedUploads, skippedUploads, images.length);
+        // Update task status as COMPLETED with FAILED evaluation for downstream aggregation in job summary
+        const updatePromises = [...failedUploads, ...skippedUploads].map(async (upload) => {
+            return dynamoService.updateTaskStatus({
+                jobId,
+                taskId: upload.fileName,
+                status: COMPLETED,
+                evaluation: FAILED,
+                reason: `${upload.reason} - ${upload.attempt} attempts`
+            });
+        });
+        await Promise.all(updatePromises);
         await updateProcessedDriveInfo(jobId, driveIds, folderIds);
 
-        console.log('----> Image uploader finished');
+        console.log(`----> Image uploader processed successfully for ${successCount.length} images, failed ${failedUploads.length} and skipped ${skippedUploads.length}`);
     } catch (error) {
         console.error('Error processing image upload', {
             error: {
@@ -113,26 +126,26 @@ function analyzeResults(results) {
     }, { successCount: [], failedUploads: [], skippedUploads: [] });
 }
 
-async function updateJobProgress(jobId, failedUploads, skippedUploads, totalImages) {
-    const uploadDetails = {
-        failedUploads,
-        skippedUploads
-    }
-    const params = {
-        TableName: process.env.JOB_PROGRESS_TABLE,
-        Key: { JobId: jobId },
-        UpdateExpression: 'SET uploadDetails = :ud',
-        ExpressionAttributeValues: {
-            ':ud': uploadDetails
-        }
-    };
+// async function updateJobProgress(jobId, failedUploads, skippedUploads, totalImages) {
+//     const uploadDetails = {
+//         failedUploads,
+//         skippedUploads
+//     }
+//     const params = {
+//         TableName: process.env.JOB_PROGRESS_TABLE,
+//         Key: { JobId: jobId },
+//         UpdateExpression: 'SET uploadDetails = :ud',
+//         ExpressionAttributeValues: {
+//             ':ud': uploadDetails
+//         }
+//     };
 
-    try {
-        await dynamoDbDocumentClient.send(new UpdateCommand(params));
-    } catch (error) {
-        logger.error('Failed to update job progress', { error, jobId });
-    }
-}
+//     try {
+//         await dynamoDbDocumentClient.send(new UpdateCommand(params));
+//     } catch (error) {
+//         logger.error('Failed to update job progress', { error, jobId });
+//     }
+// }
 
 async function updateProcessedDriveInfo(jobId, driveIds, folderIds) {
     const params = {

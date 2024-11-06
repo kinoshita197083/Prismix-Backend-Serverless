@@ -13,8 +13,10 @@ const createJobStatisticsService = (jobProgressService, cloudWatchService) => {
             eligible: 0,
             excluded: 0,
             duplicates: 0,
+            failed: 0,
             waitingForReview: 0,
-            lastEvaluatedKey: null
+            lastEvaluatedKey: null,
+            failedLogs: []
         };
 
         let lastEvaluatedKey = jobProgress.lastProcessedKey;
@@ -92,6 +94,15 @@ const createJobStatisticsService = (jobProgressService, cloudWatchService) => {
                     break;
                 case 'DUPLICATE':
                     stats.duplicates++;
+                    break;
+                case 'FAILED':
+                    stats.failed++;
+                    stats.failedLogs.push({
+                        taskId: item.TaskID,
+                        reason: item.Reason,
+                        evaluation: item.Evaluation,
+                        s3ObjectKey: item.S3ObjectKey
+                    });
                     break;
             }
 
