@@ -1,4 +1,4 @@
-const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const { PublishCommand } = require('@aws-sdk/client-sns');
 
 class NotificationService {
     constructor(snsClient, topicArn) {
@@ -6,7 +6,7 @@ class NotificationService {
         this.topicArn = topicArn;
     }
 
-    async publishJobStatus(jobId, status) {
+    async publishJobStatus(jobId, status, additionalData = {}) {
         console.log('[NotificationService.publishJobStatus] Publishing status:', {
             jobId,
             status,
@@ -14,7 +14,7 @@ class NotificationService {
         });
 
         const params = {
-            Message: JSON.stringify({ jobId, status }),
+            Message: JSON.stringify({ jobId, status, additionalData }),
             TopicArn: this.topicArn
         };
 

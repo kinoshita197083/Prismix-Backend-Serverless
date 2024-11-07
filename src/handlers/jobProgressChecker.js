@@ -44,21 +44,20 @@ const eventSchedulingConfig = {
 }
 
 // Initialize base services
-const jobProgressService = new JobProgressService(documentClient, config);
 const cloudWatchService = new CloudWatchService(cloudWatch, config);
 const notificationService = new NotificationService(sns, process.env.JOB_COMPLETION_TOPIC_ARN);
 const eventBridgeService = new EventBridgeService(eventBridge, eventSchedulingConfig,);
 
-// Initialize functional services
+const jobStatisticsService = createJobStatisticsService(documentClient, cloudWatchService);
+const jobProgressService = new JobProgressService(documentClient, jobStatisticsService, config);
 const jobHealthService = createJobHealthService(jobProgressService);
-const jobTimeoutService = createJobTimeoutService(jobProgressService, notificationService);
-const jobStatisticsService = createJobStatisticsService(jobProgressService, cloudWatchService);
 const jobSchedulingService = createJobSchedulingService(
     eventBridgeService,
     sqs,
     eventSchedulingConfig,
     jobProgressService
 );
+const jobTimeoutService = createJobTimeoutService(jobProgressService, notificationService, jobSchedulingService);
 const jobCompletionService = createJobCompletionService(
     jobProgressService,
     notificationService,
@@ -125,6 +124,7 @@ const handleJobMessage = async (jobId, eventType, messageAttributes) => {
             ['COMPLETED', 'FAILED', 'STALE'].includes(jobProgress?.status) ||
             jobProgress?.schedulingStatus === 'CLEANUP_REQUESTED') {
             console.log('[handleJobMessage] Skipping processing for completed/cleaned up job:', jobId);
+            await jobSchedulingService.cleanupScheduledChecks(jobId);
             return;
         }
 
@@ -159,7 +159,7 @@ const handleTimeoutCheck = async (jobId, jobProgress) => {
         console.log('Job timed out, handling timeout');
         await Promise.all([
             jobTimeoutService.handleJobTimeout(jobId, jobProgress, timeoutStatus),
-            jobSchedulingService.cleanupScheduledChecks(jobId)
+            // jobSchedulingService.cleanupScheduledChecks(jobId)
         ]);
         return true;
     }

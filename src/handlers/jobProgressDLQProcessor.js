@@ -3,6 +3,9 @@ const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb
 const { SQSClient, DeleteMessageCommand, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const logger = require('../utils/logger');
 const { ErrorCodes } = require('../utils/errorHandler');
+const NotificationService = require('../services/notificationService');
+const { FAILED } = require('../utils/config');
+const JobProgressService = require('../services/jobProgressService');
 
 const sqs = new SQSClient();
 const ddbClient = new DynamoDBClient();
@@ -10,6 +13,15 @@ const docClient = DynamoDBDocumentClient.from(ddbClient);
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF = 1000; // 1 second
+
+// Initialize base configuration for job progress service
+const config = {
+    tasksTable: process.env.TASKS_TABLE,
+    jobProgressTable: process.env.JOB_PROGRESS_TABLE
+};
+
+const notificationService = new NotificationService(sqs, process.env.JOB_COMPLETION_TOPIC_ARN);
+const jobProgressService = new JobProgressService(docClient, config);
 
 exports.handler = async (event) => {
     logger.info('Processing Job Progress DLQ messages', { messageCount: event.Records.length });
@@ -111,6 +123,11 @@ async function handleTerminalFailure(jobId, error) {
 
     try {
         await docClient.send(new UpdateCommand(params));
+        await jobProgressService.updateJobStatusRDS(jobId, FAILED);
+        await notificationService.publishJobStatus(jobId, FAILED, {
+            completedAt: Date.now().toString(),
+            status: FAILED
+        });
         logger.info('Updated job status to FAILED', { jobId, error });
     } catch (updateError) {
         logger.error('Failed to update job status for terminal failure', {

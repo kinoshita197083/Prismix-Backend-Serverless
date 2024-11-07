@@ -104,6 +104,7 @@ notificationProcessor:
         arn:
           Fn::GetAtt: [NotificationQueue, Arn]
   environment:
+    FRONTEND_URL: ${env:FRONTEND_URL}
     NOTIFICATION_QUEUE_URL:
       Ref: NotificationQueue
     SENDER_EMAIL_ADDRESS: ${env:SENDER_EMAIL_ADDRESS}
@@ -139,6 +140,8 @@ jobProgressDLQProcessor:
         batchSize: 1
   environment:
     JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+    JOB_COMPLETION_TOPIC_ARN: 
+      Ref: JobCompletionTopic
     JOB_PROGRESS_QUEUE_URL:
       Ref: JobProgressQueue
     JOB_PROGRESS_DLQ_URL:

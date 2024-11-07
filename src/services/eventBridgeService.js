@@ -1,5 +1,5 @@
 const { DisableRuleCommand, DeleteRuleCommand,
-    DescribeRuleCommand, PutRuleCommand, PutTargetsCommand } = require("@aws-sdk/client-eventbridge");
+    DescribeRuleCommand, PutRuleCommand, PutTargetsCommand, ListTargetsByRuleCommand, RemoveTargetsCommand } = require("@aws-sdk/client-eventbridge");
 
 class EventBridgeService {
     constructor(eventBridgeClient, config) {
@@ -7,34 +7,32 @@ class EventBridgeService {
         this.config = config;
     }
 
-    getRuleName(jobId) {
-        if (jobId.startsWith('JobProgressCheck-')) {
-            return jobId;
-        }
-        const ruleName = `JobProgressCheck-${jobId}`;
-        return ruleName.substring(0, 64);
-    }
-
-    async disableAndDeleteRule(jobId) {
+    async disableAndDeleteRule(jobId, ruleName) {
         try {
-            const ruleName = this.getRuleName(jobId);
             console.log(`[EventBridgeService] Cleaning up rule: ${ruleName}`);
 
             try {
                 await this.eventBridgeClient.send(new DescribeRuleCommand({
                     Name: ruleName
                 }));
+                console.log(`[EventBridgeService] Rule ${ruleName} exists, proceeding with cleanup`);
             } catch (error) {
                 if (error.name === 'ResourceNotFoundException') {
                     console.log(`[EventBridgeService] Rule ${ruleName} doesn't exist, skipping cleanup`);
                     return;
                 }
+                console.error(`[EventBridgeService] Error describing rule ${ruleName}:`, error);
                 throw error;
             }
 
-            await this._disableRule(ruleName);
-            await this._deleteRule(ruleName);
+            // Disable and remove targets before deleting the rule
+            await Promise.all([
+                this._disableRule(ruleName),
+                this._removeTargets(ruleName),
+            ]);
 
+            // Delete the rule
+            await this._deleteRule(ruleName);
         } catch (error) {
             console.error('[EventBridgeService] Error in disableAndDeleteRule:', error);
             throw error;
@@ -60,10 +58,36 @@ class EventBridgeService {
             await this.eventBridgeClient.send(new DeleteRuleCommand({
                 Name: ruleName
             }));
+            console.log('[EventBridgeService] Deleted EventBridge rule:', ruleName);
         } catch (error) {
             if (error.name !== 'ResourceNotFoundException') {
                 throw error;
             }
+        }
+    }
+
+    async _removeTargets(ruleName) {
+        try {
+            // First, get all targets for the rule
+            const listTargetsParams = {
+                Rule: ruleName,
+                EventBusName: process.env.EVENT_BUS_NAME || 'default'
+            };
+
+            const targets = await this.eventBridgeClient.send(new ListTargetsByRuleCommand(listTargetsParams));
+
+            if (targets.Targets && targets.Targets.length > 0) {
+                // Remove all targets
+                const targetIds = targets.Targets.map(target => target.Id);
+                await this.eventBridgeClient.send(new RemoveTargetsCommand({
+                    Rule: ruleName,
+                    EventBusName: process.env.EVENT_BUS_NAME || 'default',
+                    Ids: targetIds
+                }));
+            }
+        } catch (error) {
+            console.error(`[EventBridgeService] Error removing targets for rule ${ruleName}:`, error);
+            throw error;
         }
     }
 

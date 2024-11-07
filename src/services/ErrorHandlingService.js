@@ -1,3 +1,5 @@
+const { FAILED } = require("../utils/config");
+
 const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSchedulingService) => {
     const TERMINAL_ERRORS = ['SYSTEM_ERROR', 'CONFIGURATION_ERROR'];
     const RETRYABLE_ERRORS = ['HEALTH_CHECK_FAILED', 'TEMPORARY_ERROR'];
@@ -61,7 +63,7 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
 
             // If max retries exceeded or other error, handle as terminal
             await jobProgressService.updateJobProgress(jobId, {
-                status: 'FAILED',
+                status: FAILED,
                 processingDetails: {
                     lastError: {
                         code: error.code,
@@ -72,6 +74,9 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
                 },
                 completedAt: new Date().toISOString()
             });
+
+            // Update job status in RDS
+            await jobProgressService.updateJobStatusRDS(jobId, FAILED);
 
             console.log('[handleProcessingError] Job progress updated with terminal error due to retry limit');
 

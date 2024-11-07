@@ -4,12 +4,17 @@ const { WAITING_FOR_REVIEW, COMPLETED, FAILED } = require('../utils/config');
 const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgressService) => {
     // Constants for scheduling logic
     const SCHEDULE_CONFIG = {
+        // Progress check intervals
         INITIAL_INTERVAL: 60, // 1 minute in seconds
         MAX_INTERVAL: 300,    // 5 minutes in seconds
         REVIEW_INTERVAL: 900, // 15 minutes in seconds
-        // REVIEW_TIMEOUT_CHECK_INTERVAL: 30,    // 30 minutes
-        REVIEW_TIMEOUT_CHECK_INTERVAL: 1,    // 1 minute TESTING
+
+        // Timeout check intervals
+        REVIEW_TIMEOUT_CHECK_INTERVAL: 60,    // 60 minutes
+        // REVIEW_TIMEOUT_CHECK_INTERVAL: 1,    // 1 minute TESTING
         PROCESSING_TIMEOUT_CHECK_INTERVAL: 15, // 15 minutes
+
+        // Retry config - Backoff logic
         MAX_ATTEMPTS: 3,
         BACKOFF_MULTIPLIER: 2
     };
@@ -196,15 +201,19 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
 
             // Run rule deletions in parallel
             await Promise.all(
-                ruleNames.map(async ruleName => {
+                ruleNames.map(async (ruleName) => {
                     try {
+                        console.log(`[JobSchedulingService.cleanupScheduledChecks] Attempting to clean up rule: ${ruleName}`);
+
+                        // Await the deletion of each rule
                         await eventBridgeService.disableAndDeleteRule(jobId, ruleName);
-                        console.log('[JobSchedulingService.cleanupScheduledChecks] Deleted EventBridge rule:', ruleName);
                     } catch (error) {
                         // Don't throw if rule doesn't exist
                         if (error.name !== 'ResourceNotFoundException') {
                             console.error('[JobSchedulingService.cleanupScheduledChecks] Error cleaning up EventBridge rule:', error);
                         }
+
+                        console.log(`[JobSchedulingService.cleanupScheduledChecks] Rule ${ruleName} not found or error during cleanup`);
                     }
                 })
             );

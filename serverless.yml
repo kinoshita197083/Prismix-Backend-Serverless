@@ -31,6 +31,7 @@ provider:
     JOB_PROGRESS_QUEUE_URL: ${env:JOB_PROGRESS_QUEUE_URL}
   iam:
     role: BaseCloudWatchRole
+  logRetentionInDays: ${self:custom.logRetention.${self:provider.stage}}
   logs:
     # restApi:
       # accessLogging: true
@@ -51,6 +52,9 @@ custom:
   memorySize:
     prod: 256
     dev: 128
+  logRetention:
+    prod: 30
+    dev: 7
   bucketName: ${self:service}-${self:provider.stage}-bucket
   queueName: ${self:service}-${self:provider.stage}-queue
   deploymentBucketName: ${self:service}-${self:provider.stage}-${self:provider.region}-deploys

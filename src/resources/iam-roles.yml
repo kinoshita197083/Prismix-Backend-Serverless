@@ -239,6 +239,7 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem 
                   - dynamodb:Query
+                  - dynamodb:BatchWriteItem
                 Resource:
                   - Fn::GetAtt: [JobProgressTable, Arn]
                   - Fn::GetAtt: [TasksTable, Arn]
@@ -265,9 +266,11 @@ Resources:
                   - events:PutRule
                   - events:PutTargets
                   - events:DeleteRule
-                  - events:RemoveTargets
                   - events:DisableRule
+                  - events:RemoveTargets
+                  - events:ListTargetsByRule
                   - events:DescribeRule
+                  - events:ListRules
                 Resource:
                   - Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobTimeout-*
                   - Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
@@ -427,6 +430,11 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  Ref: JobCompletionTopic
               - Effect: Allow
                 Action:
                   - dynamodb:UpdateItem

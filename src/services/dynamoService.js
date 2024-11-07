@@ -1,8 +1,9 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand, BatchWriteCommand } = require("@aws-sdk/lib-dynamodb");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');
 const { IMAGE_HASH_EXPIRATION_TIME, DUPLICATE, COMPLETED, FAILED, EXCLUDED, ELIGIBLE } = require('../utils/config');
+const { chunkArray } = require('../utils/helpers');
 
 const client = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(client, {
@@ -258,19 +259,65 @@ const dynamoService = {
     },
 
     async getTaskCount(jobId, options = { status: COMPLETED }) {
-        const params = {
-            TableName: process.env.TASKS_TABLE,
-            KeyConditionExpression: 'JobID = :jobId',
-            FilterExpression: 'TaskStatus = :status',
-            ExpressionAttributeValues: {
-                ':jobId': jobId,
-                ':status': options.status
-            },
-            Select: 'COUNT' // Only get the count of matching items
-        };
+        try {
+            const params = {
+                TableName: process.env.TASKS_TABLE,
+                KeyConditionExpression: 'JobID = :jobId',
+                FilterExpression: 'TaskStatus = :status',
+                ExpressionAttributeValues: {
+                    ':jobId': jobId,
+                    ':status': options.status
+                },
+                Select: 'COUNT' // Only get the count of matching items
+            };
 
-        const result = await docClient.send(new QueryCommand(params));
-        return result.Count;
+            const result = await docClient.send(new QueryCommand(params));
+            return result.Count;
+        } catch (error) {
+            logger.error('Error getting task count', { error, jobId, options });
+            throw error;
+        }
+    },
+
+    async autoReviewAllRemainingTasks(jobId) {
+        try {
+            const queryCommand = new QueryCommand({
+                TableName: process.env.TASKS_TABLE,
+                KeyConditionExpression: "JobID = :jobId",
+                FilterExpression: "Evaluation <> :eligible AND Evaluation <> :failed",
+                ExpressionAttributeValues: {
+                    ":jobId": jobId,
+                    ":eligible": ELIGIBLE,
+                    ":failed": FAILED
+                }
+            });
+            const result = await docClient.send(queryCommand);
+            const tasks = result.Items || [];
+
+            const batchedTasks = chunkArray(tasks, 25);
+
+            // Process each batch
+            await Promise.all(batchedTasks.map(async (batch) => {
+                const batchWriteCommand = new BatchWriteCommand({
+                    RequestItems: {
+                        [process.env.TASKS_TABLE]: batch.map(task => ({
+                            PutRequest: {
+                                Item: {
+                                    ...task,
+                                    TaskStatus: "REVIEWED",
+                                    UpdatedAt: Date.now().toString()
+                                }
+                            }
+                        }))
+                    }
+                });
+
+                await docClient.send(batchWriteCommand);
+            }));
+        } catch (error) {
+            logger.error('Error auto-reviewing all remaining tasks', { error, jobId });
+            throw error;
+        }
     }
 };
 

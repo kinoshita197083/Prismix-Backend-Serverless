@@ -2,7 +2,7 @@ const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = requ
 const { createClient } = require('@supabase/supabase-js');
 
 class JobProgressService {
-    constructor(dynamoDB, config) {
+    constructor(dynamoDB, jobStatisticsService, config) {
         this.dynamoDB = DynamoDBDocumentClient.from(dynamoDB, {
             marshallOptions: {
                 removeUndefinedValues: true,
@@ -14,24 +14,7 @@ class JobProgressService {
         );
         this.tasksTable = config.tasksTable;
         this.jobProgressTable = config.jobProgressTable;
-    }
-
-    async getJobStats(jobId) {
-        console.log('[JobProgressService.getJobStats] Fetching stats for jobId:', jobId);
-
-        const params = {
-            TableName: this.tasksTable,
-            KeyConditionExpression: "JobID = :jobId",
-            ExpressionAttributeValues: { ':jobId': jobId }
-        };
-
-        console.log('[JobProgressService.getJobStats] Query params:', params);
-        const result = await this.dynamoDB.send(new QueryCommand(params));
-        console.log('[JobProgressService.getJobStats] Query result:', result);
-
-        const stats = this._aggregateJobStats(result.Items);
-        console.log('[JobProgressService.getJobStats] Aggregated stats:', stats);
-        return stats;
+        this.jobStatisticsService = jobStatisticsService;
     }
 
     async getCurrentJobProgress(jobId) {
@@ -53,43 +36,43 @@ class JobProgressService {
         return result.Item;
     }
 
-    async updateJobProgress(jobId, data, currentVersion) {
-        console.log('[JobProgressService.updateJobProgress] Updating progress:', {
-            jobId,
-            data,
-            currentVersion
-        });
+    // async updateJobProgress(jobId, data, currentVersion) {
+    //     console.log('[JobProgressService.updateJobProgress] Updating progress:', {
+    //         jobId,
+    //         data,
+    //         currentVersion
+    //     });
 
-        const cleanData = {
-            status: data.status || 'IN_PROGRESS',
-            processedImages: data.processedImages || 0,
-            eligibleImages: data.eligibleImages || 0,
-            duplicateImages: data.duplicateImages || 0,
-            excludedImages: data.excludedImages || 0,
-            reviewedImages: data.reviewedImages || 0,
-            requiredManualReview: data.requiredManualReview || false,
-            processingDetails: data.processingDetails || {}
-        };
+    //     const cleanData = {
+    //         status: data.status || 'IN_PROGRESS',
+    //         processedImages: data.processedImages || 0,
+    //         eligibleImages: data.eligibleImages || 0,
+    //         duplicateImages: data.duplicateImages || 0,
+    //         excludedImages: data.excludedImages || 0,
+    //         reviewedImages: data.reviewedImages || 0,
+    //         requiredManualReview: data.requiredManualReview || false,
+    //         processingDetails: data.processingDetails || {}
+    //     };
 
-        const { regularParams, manualReviewParams } = this._buildUpdateParams(jobId, cleanData, currentVersion);
+    //     const { regularParams, manualReviewParams } = this._buildUpdateParams(jobId, cleanData, currentVersion);
 
-        console.log('[JobProgressService.updateJobProgress] Built update params:', {
-            regularParams,
-            manualReviewParams
-        });
+    //     console.log('[JobProgressService.updateJobProgress] Built update params:', {
+    //         regularParams,
+    //         manualReviewParams
+    //     });
 
-        await this.dynamoDB.send(new UpdateCommand(regularParams));
+    //     await this.dynamoDB.send(new UpdateCommand(regularParams));
 
-        if (manualReviewParams) {
-            try {
-                await this.dynamoDB.send(new UpdateCommand(manualReviewParams));
-            } catch (error) {
-                if (error.name !== 'ConditionalCheckFailedException') {
-                    throw error;
-                }
-            }
-        }
-    }
+    //     if (manualReviewParams) {
+    //         try {
+    //             await this.dynamoDB.send(new UpdateCommand(manualReviewParams));
+    //         } catch (error) {
+    //             if (error.name !== 'ConditionalCheckFailedException') {
+    //                 throw error;
+    //             }
+    //         }
+    //     }
+    // }
 
     async updateJobStatusRDS(jobId, status) {
         const { data, error } = await this.supabase
@@ -102,113 +85,51 @@ class JobProgressService {
         return data;
     }
 
-    _aggregateJobStats(items) {
-        console.log('[JobProgressService._aggregateJobStats] Aggregating stats for items:', items);
+    // _buildUpdateParams(jobId, data, currentVersion) {
+    //     const regularUpdateValues = {
+    //         ':jobStatus': data.status,
+    //         ':processedImages': data.processedImages,
+    //         ':eligibleImages': data.eligibleImages,
+    //         ':duplicateImages': data.duplicateImages,
+    //         ':excludedImages': data.excludedImages,
+    //         ':reviewedImages': data.reviewedImages,
+    //         ':newVersion': currentVersion + 1,
+    //         ':currentVersion': currentVersion,
+    //         ':updatedAt': new Date().toISOString(),
+    //         ':processingDetails': data.processingDetails || {},
+    //     };
 
-        const stats = {
-            processedImages: 0,
-            eligibleImages: 0,
-            duplicateImages: 0,
-            excludedImages: 0,
-            reviewedImages: 0,
-            processingDetails: { failedProcessedImages: [] },
-            requiredManualReview: false
-        };
+    //     const regularParams = {
+    //         TableName: this.jobProgressTable,
+    //         Key: { JobId: jobId },
+    //         UpdateExpression: `
+    //             SET #status = :jobStatus,
 
-        if (!items || !items.length) {
-            console.log('[JobProgressService._aggregateJobStats] No items to aggregate');
-            return stats;
-        }
+    //                 reviewedImages = :reviewedImages,
+    //                 processingDetails = :processingDetails,
+    //                 version = :newVersion,
+    //                 updatedAt = :updatedAt,
+    //         `,
+    //         ExpressionAttributeNames: {
+    //             '#status': 'status'
+    //         },
+    //         ExpressionAttributeValues: regularUpdateValues,
+    //         ConditionExpression: 'version = :currentVersion'
+    //     };
 
-        return items.reduce((acc, task) => {
-            // Count processed images
-            if (['COMPLETED', 'REVIEWED'].includes(task.TaskStatus)) {
-                acc.processedImages++;
-            }
+    //     const manualReviewParams = data.requiredManualReview ? {
+    //         TableName: this.jobProgressTable,
+    //         Key: { JobId: jobId },
+    //         UpdateExpression: 'SET requiredManualReview = :review',
+    //         ExpressionAttributeValues: {
+    //             ':review': true,
+    //             ':false': false
+    //         },
+    //         ConditionExpression: 'attribute_not_exists(requiredManualReview) OR requiredManualReview = :false'
+    //     } : null;
 
-            // Count by evaluation type
-            switch (task.Evaluation) {
-                case 'ELIGIBLE':
-                    acc.eligibleImages++;
-                    break;
-                case 'DUPLICATE':
-                    acc.duplicateImages++;
-                    break;
-                case 'EXCLUDED':
-                    acc.excludedImages++;
-                    break;
-                case 'FAILED':
-                    if (task.ImageS3Key) {
-                        acc.processingDetails.failedProcessedImages.push({
-                            imageS3Key: task.ImageS3Key,
-                            reason: task.Reason || 'Unknown'
-                        });
-                    }
-                    break;
-            }
-
-            // Track reviewed images separately
-            if (task.TaskStatus === 'REVIEWED') {
-                acc.reviewedImages++;
-            }
-
-            // Check if any task still needs review
-            if (task.TaskStatus === 'WAITING_FOR_REVIEW') {
-                acc.requiredManualReview = true;
-            }
-
-            return acc;
-        }, stats);
-    }
-
-    _buildUpdateParams(jobId, data, currentVersion) {
-        const regularUpdateValues = {
-            ':jobStatus': data.status,
-            ':processedImages': data.processedImages,
-            ':eligibleImages': data.eligibleImages,
-            ':duplicateImages': data.duplicateImages,
-            ':excludedImages': data.excludedImages,
-            ':reviewedImages': data.reviewedImages,
-            ':newVersion': currentVersion + 1,
-            ':currentVersion': currentVersion,
-            ':updatedAt': new Date().toISOString(),
-            ':processingDetails': data.processingDetails || {},
-        };
-
-        const regularParams = {
-            TableName: this.jobProgressTable,
-            Key: { JobId: jobId },
-            UpdateExpression: `
-                SET #status = :jobStatus,
-                    processedImages = :processedImages,
-                    eligibleImages = :eligibleImages,
-                    duplicateImages = :duplicateImages,
-                    excludedImages = :excludedImages,
-                    reviewedImages = :reviewedImages,
-                    processingDetails = :processingDetails,
-                    version = :newVersion,
-                    updatedAt = :updatedAt,
-            `,
-            ExpressionAttributeNames: {
-                '#status': 'status'
-            },
-            ExpressionAttributeValues: regularUpdateValues,
-            ConditionExpression: 'version = :currentVersion'
-        };
-
-        const manualReviewParams = data.requiredManualReview ? {
-            TableName: this.jobProgressTable,
-            Key: { JobId: jobId },
-            UpdateExpression: 'SET requiredManualReview = :review',
-            ExpressionAttributeValues: {
-                ':review': true,
-                ':false': false
-            },
-            ConditionExpression: 'attribute_not_exists(requiredManualReview) OR requiredManualReview = :false'
-        } : null;
-
-        return { regularParams, manualReviewParams };
-    }
+    //     return { regularParams, manualReviewParams };
+    // }
 
     async markJobAsStale(jobId) {
         console.log('[JobProgressService.markJobAsStale] Marking job as stale:', jobId);
@@ -229,6 +150,24 @@ class JobProgressService {
 
         await this.dynamoDB.send(new UpdateCommand(params));
         console.log('[JobProgressService.markJobAsStale] Job marked as stale successfully');
+    }
+
+    async adjustJobStatistics(jobId) {
+        // Update final statistics considering auto-reviewed items
+        const finalStats = await this.jobStatisticsService.getJobStatisticsWithPagination(jobId);
+        const adjustedStats = {
+            ...finalStats,
+            // Move waiting for review count to excluded count
+            excluded: finalStats.excluded + finalStats.waitingForReview,
+            waitingForReview: 0,
+            autoReviewed: finalStats.waitingForReview // Track how many were auto-reviewed
+        };
+
+        // Update job progress with adjusted statistics
+        await this.updateJobProgress(jobId, {
+            statistics: adjustedStats
+        });
+        return adjustedStats;
     }
 
     async getJobStatistics(jobId) {
@@ -280,6 +219,7 @@ class JobProgressService {
 
         // Build dynamic update expression
         Object.entries(updates).forEach(([key, value]) => {
+            if (value === undefined || value === null) return console.log(`[JobProgressService.updateJobProgress] Skipping update for key: ${key} with value: ${value}`);
             const attributeName = `#${key}`;
             const attributeValue = `:${key}`;
             updateExpressions.push(`${attributeName} = ${attributeValue}`);

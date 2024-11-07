@@ -1,65 +1,191 @@
 const EMAIL_TEMPLATES = {
     COMPLETED: {
         subject: "Your Job Has Been Completed - Prismix Notification",
-        getContent: (name, jobId) => ({
-            html: generateCompletedEmailHtml(name, jobId),
-            text: generateCompletedEmailText(name, jobId)
+        getContent: (name, jobId, projectId) => ({
+            html: generateCompletedEmailHtml(name, jobId, projectId),
+            text: generateCompletedEmailText(name, jobId, projectId)
         })
     },
     WAITING_FOR_REVIEW: {
         subject: "Your Job Requires Manual Review - Prismix Notification",
-        getContent: (name, jobId) => ({
-            html: generateReviewEmailHtml(name, jobId),
-            text: generateReviewEmailText(name, jobId)
+        getContent: (name, jobId, projectId) => ({
+            html: generateReviewEmailHtml(name, jobId, projectId),
+            text: generateReviewEmailText(name, jobId, projectId)
         })
     },
     REVIEW_EXTENDED: {
         subject: "Job Review Period Extended - Prismix Notification",
-        getContent: (name, jobId, extendedUntil) => ({
-            html: generateReviewExtendedHtml(name, jobId, extendedUntil),
-            text: generateReviewExtendedText(name, jobId, extendedUntil)
+        getContent: (name, jobId, extendedUntil, projectId) => ({
+            html: generateReviewExtendedHtml(name, jobId, extendedUntil, projectId),
+            text: generateReviewExtendedText(name, jobId, extendedUntil, projectId)
         })
     },
     FAILED: {
         subject: "Job Processing Failed - Prismix Notification",
-        getContent: (name, jobId, error) => ({
-            html: generateFailedEmailHtml(name, jobId, error),
-            text: generateFailedEmailText(name, jobId, error)
+        getContent: (name, jobId, error, projectId) => ({
+            html: generateFailedEmailHtml(name, jobId, error, projectId),
+            text: generateFailedEmailText(name, jobId, error, projectId)
         })
     }
 };
+
+// Common header component
+const getEmailHeader = (title) => `
+    <div class="header">
+        <img src="https://anythingfrenkie.s3.ap-southeast-2.amazonaws.com/logo_black.svg" alt="Prismix" class="logo" />
+        <h1>${title}</h1>
+    </div>
+`;
+
+// Common footer component
+const getEmailFooter = () => `
+    <div class="footer">
+        <div class="footer-links">
+            <a href="#">Privacy Policy</a> • 
+            <a href="#">Terms of Service</a> • 
+            <a href="#">Contact Support</a>
+        </div>
+        <p class="footer-copyright">© ${new Date().getFullYear()} Prismix. All rights reserved.</p>
+        <p class="footer-note">This is an automated message. Please do not reply to this email.</p>
+    </div>
+`;
+
+const getEmailStyles = () => `
+    body { 
+        font-family: Arial, sans-serif; 
+        line-height: 1.6; 
+        color: #1C1C1C; 
+        margin: 0; 
+        padding: 0; 
+        background-color: #F6F6F6;
+    }
+    .container { 
+        max-width: 640px; 
+        margin: 32px auto; 
+        background-color: #FFFFFF;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .header { 
+        background-color: #121212; 
+        color: #FFFFFF; 
+        padding: 32px 40px; 
+        text-align: left;
+    }
+    .logo {
+        height: 32px;
+        margin-bottom: 24px;
+        display: block;
+    }
+    .content { 
+        padding: 40px;
+        background-color: #FFFFFF;
+    }
+    .footer { 
+        text-align: center; 
+        padding: 32px 40px;
+        font-size: 12px; 
+        color: #666666;
+        background-color: #F9F9F9;
+        border-top: 1px solid #E0E0E0;
+    }
+    .footer-links {
+        margin-bottom: 16px;
+    }
+    .footer-links a {
+        color: #666666;
+        text-decoration: none;
+    }
+    .footer-links a:hover {
+        text-decoration: underline;
+    }
+    .footer-copyright {
+        margin: 8px 0;
+    }
+    .footer-note {
+        color: #999999;
+        margin: 8px 0;
+    }
+    .job-id { 
+        background-color: #F5F5F5; 
+        padding: 8px 12px; 
+        border-radius: 3px; 
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        color: #333333;
+        border: 1px solid #E0E0E0;
+        display: inline-block;
+    }
+    .status-box {
+        padding: 24px;
+        background-color: #F9F9F9;
+        border-radius: 4px;
+        margin: 24px 0;
+    }
+    h1 { 
+        font-size: 24px; 
+        font-weight: 700; 
+        margin: 0; 
+        letter-spacing: -0.5px;
+    }
+    p { 
+        margin: 16px 0; 
+        font-size: 15px;
+        color: #333333;
+    }
+    .warning { 
+        color: #D32F2F;
+        font-weight: 500;
+        font-size: 15px;
+    }
+    .deadline { 
+        color: #1C1C1C; 
+        font-weight: 600;
+        background-color: #FFF9C4;
+        padding: 2px 4px;
+    }
+    .error-details { 
+        background-color: #FFEBEE; 
+        padding: 24px; 
+        border-radius: 4px; 
+        margin: 24px 0;
+        border-left: 4px solid #EF5350;
+    }
+    .button {
+        display: inline-block;
+        padding: 12px 24px;
+        background-color: #121212;
+        color: #FFFFFF;
+        text-decoration: none;
+        border-radius: 4px;
+        margin: 16px 0;
+        font-weight: 500;
+    }
+    .button:hover {
+        background-color: #2C2C2C;
+    }
+`;
 
 // Completed Job Email
 const generateCompletedEmailHtml = (name, jobId) => `
     <html>
         <head>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 4px 4px 0 0; }
-                .content { padding: 30px; background-color: #f9f9f9; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; }
-                .footer { text-align: center; margin-top: 20px; font-size: 0.8em; color: #777; }
-                .button { display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-                .job-id { background-color: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace; }
-            </style>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${getEmailStyles()}</style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <h1>Job Completion Notification</h1>
-                </div>
+                ${getEmailHeader('Job Completion Notification')}
                 <div class="content">
                     <p>Dear ${name},</p>
-                    <p>We are pleased to inform you that your job has been completed successfully.</p>
-                    <p><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
-                    <p>You can now access and review the results of your job through our platform. If you have any questions or need further assistance, please don't hesitate to contact our support team.</p>
-                    <a href="${process.env.DASHBOARD_URL}/jobs/${jobId}" class="button">View Job Results</a>
-                    <p>Thank you for using our services.</p>
+                    <div class="status-box">
+                        <p style="margin: 0;"><strong>Status:</strong> Completed</p>
+                        <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
+                    </div>
+                    <p>Your job has been completed successfully. You can now access and review the results through our platform.</p>
+                    <a href="#" class="button">View Results</a>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
-                <div class="footer">
-                    <p>This is an automated message. Please do not reply to this email.</p>
-                </div>
+                ${getEmailFooter()}
             </div>
         </body>
     </html>
@@ -68,15 +194,11 @@ const generateCompletedEmailHtml = (name, jobId) => `
 const generateCompletedEmailText = (name, jobId) => `
 Dear ${name},
 
-We are pleased to inform you that your job has been completed successfully.
+Your job has been completed successfully.
 
 Job ID: ${jobId}
 
-You can now access and review the results of your job through our platform. If you have any questions or need further assistance, please don't hesitate to contact our support team.
-
-To view your job results, visit: ${process.env.DASHBOARD_URL}/jobs/${jobId}
-
-Thank you for using our services.
+You can now access and review the results of your job through our platform.
 
 Best regards,
 The Prismix Team
@@ -88,34 +210,25 @@ This is an automated message. Please do not reply to this email.
 const generateReviewEmailHtml = (name, jobId) => `
     <html>
         <head>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 4px 4px 0 0; }
-                .content { padding: 30px; background-color: #f9f9f9; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; }
-                .footer { text-align: center; margin-top: 20px; font-size: 0.8em; color: #777; }
-                .button { display: inline-block; padding: 12px 24px; background-color: #FF9800; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-                .job-id { background-color: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace; }
-                .warning { color: #FF9800; font-weight: bold; }
-            </style>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${getEmailStyles()}</style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <h1>Manual Review Required</h1>
-                </div>
+                ${getEmailHeader('Manual Review Required')}
                 <div class="content">
                     <p>Dear ${name},</p>
+                    <div class="status-box">
+                        <p style="margin: 0;"><strong>Status:</strong> Awaiting Review</p>
+                        <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
+                    </div>
                     <p>Your job requires manual review before it can be completed.</p>
-                    <p><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
-                    <p class="warning">Please review and approve the processed items within the next 48 hours.</p>
+                    <p class="warning">⚠️ Please review and approve the processed items within the next 48 hours.</p>
                     <p>If no action is taken within this timeframe, the system will automatically process the remaining items according to default settings.</p>
-                    <a href="${process.env.DASHBOARD_URL}/jobs/${jobId}/review" class="button">Review Now</a>
+                    <a href="#" class="button">Review Now</a>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
-                <div class="footer">
-                    <p>This is an automated message. Please do not reply to this email.</p>
-                </div>
+                ${getEmailFooter()}
             </div>
         </body>
     </html>
@@ -131,8 +244,6 @@ Job ID: ${jobId}
 Please review and approve the processed items within the next 48 hours.
 If no action is taken within this timeframe, the system will automatically process the remaining items according to default settings.
 
-To review your job, visit: ${process.env.DASHBOARD_URL}/jobs/${jobId}/review
-
 Best regards,
 The Prismix Team
 
@@ -140,37 +251,28 @@ This is an automated message. Please do not reply to this email.
 `;
 
 // Review Period Extended Email
-const generateReviewExtendedHtml = (name, jobId, extendedUntil) => `
+const generateReviewExtendedHtml = (name, jobId, extendedUntil, projectId) => `
     <html>
         <head>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 4px 4px 0 0; }
-                .content { padding: 30px; background-color: #f9f9f9; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; }
-                .footer { text-align: center; margin-top: 20px; font-size: 0.8em; color: #777; }
-                .button { display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-                .job-id { background-color: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace; }
-                .deadline { color: #2196F3; font-weight: bold; }
-            </style>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${getEmailStyles()}</style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <h1>Review Period Extended</h1>
-                </div>
+                ${getEmailHeader('Review Period Extended')}
                 <div class="content">
                     <p>Dear ${name},</p>
-                    <p>The review period for your job has been extended.</p>
-                    <p><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
-                    <p>New deadline: <span class="deadline">${new Date(extendedUntil).toLocaleString()}</span></p>
-                    <p>Please complete your review before the new deadline. After this time, remaining items will be processed automatically.</p>
-                    <a href="${process.env.DASHBOARD_URL}/jobs/${jobId}/review" class="button">Continue Review</a>
+                    <div class="status-box">
+                        <p style="margin: 0;"><strong>Status:</strong> Review Extended</p>
+                        <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
+                        <p style="margin: 8px 0 0;"><strong>New Deadline:</strong> <span class="deadline">${new Date(+extendedUntil).toLocaleString()}</span></p>
+                    </div>
+                    <p>The review period for your job has been extended. Please complete your review before the new deadline.</p>
+                    <p>After this time, remaining items will be processed automatically.</p>
+                    <a href="${process.env.FRONTEND_URL}/project/${projectId}/job/${jobId}" class="button">Continue Review</a>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
-                <div class="footer">
-                    <p>This is an automated message. Please do not reply to this email.</p>
-                </div>
+                ${getEmailFooter()}
             </div>
         </body>
     </html>
@@ -186,8 +288,6 @@ New deadline: ${new Date(extendedUntil).toLocaleString()}
 
 Please complete your review before the new deadline. After this time, remaining items will be processed automatically.
 
-To continue your review, visit: ${process.env.DASHBOARD_URL}/jobs/${jobId}/review
-
 Best regards,
 The Prismix Team
 
@@ -198,38 +298,29 @@ This is an automated message. Please do not reply to this email.
 const generateFailedEmailHtml = (name, jobId, error) => `
     <html>
         <head>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #F44336; color: white; padding: 20px; text-align: center; border-radius: 4px 4px 0 0; }
-                .content { padding: 30px; background-color: #f9f9f9; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; }
-                .footer { text-align: center; margin-top: 20px; font-size: 0.8em; color: #777; }
-                .button { display: inline-block; padding: 12px 24px; background-color: #F44336; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-                .job-id { background-color: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace; }
-                .error-details { background-color: #ffebee; padding: 15px; border-radius: 4px; margin: 15px 0; }
-            </style>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${getEmailStyles()}</style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <h1>Job Processing Failed</h1>
-                </div>
+                ${getEmailHeader('Job Processing Failed')}
                 <div class="content">
                     <p>Dear ${name},</p>
+                    <div class="status-box">
+                        <p style="margin: 0;"><strong>Status:</strong> Failed</p>
+                        <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
+                    </div>
                     <p>We regret to inform you that your job has encountered an error during processing.</p>
-                    <p><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
                     <div class="error-details">
-                        <p><strong>Error Details:</strong></p>
-                        <p>${error.message || 'An unexpected error occurred'}</p>
-                        ${error.details ? `<p><strong>Additional Information:</strong> ${error.details}</p>` : ''}
+                        <p style="margin-top: 0;"><strong>Error Details:</strong></p>
+                        <p style="margin-bottom: 0;">${error.message || 'An unexpected error occurred'}</p>
+                        ${error.details ? `<p style="margin-top: 8px; margin-bottom: 0;"><strong>Additional Information:</strong> ${error.details}</p>` : ''}
                     </div>
                     <p>Our technical team has been notified and will investigate the issue. You may need to resubmit your job once the issue is resolved.</p>
-                    <a href="${process.env.DASHBOARD_URL}/jobs/${jobId}" class="button">View Job Details</a>
+                    <a href="#" class="button">Contact Support</a>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
-                <div class="footer">
-                    <p>This is an automated message. Please do not reply to this email.</p>
-                </div>
+                ${getEmailFooter()}
             </div>
         </body>
     </html>
@@ -247,8 +338,6 @@ ${error.message || 'An unexpected error occurred'}
 ${error.details ? `Additional Information: ${error.details}` : ''}
 
 Our technical team has been notified and will investigate the issue. You may need to resubmit your job once the issue is resolved.
-
-To view your job details, visit: ${process.env.DASHBOARD_URL}/jobs/${jobId}
 
 Best regards,
 The Prismix Team

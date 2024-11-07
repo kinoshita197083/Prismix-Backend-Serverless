@@ -1,5 +1,4 @@
-const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
-const { COMPLETED } = require("../utils/config");
+const { COMPLETED, WAITING_FOR_REVIEW } = require("../utils/config");
 const dynamoService = require("./dynamoService");
 
 
@@ -20,18 +19,6 @@ const createReviewCompletionService = (
                 return 0;
             }
 
-            // const params = {
-            //     TableName: process.env.TASKS_TABLE,
-            //     KeyConditionExpression: 'JobID = :jobId',
-            //     FilterExpression: 'TaskStatus = :status',
-            //     ExpressionAttributeValues: {
-            //         ':jobId': jobId,
-            //         ':status': 'WAITING_FOR_REVIEW'
-            //     },
-            //     Select: 'COUNT' // Only get the count of matching items
-            // };
-
-            // const result = await jobProgressService.dynamoDB.send(new QueryCommand(params));
             const pendingCount = await dynamoService.getTaskCount(jobId, { status: WAITING_FOR_REVIEW }) || 0;
 
             console.log(`[verifyAllTasksReviewed] Found ${pendingCount} tasks pending review for job: ${jobId}`);
@@ -57,6 +44,7 @@ const createReviewCompletionService = (
                     `Job still has ${pendingReviews} tasks pending review`
                 );
             }
+            // Adjust job statistics to reflect auto-reviewed tasks is done by Next.js API
 
             // Let jobCompletionService handle the completion logic
             await jobCompletionService.handleJobCompletion(jobId, COMPLETED);

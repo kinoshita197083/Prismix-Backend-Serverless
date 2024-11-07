@@ -25,7 +25,7 @@ const processNotification = async (message) => {
             throw new Error(`No user data found for ID: ${jobData.userId}`);
         }
 
-        await sendEmailNotification(userData, jobId, status, additionalData);
+        await sendEmailNotification(userData, jobId, status, additionalData, jobData.projectId);
         await updateEmailSent(jobId);
 
         logger.info(`Notification sent successfully for job ${jobId}`);
@@ -35,9 +35,9 @@ const processNotification = async (message) => {
     }
 };
 
-const sendEmailNotification = async (user, jobId, status, additionalData) => {
+const sendEmailNotification = async (user, jobId, status, additionalData, projectId) => {
     const template = EmailTemplateService.getEmailTemplate(status);
-    const content = template.getContent(user.name, jobId, additionalData);
+    const content = template.getContent(user.name, jobId, additionalData, projectId);
 
     const params = {
         Destination: { ToAddresses: [user.email] },
@@ -97,4 +97,19 @@ async function fetchDataFromJobProgress(jobId) {
         logger.error('Error fetching userId from JobProgress:', { error, jobId });
         throw error;
     }
+}
+
+async function fetchUserData(userId) {
+    const { data: user, error } = await supabase
+        .from('User')
+        .select('name, email')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        logger.error('Error fetching user data:', { error, userId });
+        throw error;
+    }
+
+    return user;
 }

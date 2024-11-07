@@ -1,6 +1,6 @@
 const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
 
-const createJobStatisticsService = (jobProgressService, cloudWatchService) => {
+const createJobStatisticsService = (dynamoDBDocumentClient, cloudWatchService) => {
     const PAGINATION_CONFIG = {
         maxPages: 100,
         maxBatchSize: 100,
@@ -16,10 +16,11 @@ const createJobStatisticsService = (jobProgressService, cloudWatchService) => {
             failed: 0,
             waitingForReview: 0,
             lastEvaluatedKey: null,
+            reviewedImages: 0,
             failedLogs: []
         };
 
-        let lastEvaluatedKey = jobProgress.lastProcessedKey;
+        let lastEvaluatedKey = jobProgress?.lastProcessedKey;
         let pageCount = 0;
 
         try {
@@ -76,7 +77,7 @@ const createJobStatisticsService = (jobProgressService, cloudWatchService) => {
             params.ExclusiveStartKey = exclusiveStartKey;
         }
 
-        return await jobProgressService.dynamoDB.send(new QueryCommand(params));
+        return await dynamoDBDocumentClient.send(new QueryCommand(params));
     };
 
     const updateStatsFromItems = (stats, items) => {
@@ -104,6 +105,11 @@ const createJobStatisticsService = (jobProgressService, cloudWatchService) => {
                         s3ObjectKey: item.S3ObjectKey
                     });
                     break;
+            }
+
+            // Track reviewed images separately
+            if (item.TaskStatus === 'REVIEWED') {
+                stats.reviewedImages++;
             }
 
             // Update stats based on task status

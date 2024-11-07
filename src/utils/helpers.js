@@ -59,10 +59,19 @@ const createHash = (value) => {
     return crypto.createHash('md5').update(value).digest('hex');
 }
 
+// Helper function to chunk array into batches
+const chunkArray = (array, size) => {
+    return Array.from(
+        { length: Math.ceil(array.length / size) },
+        (_, index) => array.slice(index * size, (index + 1) * size)
+    );
+};
+
 module.exports = {
     sleep,
     streamToBuffer,
     calculateImageHash,
     formatLabels,
-    createHash
+    createHash,
+    chunkArray
 };

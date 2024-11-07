@@ -1,6 +1,7 @@
 const { COMPLETED, FAILED } = require("../utils/config");
+const dynamoService = require("./dynamoService");
 
-const createJobTimeoutService = (jobProgressService, notificationService) => {
+const createJobTimeoutService = (jobProgressService, notificationService, jobSchedulingService) => {
     // Centralize all timeout configurations
     const JOB_TIMEOUTS = {
         PROCESSING: {
@@ -8,25 +9,47 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
             INACTIVITY: 30 * 60 * 1000,    // 30 minutes
         },
         REVIEW: {
-            // DURATION: 72 * 60 * 60 * 1000, // 72 hours
-            DURATION: 0.1 * 60 * 60 * 1000, // 10 minutes TESTING TIMEOUT
-            INACTIVITY: 24 * 60 * 60 * 1000, // 24 hours
-            // EXTENSION: 24 * 60 * 60 * 1000  // 24 hours extension if needed
-            EXTENSION: 0.1 * 60 * 60 * 1000  // 10 minutes extension if needed
+            // DURATION: 0.05 * 60 * 60 * 1000, // 5 minutes TESTING TIMEOUT
+            // INACTIVITY: 0.01 * 60 * 60 * 1000, // 5 minutes TESTING TIMEOUT
+            // EXTENSION: 0.05 * 60 * 60 * 1000  // 5 minutes extension TESTING TIMEOUT
+            DURATION: 72 * 60 * 60 * 1000, // 72 hours
+            INACTIVITY: 8 * 60 * 60 * 1000, // 8 hours
+            EXTENSION: 24 * 60 * 60 * 1000  // 24 hours extension if needed
         }
     };
 
     const isJobTimedOut = (jobProgress) => {
-        const currentTime = new Date().getTime();
-        const startTime = new Date(+jobProgress.createdAt).getTime();
-        const lastUpdateTime = new Date(+jobProgress.updatedAt || jobProgress.createdAt).getTime();
+        // Convert timestamps safely, handling both numeric and ISO string formats
+        const parseTimestamp = (timestamp) => {
+            if (!timestamp) return Date.now(); // Default to current time if no timestamp
+            try {
+                // Handle string timestamps (both ISO and numeric strings)
+                if (typeof timestamp === 'string') {
+                    // If it's a numeric string, convert directly
+                    if (!isNaN(timestamp)) return parseInt(timestamp, 10);
+                    // Otherwise treat as ISO string
+                    return new Date(timestamp).getTime();
+                }
+                // Handle numeric timestamps
+                return typeof timestamp === 'number' ? timestamp : Date.now();
+            } catch (error) {
+                console.error('[parseTimestamp] Error parsing timestamp:', { timestamp, error });
+                return Date.now(); // Fallback to current time
+            }
+        };
 
-        console.log('[isJobTimedOut] Checking timeout for job:', {
-            jobId: jobProgress.JobId,
-            status: jobProgress.status,
-            currentTime,
-            startTime,
-            lastUpdateTime
+        const currentTime = Date.now();
+        const startTime = parseTimestamp(jobProgress.createdAt);
+        const lastUpdateTime = parseTimestamp(jobProgress.updatedAt);
+
+        // Add detailed logging to help debug
+        console.log('[isJobTimedOut] Timestamp details:', {
+            rawCreatedAt: jobProgress.createdAt,
+            rawUpdatedAt: jobProgress.updatedAt,
+            parsedStartTime: startTime,
+            parsedLastUpdateTime: lastUpdateTime,
+            currentTime: currentTime,
+            timeSinceLastUpdate: (currentTime - lastUpdateTime) / (60 * 1000) // in minutes
         });
 
         // Get appropriate timeout config based on job status
@@ -35,19 +58,10 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
             : JOB_TIMEOUTS.PROCESSING;
 
         console.log('[isJobTimedOut] Using timeout config:', timeoutConfig);
+        // TODO: fixed the timeout extension grace period
 
         // Check max duration timeout
         const maxDuration = timeoutConfig.DURATION;
-
-        console.log('[isJobTimedOut] condition check:', { result: currentTime - startTime > maxDuration, maxDuration });
-        if (currentTime - startTime > maxDuration) {
-            console.log('[isJobTimedOut] Job timed out due to max duration: ',);
-            return {
-                timedOut: true,
-                reason: 'MAX_DURATION_EXCEEDED',
-                details: `Job exceeded maximum ${jobProgress.status === 'WAITING_FOR_REVIEW' ? 'review' : 'processing'} time of ${maxDuration / (60 * 60 * 1000)} hours`
-            };
-        }
 
         // Check inactivity timeout - different thresholds for different statuses
         const inactivityThreshold = timeoutConfig.INACTIVITY;
@@ -55,6 +69,7 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
             // For review status, we might want to send notifications before timing out
             if (jobProgress.status === 'WAITING_FOR_REVIEW') {
                 const inactiveHours = (currentTime - lastUpdateTime) / (60 * 60 * 1000);
+                console.log('[isJobTimedOut] Job timed out due to review inactivity:', { inactiveHours });
                 return {
                     timedOut: true,
                     reason: 'REVIEW_INACTIVITY',
@@ -70,6 +85,22 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
             };
         }
 
+        console.log('[isJobTimedOut] condition check:', { result: currentTime - startTime > maxDuration, maxDuration });
+        if (currentTime - startTime > maxDuration) {
+            console.log('[isJobTimedOut] Job timed out due to max duration: ',);
+            return {
+                timedOut: true,
+                reason: 'MAX_DURATION_EXCEEDED',
+                details: `Job exceeded maximum ${jobProgress.status === 'WAITING_FOR_REVIEW' ? 'review' : 'processing'} time of ${maxDuration / (60 * 60 * 1000)} hours`
+            };
+        }
+
+        console.log('[isJobTimedOut] Time differences:', {
+            inactivityDiff: currentTime - lastUpdateTime,
+            inactivityThreshold: timeoutConfig.INACTIVITY,
+            isExceeded: currentTime - lastUpdateTime > timeoutConfig.INACTIVITY
+        });
+
         return { timedOut: false };
     };
 
@@ -84,15 +115,21 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
             // Check if job is already in terminal state
             if (['COMPLETED', 'FAILED', 'STALE'].includes(jobProgress.status)) {
                 console.log('[handleJobTimeout] Job already in terminal state:', jobProgress.status);
-                await jobSchedulingService.cleanupScheduledChecks(jobId);
                 return;
             }
 
             // Special handling for review timeouts with extension possibility
             if (timeoutInfo.reason === 'REVIEW_INACTIVITY' && timeoutInfo.canExtend) {
-                await handleReviewExtension(jobId, jobProgress);
+                console.log('[handleJobTimeout] Handling review extension for job:', { jobId });
+                await handleReviewExtension(jobId);
                 return;
             }
+
+            // Cleanup scheduled checks
+            await jobSchedulingService.cleanupScheduledChecks(jobId);
+
+            // Auto-review remaining tasks
+            await dynamoService.autoReviewAllRemainingTasks(jobId);
 
             const updates = {
                 status: FAILED,
@@ -114,23 +151,16 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
                 // TODO: refactor error fields
             }
 
-            // Update final statistics considering auto-reviewed items
-            const finalStats = await jobProgressService.getJobStatistics(jobId);
-            const adjustedStats = {
-                ...finalStats,
-                // Move waiting for review count to excluded count
-                excluded: finalStats.excluded + finalStats.waitingForReview,
-                waitingForReview: 0,
-                timeoutReason: timeoutInfo.reason,
-                autoReviewed: finalStats.waitingForReview // Track how many were auto-reviewed
-            };
-
+            // // Update final statistics considering auto-reviewed items
+            const adjustedStats = await jobProgressService.adjustJobStatistics(jobId);
             updates.statistics = adjustedStats;
 
             console.log('[handleJobTimeout] Updating job progress:', updates);
 
-            // Update job progress and status to both RDS and DynamoDB
+            // Update final statistics to job progress (DynamoDB)
             await jobProgressService.updateJobProgress(jobId, updates);
+
+            // Update job status to RDS
             await jobProgressService.updateJobStatusRDS(jobId, COMPLETED);
             console.log('[handleJobTimeout] Job statistics updated successfully again');
 
@@ -139,18 +169,20 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
                     error: 'TIMEOUT',
                     reason: timeoutInfo.reason,
                     details: timeoutInfo.details,
-                    autoReviewed: finalStats.waitingForReview > 0 ? {
-                        count: finalStats.waitingForReview,
-                        action: 'EXCLUDED'
-                    } : undefined
+                    // autoReviewed: finalStats.waitingForReview > 0 ? {
+                    //     count: finalStats.waitingForReview,
+                    //     action: 'EXCLUDED'
+                    // } : undefined
+                    autoReviewed: 0
                 });
             } else {
                 await notificationService.publishJobStatus(jobId, 'COMPLETED', {
                     finalStatistics: adjustedStats,
-                    autoReviewed: finalStats.waitingForReview > 0 ? {
-                        count: finalStats.waitingForReview,
-                        action: 'EXCLUDED'
-                    } : undefined
+                    // autoReviewed: finalStats.waitingForReview > 0 ? {
+                    //     count: finalStats.waitingForReview,
+                    //     action: 'EXCLUDED'
+                    // } : undefined
+                    autoReviewed: 0
                 });
             }
 
@@ -160,16 +192,21 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
         }
     };
 
-    const handleReviewExtension = async (jobId, jobProgress) => {
+    const handleReviewExtension = async (jobId) => {
+        console.log('[handleReviewExtension] Handling review extension for job:', { jobId });
         try {
             await jobProgressService.updateJobProgress(jobId, {
                 reviewExtended: true,
-                reviewExtendedAt: new Date().toISOString()
+                reviewExtendedAt: Date.now().toString()
             });
+
+            console.log('[handleReviewExtension] Job progress updated with review extension');
 
             await notificationService.publishJobStatus(jobId, 'REVIEW_EXTENDED', {
                 extendedUntil: new Date(Date.now() + JOB_TIMEOUTS.REVIEW.EXTENSION).toISOString()
             });
+
+            console.log('[handleReviewExtension] Notification published for review extension');
         } catch (error) {
             console.error('Error handling review extension:', error);
             throw error;
