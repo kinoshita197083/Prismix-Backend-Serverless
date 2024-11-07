@@ -1,5 +1,6 @@
 const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
 const { COMPLETED } = require("../utils/config");
+const dynamoService = require("./dynamoService");
 
 
 const createReviewCompletionService = (
@@ -19,18 +20,19 @@ const createReviewCompletionService = (
                 return 0;
             }
 
-            const params = {
-                TableName: process.env.TASKS_TABLE,
-                KeyConditionExpression: 'JobID = :jobId',
-                FilterExpression: 'TaskStatus = :status',
-                ExpressionAttributeValues: {
-                    ':jobId': jobId,
-                    ':status': 'WAITING_FOR_REVIEW'
-                }
-            };
+            // const params = {
+            //     TableName: process.env.TASKS_TABLE,
+            //     KeyConditionExpression: 'JobID = :jobId',
+            //     FilterExpression: 'TaskStatus = :status',
+            //     ExpressionAttributeValues: {
+            //         ':jobId': jobId,
+            //         ':status': 'WAITING_FOR_REVIEW'
+            //     },
+            //     Select: 'COUNT' // Only get the count of matching items
+            // };
 
-            const result = await jobProgressService.dynamoDB.send(new QueryCommand(params));
-            const pendingCount = result.Items?.length || 0;
+            // const result = await jobProgressService.dynamoDB.send(new QueryCommand(params));
+            const pendingCount = await dynamoService.getTaskCount(jobId, { status: WAITING_FOR_REVIEW }) || 0;
 
             console.log(`[verifyAllTasksReviewed] Found ${pendingCount} tasks pending review for job: ${jobId}`);
             return pendingCount;

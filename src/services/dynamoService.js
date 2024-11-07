@@ -255,6 +255,22 @@ const dynamoService = {
             reason: qualityIssues,
             updatedAt: Date.now().toString(),
         });
+    },
+
+    async getTaskCount(jobId, options = { status: COMPLETED }) {
+        const params = {
+            TableName: process.env.TASKS_TABLE,
+            KeyConditionExpression: 'JobID = :jobId',
+            FilterExpression: 'TaskStatus = :status',
+            ExpressionAttributeValues: {
+                ':jobId': jobId,
+                ':status': options.status
+            },
+            Select: 'COUNT' // Only get the count of matching items
+        };
+
+        const result = await docClient.send(new QueryCommand(params));
+        return result.Count;
     }
 };
 

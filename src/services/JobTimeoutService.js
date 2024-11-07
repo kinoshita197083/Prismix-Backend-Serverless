@@ -100,21 +100,19 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
                     code: 'TIMEOUT',
                     reason: timeoutInfo.reason,
                     details: timeoutInfo.details,
-                    timeoutAt: new Date().toISOString()
+                    timeoutAt: Date.now().toString()
                 },
-                completedAt: new Date().toISOString()
+                completedAt: Date.now().toString()
             };
 
             // Add auto-review flag if timing out during review
             if (jobProgress.status === 'WAITING_FOR_REVIEW') {
                 updates.autoReviewedAsExcluded = true;
-                updates.autoReviewedAt = new Date().toISOString();
+                updates.autoReviewedAt = Date.now().toString();
                 updates.autoReviewReason = 'REVIEW_TIMEOUT';
                 updates.status = COMPLETED;
                 // TODO: refactor error fields
             }
-
-            await jobProgressService.updateJobProgress(jobId, updates);
 
             // Update final statistics considering auto-reviewed items
             const finalStats = await jobProgressService.getJobStatistics(jobId);
@@ -127,9 +125,14 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
                 autoReviewed: finalStats.waitingForReview // Track how many were auto-reviewed
             };
 
-            await jobProgressService.updateJobProgress(jobId, {
-                statistics: adjustedStats
-            });
+            updates.statistics = adjustedStats;
+
+            console.log('[handleJobTimeout] Updating job progress:', updates);
+
+            // Update job progress and status to both RDS and DynamoDB
+            await jobProgressService.updateJobProgress(jobId, updates);
+            await jobProgressService.updateJobStatusRDS(jobId, COMPLETED);
+            console.log('[handleJobTimeout] Job statistics updated successfully again');
 
             if (jobProgress.status === FAILED) {
                 await notificationService.publishJobStatus(jobId, 'FAILED', {

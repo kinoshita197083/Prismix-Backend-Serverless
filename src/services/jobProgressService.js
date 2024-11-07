@@ -67,8 +67,8 @@ class JobProgressService {
             duplicateImages: data.duplicateImages || 0,
             excludedImages: data.excludedImages || 0,
             reviewedImages: data.reviewedImages || 0,
-            processingDetails: data.processingDetails || { failedProcessedImages: [] },
-            requiredManualReview: data.requiredManualReview || false
+            requiredManualReview: data.requiredManualReview || false,
+            processingDetails: data.processingDetails || {}
         };
 
         const { regularParams, manualReviewParams } = this._buildUpdateParams(jobId, cleanData, currentVersion);
@@ -169,10 +169,10 @@ class JobProgressService {
             ':duplicateImages': data.duplicateImages,
             ':excludedImages': data.excludedImages,
             ':reviewedImages': data.reviewedImages,
-            ':processingDetails': data.processingDetails,
             ':newVersion': currentVersion + 1,
             ':currentVersion': currentVersion,
-            ':updatedAt': new Date().toISOString()
+            ':updatedAt': new Date().toISOString(),
+            ':processingDetails': data.processingDetails || {},
         };
 
         const regularParams = {
@@ -187,7 +187,7 @@ class JobProgressService {
                     reviewedImages = :reviewedImages,
                     processingDetails = :processingDetails,
                     version = :newVersion,
-                    updatedAt = :updatedAt
+                    updatedAt = :updatedAt,
             `,
             ExpressionAttributeNames: {
                 '#status': 'status'
