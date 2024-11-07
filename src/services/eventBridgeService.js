@@ -1,9 +1,10 @@
-const { EventBridgeClient, DisableRuleCommand, DeleteRuleCommand,
-    ListTargetsByRuleCommand, RemoveTargetsCommand, DescribeRuleCommand } = require("@aws-sdk/client-eventbridge");
+const { DisableRuleCommand, DeleteRuleCommand,
+    DescribeRuleCommand, PutRuleCommand, PutTargetsCommand } = require("@aws-sdk/client-eventbridge");
 
 class EventBridgeService {
-    constructor(eventBridgeClient) {
+    constructor(eventBridgeClient, config) {
         this.eventBridgeClient = eventBridgeClient;
+        this.config = config;
     }
 
     getRuleName(jobId) {
@@ -65,6 +66,51 @@ class EventBridgeService {
             }
         }
     }
+
+    async createEventBridgeRule(ruleName, scheduleExpression, jobId, action, status) {
+        console.log(`[EventBridgeService] Creating rule: ${ruleName} with schedule: ${scheduleExpression} & config: `, this.config);
+        try {
+            await this.eventBridgeClient.send(new PutRuleCommand({
+                Name: ruleName,
+                ScheduleExpression: scheduleExpression,
+                State: 'ENABLED',
+                Description: `${action} schedule for job ${jobId}`
+            }));
+
+            await this.eventBridgeClient.send(new PutTargetsCommand({
+                Rule: ruleName,
+                Targets: [{
+                    Id: `${action}Target-${jobId}`,
+                    Arn: this.config.lambdaArn,
+                    Input: JSON.stringify({
+                        Records: [{
+                            messageId: `${action}-${Date.now()}`,
+                            body: JSON.stringify({
+                                jobId,
+                                action,
+                                status,
+                                timestamp: new Date().toISOString()
+                            }),
+                            messageAttributes: {
+                                eventType: {
+                                    stringValue: action,
+                                    stringListValues: [],
+                                    binaryListValues: [],
+                                    dataType: "String"
+                                }
+                            }
+                        }]
+                    })
+                }]
+            }));
+
+            console.log(`Scheduled ${action} for job ${jobId}`);
+            return true;
+        } catch (error) {
+            console.error(`Error scheduling ${action}:`, error);
+            return false;
+        }
+    };
 }
 
 module.exports = EventBridgeService; 

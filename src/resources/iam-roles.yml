@@ -262,15 +262,15 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - events:DisableRule
-                  - events:DeleteRule
-                  - events:ListTargetsByRule
-                  - events:RemoveTargets
-                  - events:DescribeRule
                   - events:PutRule
                   - events:PutTargets
-                Resource: 
-                  Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
+                  - events:DeleteRule
+                  - events:RemoveTargets
+                  - events:DisableRule
+                  - events:DescribeRule
+                Resource:
+                  - Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobTimeout-*
+                  - Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
 
   DeliveryProcessorRole:
     Type: AWS::IAM::Role

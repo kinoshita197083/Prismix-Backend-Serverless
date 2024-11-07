@@ -9,25 +9,39 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
         },
         REVIEW: {
             // DURATION: 72 * 60 * 60 * 1000, // 72 hours
-            DURATION: 1 * 60 * 60 * 1000, // 1 hours TESTING
+            DURATION: 0.1 * 60 * 60 * 1000, // 10 minutes TESTING TIMEOUT
             INACTIVITY: 24 * 60 * 60 * 1000, // 24 hours
-            EXTENSION: 24 * 60 * 60 * 1000  // 24 hours extension if needed
+            // EXTENSION: 24 * 60 * 60 * 1000  // 24 hours extension if needed
+            EXTENSION: 0.1 * 60 * 60 * 1000  // 10 minutes extension if needed
         }
     };
 
     const isJobTimedOut = (jobProgress) => {
         const currentTime = new Date().getTime();
-        const startTime = new Date(jobProgress.createdAt).getTime();
-        const lastUpdateTime = new Date(jobProgress.updatedAt || jobProgress.createdAt).getTime();
+        const startTime = new Date(+jobProgress.createdAt).getTime();
+        const lastUpdateTime = new Date(+jobProgress.updatedAt || jobProgress.createdAt).getTime();
+
+        console.log('[isJobTimedOut] Checking timeout for job:', {
+            jobId: jobProgress.JobId,
+            status: jobProgress.status,
+            currentTime,
+            startTime,
+            lastUpdateTime
+        });
 
         // Get appropriate timeout config based on job status
         const timeoutConfig = jobProgress.status === 'WAITING_FOR_REVIEW'
             ? JOB_TIMEOUTS.REVIEW
             : JOB_TIMEOUTS.PROCESSING;
 
+        console.log('[isJobTimedOut] Using timeout config:', timeoutConfig);
+
         // Check max duration timeout
         const maxDuration = timeoutConfig.DURATION;
+
+        console.log('[isJobTimedOut] condition check:', { result: currentTime - startTime > maxDuration, maxDuration });
         if (currentTime - startTime > maxDuration) {
+            console.log('[isJobTimedOut] Job timed out due to max duration: ',);
             return {
                 timedOut: true,
                 reason: 'MAX_DURATION_EXCEEDED',

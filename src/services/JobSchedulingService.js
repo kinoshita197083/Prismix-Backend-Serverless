@@ -1,4 +1,3 @@
-const { PutRuleCommand, PutTargetsCommand } = require('@aws-sdk/client-eventbridge');
 const { SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { WAITING_FOR_REVIEW, COMPLETED, FAILED } = require('../utils/config');
 
@@ -8,7 +7,8 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
         INITIAL_INTERVAL: 60, // 1 minute in seconds
         MAX_INTERVAL: 300,    // 5 minutes in seconds
         REVIEW_INTERVAL: 900, // 15 minutes in seconds
-        REVIEW_TIMEOUT_CHECK_INTERVAL: 30,    // 30 minutes
+        // REVIEW_TIMEOUT_CHECK_INTERVAL: 30,    // 30 minutes
+        REVIEW_TIMEOUT_CHECK_INTERVAL: 1,    // 1 minute TESTING
         PROCESSING_TIMEOUT_CHECK_INTERVAL: 15, // 15 minutes
         MAX_ATTEMPTS: 3,
         BACKOFF_MULTIPLIER: 2
@@ -42,45 +42,14 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
         }
     };
 
-    const createEventBridgeRule = async (ruleName, interval, jobId, action, status) => {
-        try {
-            await eventBridge.send(new PutRuleCommand({
-                Name: ruleName,
-                ScheduleExpression: `rate(${interval})`,
-                State: 'ENABLED',
-                Description: `${action} schedule for job ${jobId}`
-            }));
-
-            await eventBridge.send(new PutTargetsCommand({
-                Rule: ruleName,
-                Targets: [{
-                    Id: `${action}Target-${jobId}`,
-                    Arn: config.lambdaArn,
-                    Input: JSON.stringify({
-                        jobId,
-                        action,
-                        status,
-                        timestamp: new Date().toISOString()
-                    })
-                }]
-            }));
-
-            console.log(`Scheduled ${action} for job ${jobId}`);
-            return true;
-        } catch (error) {
-            console.error(`Error scheduling ${action}:`, error);
-            return false;
-        }
-    };
-
     const scheduleTimeoutCheck = async (jobId, status) => {
         const timeoutConfig = status === 'WAITING_FOR_REVIEW'
             ? SCHEDULE_CONFIG.REVIEW_TIMEOUT_CHECK_INTERVAL
             : SCHEDULE_CONFIG.PROCESSING_TIMEOUT_CHECK_INTERVAL;
 
-        return createEventBridgeRule(
+        return eventBridgeService.createEventBridgeRule(
             `JobTimeout-${jobId}`,
-            `${timeoutConfig} minutes`,
+            `rate(${timeoutConfig} minute${timeoutConfig > 1 ? 's' : ''})`,
             jobId,
             'TIMEOUT_CHECK',
             status
@@ -88,9 +57,9 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
     };
 
     const scheduleWithEventBridge = async (jobId, delaySeconds, currentStatus) => {
-        return createEventBridgeRule(
+        return eventBridgeService.createEventBridgeRule(
             `JobProgressCheck-${jobId}`,
-            `${delaySeconds} seconds`,
+            `rate(${delaySeconds} seconds)`,
             jobId,
             'PROGRESS_CHECK',
             currentStatus

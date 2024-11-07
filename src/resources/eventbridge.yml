@@ -6,29 +6,15 @@ Resources:
         Fn::GetAtt: [JobProgressCheckerLambdaFunction, Arn]
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: 
-        !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*"
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*"
 
-
-  # EventBridge rule for job cleanup (runs every day)
-  # JobCleanupEventsRuleSchedule:
-  #   Type: AWS::Events::Rule
-  #   Properties:
-  #     Name: !Sub "${AWS::StackName}-job-cleanup-schedule"
-  #     Description: "Schedule for job cleanup lambda"
-  #     ScheduleExpression: "rate(1 day)"
-  #     State: "ENABLED"
-  #     Targets:
-  #       - Arn: !GetAtt JobCleanupLambdaFunction.Arn
-  #         Id: "JobCleanupTarget"
-
-  # # Lambda permission for EventBridge to invoke job cleanup
-  # JobCleanupLambdaPermissionEventsRuleSchedule:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !GetAtt JobCleanupLambdaFunction.Arn
-  #     Action: "lambda:InvokeFunction"
-  #     Principal: "events.amazonaws.com"
-  #     SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${AWS::StackName}-job-cleanup-schedule"
+  JobTimeoutCheckerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Fn::GetAtt: [JobProgressCheckerLambdaFunction, Arn]
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobTimeout-*"
 
 

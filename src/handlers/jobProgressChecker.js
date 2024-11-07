@@ -36,11 +36,18 @@ const config = {
     jobProgressTable: process.env.JOB_PROGRESS_TABLE
 };
 
+const eventSchedulingConfig = {
+    region: process.env.AWS_REGION,
+    accountId: process.env.AWS_ACCOUNT_ID,
+    lambdaArn: process.env.JOB_PROGRESS_CHECKER_LAMBDA_ARN,
+    jobProgressQueueUrl: process.env.JOB_PROGRESS_QUEUE_URL
+}
+
 // Initialize base services
 const jobProgressService = new JobProgressService(documentClient, config);
 const cloudWatchService = new CloudWatchService(cloudWatch, config);
 const notificationService = new NotificationService(sns, process.env.JOB_COMPLETION_TOPIC_ARN);
-const eventBridgeService = new EventBridgeService(eventBridge);
+const eventBridgeService = new EventBridgeService(eventBridge, eventSchedulingConfig,);
 
 // Initialize functional services
 const jobHealthService = createJobHealthService(jobProgressService);
@@ -49,12 +56,7 @@ const jobStatisticsService = createJobStatisticsService(jobProgressService, clou
 const jobSchedulingService = createJobSchedulingService(
     eventBridgeService,
     sqs,
-    {
-        region: process.env.AWS_REGION,
-        accountId: process.env.AWS_ACCOUNT_ID,
-        lambdaArn: process.env.JOB_PROGRESS_CHECKER_LAMBDA_ARN,
-        jobProgressQueueUrl: process.env.JOB_PROGRESS_QUEUE_URL
-    },
+    eventSchedulingConfig,
     jobProgressService
 );
 const jobCompletionService = createJobCompletionService(
@@ -161,11 +163,12 @@ const handleTimeoutCheck = async (jobId, jobProgress) => {
         ]);
         return true;
     }
+    console.log('Job not timed out for jobId:', jobId);
     return false;
 };
 
 // Regular progress check handler
-const handleRegularProgressCheck = async (jobId) => {
+const handleRegularProgressCheck = async (jobId, jobProgress) => {
     const circuitBreaker = createCircuitBreaker(jobId, jobProgressService);
     console.log('Circuit breaker created for jobId:', jobId);
 
@@ -178,10 +181,11 @@ const handleRegularProgressCheck = async (jobId) => {
         }
         console.log('Health check completed for jobId:', jobId);
 
-        const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
+        // const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
 
         // Check timeout first
         if (await handleTimeoutCheck(jobId, jobProgress)) {
+            console.log('Job timed out, skipping progress check');
             return;
         }
         console.log('Job not timed out for jobId:', jobId);
