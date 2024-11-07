@@ -8,7 +8,8 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
             INACTIVITY: 30 * 60 * 1000,    // 30 minutes
         },
         REVIEW: {
-            DURATION: 72 * 60 * 60 * 1000, // 72 hours
+            // DURATION: 72 * 60 * 60 * 1000, // 72 hours
+            DURATION: 1 * 60 * 60 * 1000, // 1 hours TESTING
             INACTIVITY: 24 * 60 * 60 * 1000, // 24 hours
             EXTENSION: 24 * 60 * 60 * 1000  // 24 hours extension if needed
         }
@@ -66,7 +67,14 @@ const createJobTimeoutService = (jobProgressService, notificationService) => {
         });
 
         try {
-            // Special handling for review timeouts
+            // Check if job is already in terminal state
+            if (['COMPLETED', 'FAILED', 'STALE'].includes(jobProgress.status)) {
+                console.log('[handleJobTimeout] Job already in terminal state:', jobProgress.status);
+                await jobSchedulingService.cleanupScheduledChecks(jobId);
+                return;
+            }
+
+            // Special handling for review timeouts with extension possibility
             if (timeoutInfo.reason === 'REVIEW_INACTIVITY' && timeoutInfo.canExtend) {
                 await handleReviewExtension(jobId, jobProgress);
                 return;

@@ -15,59 +15,54 @@ const createJobCompletionService = (
         });
 
         try {
-            // const currentJob = await jobProgressService.getCurrentJobProgress(jobId);
+            // First ensure the job exists and isn't already completed
+            const currentJob = await jobProgressService.getCurrentJobProgress(jobId);
+            if (!currentJob) {
+                throw new Error(`Job ${jobId} not found`);
+            }
 
-            // if (!currentJob) {
-            //     throw new Error(`Job ${jobId} not found`);
-            // }
+            if (['COMPLETED', 'FAILED'].includes(currentJob.status)) {
+                console.log('[handleJobCompletion] entered terminal state check');
+                // return true;
+            }
 
             try {
-                console.log('[handleJobCompletion] Publishing job completion event');
+                // Step 1: Clean up scheduled checks first
+                console.log('[handleJobCompletion] Job already in terminal state:', currentJob.status);
+                await jobSchedulingService.cleanupScheduledChecks(jobId);
 
-                if (newStatus === 'COMPLETED') {
-                    await Promise.all([
-                        jobSchedulingService.cleanupScheduledChecks(jobId),
-                        notificationService.publishJobStatus(jobId, newStatus, {
-                            completedAt: new Date().toISOString(),
-                            status: newStatus,
-                        }),
-                        jobProgressService.updateJobStatusRDS(jobId, newStatus)
-                    ]);
-                }
+                // Step 2: Update status and notify in parallel
+                await Promise.all([
+                    notificationService.publishJobStatus(jobId, newStatus, {
+                        completedAt: new Date().toISOString(),
+                        status: newStatus
+                    }),
+                    jobProgressService.updateJobStatusRDS(jobId, newStatus)
+                ]);
+
+                // Step 3: Record completion metrics
+                await cloudWatchService.recordMetrics('JobCompletion', {
+                    status: newStatus,
+                    duration: Date.now() - new Date(currentJob.createdAt).getTime()
+                });
 
                 console.log('[handleJobCompletion] Job completion processed successfully');
-
                 return true;
 
             } catch (error) {
-                if (error.name === 'ConditionalCheckFailedException') {
-                    if (retryCount < MAX_RETRIES) {
-                        console.log('[handleJobCompletion] Optimistic lock failed, retrying...', {
-                            jobId,
-                            retryCount: retryCount + 1
-                        });
+                if (error.name === 'ConditionalCheckFailedException' && retryCount < MAX_RETRIES) {
+                    console.log('[handleJobCompletion] Optimistic lock failed, retrying...', {
+                        retryCount: retryCount + 1
+                    });
 
-                        const delay = Math.pow(2, retryCount) * 100; // 100ms, 200ms, 400ms
-                        await new Promise(resolve => setTimeout(resolve, delay));
-
-                        return handleJobCompletion(jobId, newStatus, retryCount + 1);
-                    }
-
-                    throw new Error(`Failed to update job ${jobId} after ${MAX_RETRIES} retries due to concurrent modifications`);
+                    const delay = Math.min(Math.pow(2, retryCount) * 100, 1000); // Max 1 second delay
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return handleJobCompletion(jobId, newStatus, retryCount + 1);
                 }
-
                 throw error;
             }
-
         } catch (error) {
-            console.error('[handleJobCompletion] Error updating job completion:', error);
-
-            await cloudWatchService.recordMetrics('JobCompletionError', {
-                jobId,
-                error: error.message,
-                retryCount
-            });
-
+            console.error('[handleJobCompletion] Error completing job:', error);
             throw error;
         }
     };

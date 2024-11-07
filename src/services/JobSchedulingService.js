@@ -8,6 +8,8 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
         INITIAL_INTERVAL: 60, // 1 minute in seconds
         MAX_INTERVAL: 300,    // 5 minutes in seconds
         REVIEW_INTERVAL: 900, // 15 minutes in seconds
+        REVIEW_TIMEOUT_CHECK_INTERVAL: 30,    // 30 minutes
+        PROCESSING_TIMEOUT_CHECK_INTERVAL: 15, // 15 minutes
         MAX_ATTEMPTS: 3,
         BACKOFF_MULTIPLIER: 2
     };
@@ -40,40 +42,59 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
         }
     };
 
-    const scheduleWithEventBridge = async (jobId, delaySeconds, currentStatus) => {
-        const ruleName = `JobProgressCheck-${jobId}`;
-        const ruleArn = `arn:aws:events:${config.region}:${config.accountId}:rule/${ruleName}`;
-
+    const createEventBridgeRule = async (ruleName, interval, jobId, action, status) => {
         try {
-            // Create or update EventBridge rule
             await eventBridge.send(new PutRuleCommand({
                 Name: ruleName,
-                ScheduleExpression: `rate(${delaySeconds} seconds)`,
+                ScheduleExpression: `rate(${interval})`,
                 State: 'ENABLED',
-                Description: `Progress check schedule for job ${jobId}`
+                Description: `${action} schedule for job ${jobId}`
             }));
 
-            // Set Lambda function as target
             await eventBridge.send(new PutTargetsCommand({
                 Rule: ruleName,
                 Targets: [{
-                    Id: `JobProgressTarget-${jobId}`,
+                    Id: `${action}Target-${jobId}`,
                     Arn: config.lambdaArn,
                     Input: JSON.stringify({
                         jobId,
-                        action: 'PROGRESS_CHECK',
-                        status: currentStatus,
+                        action,
+                        status,
                         timestamp: new Date().toISOString()
                     })
                 }]
             }));
 
-            console.log(`Scheduled next check with EventBridge for job ${jobId} in ${delaySeconds} seconds`);
+            console.log(`Scheduled ${action} for job ${jobId}`);
             return true;
         } catch (error) {
-            console.error('Error scheduling with EventBridge:', error);
+            console.error(`Error scheduling ${action}:`, error);
             return false;
         }
+    };
+
+    const scheduleTimeoutCheck = async (jobId, status) => {
+        const timeoutConfig = status === 'WAITING_FOR_REVIEW'
+            ? SCHEDULE_CONFIG.REVIEW_TIMEOUT_CHECK_INTERVAL
+            : SCHEDULE_CONFIG.PROCESSING_TIMEOUT_CHECK_INTERVAL;
+
+        return createEventBridgeRule(
+            `JobTimeout-${jobId}`,
+            `${timeoutConfig} minutes`,
+            jobId,
+            'TIMEOUT_CHECK',
+            status
+        );
+    };
+
+    const scheduleWithEventBridge = async (jobId, delaySeconds, currentStatus) => {
+        return createEventBridgeRule(
+            `JobProgressCheck-${jobId}`,
+            `${delaySeconds} seconds`,
+            jobId,
+            'PROGRESS_CHECK',
+            currentStatus
+        );
     };
 
     const scheduleWithSQS = async (jobId, delaySeconds, currentStatus, options = {}) => {
@@ -141,9 +162,9 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
 
             // For WAITING_FOR_REVIEW status, only update RDS and exit
             if (currentStatus === WAITING_FOR_REVIEW) {
-                console.log('[JobSchedulingService.scheduleNextCheck] Job is waiting for review');
+                console.log('[JobSchedulingService.scheduleNextCheck] Job is waiting for review, scheduling timeout check');
                 await jobProgressService.updateJobStatusRDS(jobId, WAITING_FOR_REVIEW);
-                // TODO: schedule a review every 6 hours
+                await scheduleTimeoutCheck(jobId, currentStatus);
                 return;
             }
 
@@ -198,20 +219,28 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
         console.log('[JobSchedulingService.cleanupScheduledChecks] Cleaning up scheduled checks for job:', jobId);
 
         try {
-            // Clean up EventBridge rule if it exists
-            const ruleName = `JobProgressCheck-${jobId}`;
+            // Clean up both progress check and timeout check EventBridge rules
+            const ruleNames = [
+                `JobProgressCheck-${jobId}`,
+                `JobTimeout-${jobId}`
+            ];
 
-            try {
-                await eventBridgeService.disableAndDeleteRule(jobId);
-                console.log('[JobSchedulingService.cleanupScheduledChecks] Deleted EventBridge rule:', ruleName);
+            // Run rule deletions in parallel
+            await Promise.all(
+                ruleNames.map(async ruleName => {
+                    try {
+                        await eventBridgeService.disableAndDeleteRule(jobId, ruleName);
+                        console.log('[JobSchedulingService.cleanupScheduledChecks] Deleted EventBridge rule:', ruleName);
+                    } catch (error) {
+                        // Don't throw if rule doesn't exist
+                        if (error.name !== 'ResourceNotFoundException') {
+                            console.error('[JobSchedulingService.cleanupScheduledChecks] Error cleaning up EventBridge rule:', error);
+                        }
+                    }
+                })
+            );
 
-                console.log('[JobSchedulingService.cleanupScheduledChecks] Successfully cleaned up EventBridge rule');
-            } catch (error) {
-                // Don't throw if rule doesn't exist
-                if (error.name !== 'ResourceNotFoundException') {
-                    console.error('[JobSchedulingService.cleanupScheduledChecks] Error cleaning up EventBridge rule:', error);
-                }
-            }
+            console.log('[JobSchedulingService.cleanupScheduledChecks] Successfully cleaned up EventBridge rules');
 
             // Purge any pending SQS messages for this job
             // Note: We can't selectively delete messages, but we can mark them for non-processing
@@ -220,7 +249,6 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
                 schedulingStatus: 'CLEANUP_REQUESTED',
                 cleanupTimestamp: new Date().toISOString()
             });
-
 
             console.log('[JobSchedulingService.cleanupScheduledChecks] Successfully marked job for cleanup');
             return true;
@@ -234,7 +262,8 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
     return {
         scheduleNextCheck,
         cleanupScheduledChecks,
-        determineNextCheckInterval // Exposed for testing
+        determineNextCheckInterval,
+        scheduleTimeoutCheck
     };
 };
 

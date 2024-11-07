@@ -113,46 +113,55 @@ exports.handler = async (event) => {
 // Main message handler
 const handleJobMessage = async (jobId, eventType, messageAttributes) => {
     const isUserTriggered = messageAttributes?.priority?.stringValue === 'high';
-    console.log('isUserTriggered:', isUserTriggered);
+    console.log('[handleJobMessage] Processing message:', { jobId, eventType, isUserTriggered });
 
-    const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
+    try {
+        const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
 
-    // Skip processing if job is in terminal state
-    if (['COMPLETED', 'FAILED', 'STALE'].includes(jobProgress?.status)) {
-        console.log(`Skipping processing for completed job: ${jobId}`);
-        return;
-    }
-
-    if (jobProgress?.schedulingStatus === 'CLEANUP_REQUESTED') {
-        console.log(`Skipping processing for cleaned up job: ${jobId}`);
-        return;
-    }
-
-    if (eventType === 'REVIEW_COMPLETED') {
-        console.log(`Handling review completion for jobId: ${jobId}`, {
-            isUserTriggered
-        });
-
-        try {
-            console.log('Handling review completion for jobId:', jobId);
-            await reviewCompletionService.handleReviewCompletion(jobId);
-
-            // Cleanup scheduled checks after successful completion
-            await jobSchedulingService.cleanupScheduledChecks(jobId);
-            console.log('Cleanup completed for jobId:', jobId);
-
-        } catch (error) {
-            if (isUserTriggered) {
-                // For user-triggered actions, we might want to handle errors differently
-                console.error('User-triggered review completion failed:', error);
-                // Potentially notify the user through a websocket or other mechanism
-            }
-            throw error;
+        // Early exit for terminal states
+        if (!jobProgress ||
+            ['COMPLETED', 'FAILED', 'STALE'].includes(jobProgress?.status) ||
+            jobProgress?.schedulingStatus === 'CLEANUP_REQUESTED') {
+            console.log('[handleJobMessage] Skipping processing for completed/cleaned up job:', jobId);
+            return;
         }
-    } else {
-        console.log(`Handling regular progress check for jobId: ${jobId}`);
-        await handleRegularProgressCheck(jobId);
+
+        // Handle different event types
+        switch (eventType) {
+            case 'REVIEW_COMPLETED':
+                await reviewCompletionService.handleReviewCompletion(jobId);
+                break;
+            case 'TIMEOUT_CHECK':
+                await handleTimeoutCheck(jobId, jobProgress);
+                break;
+            case 'PROGRESS_CHECK':
+                await handleRegularProgressCheck(jobId, jobProgress);
+                break;
+            default:
+                console.warn('[handleJobMessage] Unknown event type:', eventType);
+                break;
+        }
+    } catch (error) {
+        console.error('[handleJobMessage] Error processing message:', error);
+        await errorHandlingService.handleProcessingError(jobId, error);
+        throw error;
     }
+};
+
+const handleTimeoutCheck = async (jobId, jobProgress) => {
+    console.log(`Checking timeout for job: ${jobId}`);
+
+    const timeoutStatus = jobTimeoutService.isJobTimedOut(jobProgress);
+
+    if (timeoutStatus.timedOut) {
+        console.log('Job timed out, handling timeout');
+        await Promise.all([
+            jobTimeoutService.handleJobTimeout(jobId, jobProgress, timeoutStatus),
+            jobSchedulingService.cleanupScheduledChecks(jobId)
+        ]);
+        return true;
+    }
+    return false;
 };
 
 // Regular progress check handler
@@ -169,16 +178,10 @@ const handleRegularProgressCheck = async (jobId) => {
         }
         console.log('Health check completed for jobId:', jobId);
 
-        console.log('Checking job timeout for jobId:', jobId);
-        // Get job progress and check timeout
         const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
-        const timeoutStatus = jobTimeoutService.isJobTimedOut(jobProgress);
-        console.log('Job timeout status:', timeoutStatus);
 
-        // TODO: implement event bridge timeout event to periodically check job progress, otherwise this handleJobTimeout will be only be called when a user triggers a review
-        if (timeoutStatus.timedOut) {
-            console.log('Job timed out for jobId:', jobId);
-            await jobTimeoutService.handleJobTimeout(jobId, jobProgress, timeoutStatus);
+        // Check timeout first
+        if (await handleTimeoutCheck(jobId, jobProgress)) {
             return;
         }
         console.log('Job not timed out for jobId:', jobId);
@@ -253,10 +256,8 @@ const handleRegularProgressCheck = async (jobId) => {
             console.log('Handling job completion for jobId:', jobId);
             await jobCompletionService.handleJobCompletion(jobId, newStatus);
         }
-
     } catch (error) {
-        console.error('Error handling job progress:', error);
-        await errorHandlingService.handleProcessingError(jobId, error);
+        console.error('[handleRegularProgressCheck] Error during progress check:', error);
         throw error;
     }
 };

@@ -27,7 +27,11 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
 
             if (error.code === 'HEALTH_CHECK_FAILED' && currentHealthCheckRetries < MAX_HEALTH_CHECK_RETRIES) {
                 // Implement exponential backoff for health check retries
-                const backoffDelay = Math.pow(2, currentHealthCheckRetries) * 1000; // 1s, 2s, 4s
+                const MAX_BACKOFF_DELAY = 300000; // 5 minutes
+                const backoffDelay = Math.min(
+                    Math.pow(2, currentHealthCheckRetries) * 1000,
+                    MAX_BACKOFF_DELAY
+                );
 
                 await jobProgressService.updateJobProgress(jobId, {
                     // status: 'IN_PROGRESS',
