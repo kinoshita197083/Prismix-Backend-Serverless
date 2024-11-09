@@ -113,7 +113,7 @@ class EventBridgeService {
                                 jobId,
                                 action,
                                 status,
-                                timestamp: new Date().toISOString()
+                                timestamp: Date.now().toString()
                             }),
                             messageAttributes: {
                                 eventType: {

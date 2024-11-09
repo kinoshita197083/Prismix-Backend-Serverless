@@ -69,7 +69,7 @@ async function updateTaskStatus(jobId, taskId, status, retryCount) {
         ExpressionAttributeValues: {
             ':status': status,
             ':retryCount': retryCount,
-            ':updatedAt': new Date().toISOString()
+            ':updatedAt': Date.now().toString()
         }
     });
 

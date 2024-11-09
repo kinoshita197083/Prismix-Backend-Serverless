@@ -41,11 +41,11 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
                         lastError: {
                             code: error.code,
                             message: error.message,
-                            timestamp: new Date().toISOString(),
+                            timestamp: Date.now().toString(),
                             details: error.details || {}
                         },
                         healthCheckRetries: currentHealthCheckRetries + 1,
-                        lastHealthCheckAttempt: new Date().toISOString()
+                        lastHealthCheckAttempt: Date.now().toString()
                     }
                 });
 
@@ -68,11 +68,11 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
                     lastError: {
                         code: error.code,
                         message: error.message,
-                        timestamp: new Date().toISOString(),
+                        timestamp: Date.now().toString(),
                         details: error.details || {}
                     }
                 },
-                completedAt: new Date().toISOString()
+                completedAt: Date.now().toString()
             });
 
             // Update job status in RDS

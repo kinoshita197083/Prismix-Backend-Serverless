@@ -64,7 +64,7 @@ async function updateJobProgressWithError(jobId, error) {
         UpdateExpression: 'SET processingErrors = list_append(if_not_exists(processingErrors, :empty), :error)',
         ExpressionAttributeValues: {
             ':error': [{
-                timestamp: new Date().toISOString(),
+                timestamp: Date.now().toString(),
                 error: error.message,
                 code: error.code
             }],
@@ -116,7 +116,7 @@ async function handleTerminalFailure(jobId, error) {
             ':error': {
                 message: error.message,
                 code: error.code,
-                timestamp: new Date().toISOString()
+                timestamp: Date.now().toString()
             }
         }
     };

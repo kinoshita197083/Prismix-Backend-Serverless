@@ -34,7 +34,7 @@ const createJobCompletionService = (
                 // Step 2: Update status and notify in parallel
                 await Promise.all([
                     notificationService.publishJobStatus(jobId, newStatus, {
-                        completedAt: new Date().toISOString(),
+                        completedAt: Date.now().toString(),
                         status: newStatus
                     }),
                     jobProgressService.updateJobStatusRDS(jobId, newStatus)

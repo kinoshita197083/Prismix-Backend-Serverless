@@ -92,7 +92,7 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
                     jobId,
                     action: eventType,
                     status: currentStatus,
-                    timestamp: new Date().toISOString(),
+                    timestamp: Date.now().toString(),
                     isUserTriggered: priority === 'high',
                 }),
                 MessageAttributes: messageAttributes,
@@ -225,7 +225,7 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
             console.log('[JobSchedulingService.cleanupScheduledChecks] Purging pending SQS messages for job:', jobId);
             await jobProgressService.updateJobProgress(jobId, {
                 schedulingStatus: 'CLEANUP_REQUESTED',
-                cleanupTimestamp: new Date().toISOString()
+                cleanupTimestamp: Date.now().toString()
             });
 
             console.log('[JobSchedulingService.cleanupScheduledChecks] Successfully marked job for cleanup');

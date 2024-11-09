@@ -144,7 +144,7 @@ async function uploadImageWithRetry(
             ContentType: image.mimeType,
             Metadata: {
                 'google-drive-id': image.id,
-                'upload-date': new Date().toISOString(),
+                'upload-date': Date.now().toString(),
             }
         });
 

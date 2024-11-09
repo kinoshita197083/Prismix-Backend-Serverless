@@ -75,6 +75,11 @@ class JobProgressService {
     // }
 
     async updateJobStatusRDS(jobId, status) {
+        console.log('[JobProgressService.updateJobStatusRDS] Updating job status:', {
+            jobId,
+            status
+        });
+
         const { data, error } = await this.supabase
             .from('Job')
             .update({ jobStatus: status })
@@ -144,7 +149,7 @@ class JobProgressService {
             ExpressionAttributeValues: {
                 ':status': 'STALE',
                 ':reason': 'Job inactive for too long',
-                ':updatedAt': new Date().toISOString()
+                ':updatedAt': Date.now().toString()
             }
         };
 
@@ -282,7 +287,7 @@ class JobProgressService {
             UpdateExpression: 'SET circuitBreakerState = :state, updatedAt = :updatedAt',
             ExpressionAttributeValues: {
                 ':state': newState,
-                ':updatedAt': new Date().toISOString()
+                ':updatedAt': Date.now().toString()
             },
             ReturnValues: 'ALL_NEW'
         };

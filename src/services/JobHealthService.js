@@ -4,7 +4,7 @@ const createJobHealthService = (jobProgressService) => {
     const performHealthCheck = async (jobId) => {
         const healthStatus = {
             jobId,
-            timestamp: new Date().toISOString(),
+            timestamp: Date.now().toString(),
             checks: {}
         };
 

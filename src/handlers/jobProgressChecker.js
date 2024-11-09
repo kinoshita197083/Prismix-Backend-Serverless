@@ -275,7 +275,7 @@ const scheduleImmediateContinuation = async (jobId, lastEvaluatedKey) => {
             jobId,
             action: 'PROGRESS_CHECK',
             lastEvaluatedKey,
-            timestamp: new Date().toISOString()
+            timestamp: Date.now().toString()
         }),
         MessageAttributes: {
             eventType: {
