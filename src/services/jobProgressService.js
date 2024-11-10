@@ -2,7 +2,7 @@ const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = requ
 const { createClient } = require('@supabase/supabase-js');
 
 class JobProgressService {
-    constructor(dynamoDB, jobStatisticsService, config) {
+    constructor(dynamoDB, jobStatisticsService, config, notificationService) {
         this.dynamoDB = DynamoDBDocumentClient.from(dynamoDB, {
             marshallOptions: {
                 removeUndefinedValues: true,
@@ -15,6 +15,27 @@ class JobProgressService {
         this.tasksTable = config.tasksTable;
         this.jobProgressTable = config.jobProgressTable;
         this.jobStatisticsService = jobStatisticsService;
+        this.notificationService = notificationService;
+    }
+
+    async updateJobStatusAndNotify(jobId, status) {
+        console.log('[JobProgressService.updateJobStatusAndNotify] Updating job status and notifying:', {
+            jobId,
+            status
+        });
+
+        try {
+            await Promise.all([
+                this.notificationService.publishJobStatus(jobId, status, {
+                    completedAt: Date.now().toString(),
+                    status: status
+                }),
+                this.updateJobStatusRDS(jobId, status)
+            ]);
+        } catch (error) {
+            console.error('[JobProgressService.updateJobStatusAndNotify] Error updating job status and notifying:', error);
+            throw error;
+        }
     }
 
     async getCurrentJobProgress(jobId) {
@@ -36,44 +57,6 @@ class JobProgressService {
         return result.Item;
     }
 
-    // async updateJobProgress(jobId, data, currentVersion) {
-    //     console.log('[JobProgressService.updateJobProgress] Updating progress:', {
-    //         jobId,
-    //         data,
-    //         currentVersion
-    //     });
-
-    //     const cleanData = {
-    //         status: data.status || 'IN_PROGRESS',
-    //         processedImages: data.processedImages || 0,
-    //         eligibleImages: data.eligibleImages || 0,
-    //         duplicateImages: data.duplicateImages || 0,
-    //         excludedImages: data.excludedImages || 0,
-    //         reviewedImages: data.reviewedImages || 0,
-    //         requiredManualReview: data.requiredManualReview || false,
-    //         processingDetails: data.processingDetails || {}
-    //     };
-
-    //     const { regularParams, manualReviewParams } = this._buildUpdateParams(jobId, cleanData, currentVersion);
-
-    //     console.log('[JobProgressService.updateJobProgress] Built update params:', {
-    //         regularParams,
-    //         manualReviewParams
-    //     });
-
-    //     await this.dynamoDB.send(new UpdateCommand(regularParams));
-
-    //     if (manualReviewParams) {
-    //         try {
-    //             await this.dynamoDB.send(new UpdateCommand(manualReviewParams));
-    //         } catch (error) {
-    //             if (error.name !== 'ConditionalCheckFailedException') {
-    //                 throw error;
-    //             }
-    //         }
-    //     }
-    // }
-
     async updateJobStatusRDS(jobId, status) {
         console.log('[JobProgressService.updateJobStatusRDS] Updating job status:', {
             jobId,
@@ -89,52 +72,6 @@ class JobProgressService {
         if (error) throw error;
         return data;
     }
-
-    // _buildUpdateParams(jobId, data, currentVersion) {
-    //     const regularUpdateValues = {
-    //         ':jobStatus': data.status,
-    //         ':processedImages': data.processedImages,
-    //         ':eligibleImages': data.eligibleImages,
-    //         ':duplicateImages': data.duplicateImages,
-    //         ':excludedImages': data.excludedImages,
-    //         ':reviewedImages': data.reviewedImages,
-    //         ':newVersion': currentVersion + 1,
-    //         ':currentVersion': currentVersion,
-    //         ':updatedAt': new Date().toISOString(),
-    //         ':processingDetails': data.processingDetails || {},
-    //     };
-
-    //     const regularParams = {
-    //         TableName: this.jobProgressTable,
-    //         Key: { JobId: jobId },
-    //         UpdateExpression: `
-    //             SET #status = :jobStatus,
-
-    //                 reviewedImages = :reviewedImages,
-    //                 processingDetails = :processingDetails,
-    //                 version = :newVersion,
-    //                 updatedAt = :updatedAt,
-    //         `,
-    //         ExpressionAttributeNames: {
-    //             '#status': 'status'
-    //         },
-    //         ExpressionAttributeValues: regularUpdateValues,
-    //         ConditionExpression: 'version = :currentVersion'
-    //     };
-
-    //     const manualReviewParams = data.requiredManualReview ? {
-    //         TableName: this.jobProgressTable,
-    //         Key: { JobId: jobId },
-    //         UpdateExpression: 'SET requiredManualReview = :review',
-    //         ExpressionAttributeValues: {
-    //             ':review': true,
-    //             ':false': false
-    //         },
-    //         ConditionExpression: 'attribute_not_exists(requiredManualReview) OR requiredManualReview = :false'
-    //     } : null;
-
-    //     return { regularParams, manualReviewParams };
-    // }
 
     async markJobAsStale(jobId) {
         console.log('[JobProgressService.markJobAsStale] Marking job as stale:', jobId);

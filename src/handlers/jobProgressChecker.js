@@ -49,7 +49,7 @@ const notificationService = new NotificationService(sns, process.env.JOB_COMPLET
 const eventBridgeService = new EventBridgeService(eventBridge, eventSchedulingConfig,);
 
 const jobStatisticsService = createJobStatisticsService(documentClient, cloudWatchService);
-const jobProgressService = new JobProgressService(documentClient, jobStatisticsService, config);
+const jobProgressService = new JobProgressService(documentClient, jobStatisticsService, config, notificationService);
 const jobHealthService = createJobHealthService(jobProgressService);
 const jobSchedulingService = createJobSchedulingService(
     eventBridgeService,

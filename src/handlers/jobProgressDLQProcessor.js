@@ -21,7 +21,7 @@ const config = {
 };
 
 const notificationService = new NotificationService(sqs, process.env.JOB_COMPLETION_TOPIC_ARN);
-const jobProgressService = new JobProgressService(docClient, config);
+const jobProgressService = new JobProgressService(docClient, undefined, config, notificationService);
 
 exports.handler = async (event) => {
     logger.info('Processing Job Progress DLQ messages', { messageCount: event.Records.length });

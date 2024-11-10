@@ -65,11 +65,22 @@ const createJobTimeoutService = (jobProgressService, notificationService, jobSch
 
         // Check inactivity timeout - different thresholds for different statuses
         const inactivityThreshold = timeoutConfig.INACTIVITY;
-        if (currentTime - lastUpdateTime > inactivityThreshold) {
-            // For review status, we might want to send notifications before timing out
-            if (jobProgress.status === 'WAITING_FOR_REVIEW') {
-                const inactiveHours = (currentTime - lastUpdateTime) / (60 * 60 * 1000);
-                console.log('[isJobTimedOut] Job timed out due to review inactivity:', { inactiveHours });
+        const timeUntilMaxDuration = (startTime + maxDuration) - currentTime;
+
+        // Check if we're in the review state and within 8 hours of max duration
+        if (jobProgress.status === 'WAITING_FOR_REVIEW' &&
+            timeUntilMaxDuration <= inactivityThreshold &&
+            timeUntilMaxDuration > 0) {
+
+            const inactiveHours = (currentTime - lastUpdateTime) / (60 * 60 * 1000);
+
+            // Only offer extension if there's been inactivity in the last 8 hours
+            if (currentTime - lastUpdateTime > inactivityThreshold) {
+                console.log('[isJobTimedOut] Job approaching max duration with inactivity:', {
+                    inactiveHours,
+                    timeUntilMaxDuration: timeUntilMaxDuration / (60 * 60 * 1000)
+                });
+
                 return {
                     timedOut: true,
                     reason: 'REVIEW_INACTIVITY',
@@ -77,17 +88,11 @@ const createJobTimeoutService = (jobProgressService, notificationService, jobSch
                     canExtend: !jobProgress.reviewExtended
                 };
             }
-
-            return {
-                timedOut: true,
-                reason: 'INACTIVITY',
-                details: `No activity detected for ${inactivityThreshold / (60 * 1000)} minutes`
-            };
         }
 
-        console.log('[isJobTimedOut] condition check:', { result: currentTime - startTime > maxDuration, maxDuration });
+        // Check max duration timeout
         if (currentTime - startTime > maxDuration) {
-            console.log('[isJobTimedOut] Job timed out due to max duration: ',);
+            console.log('[isJobTimedOut] Job timed out due to max duration');
             return {
                 timedOut: true,
                 reason: 'MAX_DURATION_EXCEEDED',
@@ -95,11 +100,14 @@ const createJobTimeoutService = (jobProgressService, notificationService, jobSch
             };
         }
 
-        console.log('[isJobTimedOut] Time differences:', {
-            inactivityDiff: currentTime - lastUpdateTime,
-            inactivityThreshold: timeoutConfig.INACTIVITY,
-            isExceeded: currentTime - lastUpdateTime > timeoutConfig.INACTIVITY
-        });
+        // Check general inactivity timeout
+        if (currentTime - lastUpdateTime > inactivityThreshold) {
+            return {
+                timedOut: true,
+                reason: 'INACTIVITY',
+                details: `No activity detected for ${inactivityThreshold / (60 * 1000)} minutes`
+            };
+        }
 
         return { timedOut: false };
     };

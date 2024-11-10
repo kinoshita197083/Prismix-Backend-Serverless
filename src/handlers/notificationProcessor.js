@@ -26,7 +26,10 @@ const processNotification = async (message) => {
         }
 
         await sendEmailNotification(userData, jobId, status, additionalData, jobData.projectId);
-        await updateEmailSent(jobId);
+
+        if (['COMPLETED', 'FAILED'].includes(status)) {
+            await updateEmailSent(jobId);
+        }
 
         logger.info(`Notification sent successfully for job ${jobId}`);
     } catch (error) {

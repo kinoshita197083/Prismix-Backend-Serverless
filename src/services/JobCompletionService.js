@@ -32,13 +32,7 @@ const createJobCompletionService = (
                 await jobSchedulingService.cleanupScheduledChecks(jobId);
 
                 // Step 2: Update status and notify in parallel
-                await Promise.all([
-                    notificationService.publishJobStatus(jobId, newStatus, {
-                        completedAt: Date.now().toString(),
-                        status: newStatus
-                    }),
-                    jobProgressService.updateJobStatusRDS(jobId, newStatus)
-                ]);
+                await jobProgressService.updateJobStatusAndNotify(jobId, newStatus);
 
                 // Step 3: Record completion metrics
                 await cloudWatchService.recordMetrics('JobCompletion', {
