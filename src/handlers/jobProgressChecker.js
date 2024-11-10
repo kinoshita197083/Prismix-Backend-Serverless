@@ -102,6 +102,7 @@ exports.handler = async (event) => {
 
             await handleJobMessage(jobId, eventType, record.messageAttributes);
 
+            console.log('[Main handler] Finished processing message for jobId:', jobId);
         } catch (error) {
             console.error('Error processing record:', error);
             batchItemFailures.push({ itemIdentifier: messageId });
@@ -131,18 +132,23 @@ const handleJobMessage = async (jobId, eventType, messageAttributes) => {
         // Handle different event types
         switch (eventType) {
             case 'REVIEW_COMPLETED':
+                console.log('[handleJobMessage] Handling review completion for jobId:', jobId);
                 await reviewCompletionService.handleReviewCompletion(jobId);
                 break;
             case 'TIMEOUT_CHECK':
+                console.log('[handleJobMessage] Handling timeout check for jobId:', jobId);
                 await handleTimeoutCheck(jobId, jobProgress);
                 break;
             case 'PROGRESS_CHECK':
+                console.log('[handleJobMessage] Handling progress check for jobId:', jobId);
                 await handleRegularProgressCheck(jobId, jobProgress);
                 break;
             default:
                 console.warn('[handleJobMessage] Unknown event type:', eventType);
                 break;
         }
+
+        console.log('[handleJobMessage] Finished processing message for jobId:', jobId);
     } catch (error) {
         console.error('[handleJobMessage] Error processing message:', error);
         await errorHandlingService.handleProcessingError(jobId, error);
@@ -159,7 +165,9 @@ const handleTimeoutCheck = async (jobId, jobProgress) => {
         console.log('Job timed out, handling timeout');
         await Promise.all([
             jobTimeoutService.handleJobTimeout(jobId, jobProgress, timeoutStatus),
-            // jobSchedulingService.cleanupScheduledChecks(jobId)
+            timeoutStatus.reason !== 'REVIEW_INACTIVITY' && timeoutStatus.canExtend === false ?
+                jobSchedulingService.cleanupScheduledChecks(jobId) :
+                Promise.resolve()
         ]);
         return true;
     }

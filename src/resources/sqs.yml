@@ -60,17 +60,29 @@ Resources:
   JobCompletionTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: ${self:service}-${self:provider.stage}-job-completion-topic
+      TopicName: ${self:service}-${self:provider.stage}-job-completion-topic.fifo
+      FifoTopic: true
+      ContentBasedDeduplication: true
 
   DeliveryQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: ${self:service}-${self:provider.stage}-delivery-queue
+      QueueName: ${self:service}-${self:provider.stage}-delivery-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+      VisibilityTimeout: 900  # 15 minutes, matching Lambda timeout
 
   NotificationQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: ${self:service}-${self:provider.stage}-notification-queue
+      QueueName: ${self:service}-${self:provider.stage}-notification-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+      VisibilityTimeout: 900  # 15 minutes, matching Lambda timeout
 
   DeliveryQueuePolicy:
     Type: AWS::SQS::QueuePolicy

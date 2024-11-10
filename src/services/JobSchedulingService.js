@@ -73,6 +73,7 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
 
     const scheduleWithSQS = async (jobId, delaySeconds, currentStatus, options = {}) => {
         const { eventType = 'PROGRESS_CHECK', priority = 'normal' } = options;
+        const messageGroupId = `${jobId}-${currentStatus}`;
 
         const messageAttributes = {
             eventType: {
@@ -82,6 +83,10 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
             priority: {
                 DataType: 'String',
                 StringValue: priority
+            },
+            MessageGroupId: {
+                DataType: 'String',
+                StringValue: messageGroupId
             }
         };
 
@@ -96,7 +101,8 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
                     isUserTriggered: priority === 'high',
                 }),
                 MessageAttributes: messageAttributes,
-                DelaySeconds: Math.min(delaySeconds, 900)
+                DelaySeconds: Math.min(delaySeconds, 900),
+                MessageGroupId: messageGroupId
             }));
 
             console.log(`Scheduled ${eventType} check with SQS for job ${jobId} in ${delaySeconds} seconds`);

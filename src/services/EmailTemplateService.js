@@ -32,7 +32,6 @@ const EMAIL_TEMPLATES = {
 // Common header component
 const getEmailHeader = (title) => `
     <div class="header">
-        <img src="https://anythingfrenkie.s3.ap-southeast-2.amazonaws.com/logo_black.svg" alt="Prismix" class="logo" />
         <h1>${title}</h1>
     </div>
 `;
@@ -40,11 +39,6 @@ const getEmailHeader = (title) => `
 // Common footer component
 const getEmailFooter = () => `
     <div class="footer">
-        <div class="footer-links">
-            <a href="#">Privacy Policy</a> • 
-            <a href="#">Terms of Service</a> • 
-            <a href="#">Contact Support</a>
-        </div>
         <p class="footer-copyright">© ${new Date().getFullYear()} Prismix. All rights reserved.</p>
         <p class="footer-note">This is an automated message. Please do not reply to this email.</p>
     </div>
@@ -215,17 +209,15 @@ const generateReviewEmailHtml = (name, jobId) => `
         </head>
         <body>
             <div class="container">
-                ${getEmailHeader('Manual Review Required')}
+                ${getEmailHeader('Review Requested')}
                 <div class="content">
                     <p>Dear ${name},</p>
                     <div class="status-box">
-                        <p style="margin: 0;"><strong>Status:</strong> Awaiting Review</p>
+                        <p style="margin: 0;"><strong>Status:</strong> Ready for Review</p>
                         <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
                     </div>
-                    <p>Your job requires manual review before it can be completed.</p>
-                    <p class="warning">⚠️ Please review and approve the processed items within the next 48 hours.</p>
-                    <p>If no action is taken within this timeframe, the system will automatically process the remaining items according to default settings.</p>
-                    <a href="#" class="button">Review Now</a>
+                    <p>Your job is ready for your review. We'd appreciate if you could take a moment to check the processed items.</p>
+                    <p>For your convenience, you have 48 hours to review the results. After this period, we'll proceed with processing using our standard settings to ensure timely completion.</p>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
                 ${getEmailFooter()}
@@ -237,12 +229,11 @@ const generateReviewEmailHtml = (name, jobId) => `
 const generateReviewEmailText = (name, jobId) => `
 Dear ${name},
 
-Your job requires manual review before it can be completed.
+Your job is ready for your review.
 
 Job ID: ${jobId}
 
-Please review and approve the processed items within the next 48 hours.
-If no action is taken within this timeframe, the system will automatically process the remaining items according to default settings.
+We'd appreciate if you could take a moment to check the processed items. You have 48 hours to review the results. After this period, we'll proceed with processing using our standard settings to ensure timely completion.
 
 Best regards,
 The Prismix Team

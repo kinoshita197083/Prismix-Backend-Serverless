@@ -1,5 +1,6 @@
 const { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { createClient } = require('@supabase/supabase-js');
+const { sleep } = require("../utils/helpers");
 
 class JobProgressService {
     constructor(dynamoDB, jobStatisticsService, config, notificationService) {
@@ -57,20 +58,44 @@ class JobProgressService {
         return result.Item;
     }
 
-    async updateJobStatusRDS(jobId, status) {
-        console.log('[JobProgressService.updateJobStatusRDS] Updating job status:', {
-            jobId,
-            status
-        });
+    async updateJobStatusRDS(jobId, status, maxRetries = 3, baseDelay = 1000) {
+        let retryCount = 0;
 
-        const { data, error } = await this.supabase
-            .from('Job')
-            .update({ jobStatus: status })
-            .eq('id', jobId)
-            .single();
+        while (true) {
+            try {
+                console.log('[JobProgressService.updateJobStatusRDS] Updating job status:', {
+                    jobId,
+                    status,
+                    attempt: retryCount + 1
+                });
 
-        if (error) throw error;
-        return data;
+                const { data, error } = await this.supabase
+                    .from('Job')
+                    .update({ jobStatus: status })
+                    .eq('id', jobId)
+                    .single();
+
+                if (error) throw error;
+                return data;
+
+            } catch (error) {
+                retryCount++;
+
+                // If we've exhausted all retries, throw the last error
+                if (retryCount >= maxRetries) {
+                    console.error(`[JobProgressService.updateJobStatusRDS] Failed after ${maxRetries} attempts:`, error);
+                    throw error;
+                }
+
+                // Calculate delay with exponential backoff: 1s, 2s, 4s
+                const delay = baseDelay * Math.pow(2, retryCount - 1);
+
+                console.warn(`[JobProgressService.updateJobStatusRDS] Attempt ${retryCount} failed. Retrying in ${delay}ms:`, error);
+
+                // Wait before the next retry
+                await sleep(delay);
+            }
+        }
     }
 
     async markJobAsStale(jobId) {

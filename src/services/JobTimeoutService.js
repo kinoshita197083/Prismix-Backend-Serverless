@@ -177,20 +177,14 @@ const createJobTimeoutService = (jobProgressService, notificationService, jobSch
                     error: 'TIMEOUT',
                     reason: timeoutInfo.reason,
                     details: timeoutInfo.details,
-                    // autoReviewed: finalStats.waitingForReview > 0 ? {
-                    //     count: finalStats.waitingForReview,
-                    //     action: 'EXCLUDED'
-                    // } : undefined
-                    autoReviewed: 0
+                    autoReviewed: 0,
+                    MessageGroupId: `${jobId}-FAILED`
                 });
             } else {
                 await notificationService.publishJobStatus(jobId, 'COMPLETED', {
                     finalStatistics: adjustedStats,
-                    // autoReviewed: finalStats.waitingForReview > 0 ? {
-                    //     count: finalStats.waitingForReview,
-                    //     action: 'EXCLUDED'
-                    // } : undefined
-                    autoReviewed: 0
+                    autoReviewed: 0,
+                    MessageGroupId: `${jobId}-COMPLETED`
                 });
             }
 

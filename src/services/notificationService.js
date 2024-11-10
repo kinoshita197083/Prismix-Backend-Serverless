@@ -13,9 +13,13 @@ class NotificationService {
             topicArn: this.topicArn
         });
 
+        const messageGroupId = `${jobId}-${status}`;
+        const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
         const params = {
             Message: JSON.stringify({ jobId, status, additionalData }),
-            TopicArn: this.topicArn
+            TopicArn: this.topicArn,
+            MessageGroupId: messageGroupId,
+            MessageDeduplicationId: `${messageGroupId}-${timestamp}`
         };
 
         try {
