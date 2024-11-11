@@ -96,9 +96,22 @@ const checkMatches = (text, tagSets, source) => {
 };
 
 // Main evaluation functions
-const evaluateDetectedTexts = (texts, tagSets) => {
-    debug('Evaluating detected texts:', texts);
-    const result = texts.some(text => checkMatches(text, tagSets, 'text'));
+const evaluateDetectedTexts = (formattedDetectedTexts, tagSets, projectSettings) => {
+    debug('Evaluating detected texts:', formattedDetectedTexts);
+
+    const result = formattedDetectedTexts.some(detection => {
+        const confidence = parseFloat(detection.confidence);
+        const meetsConfidence = confidence >= projectSettings.detectionConfidence;
+
+        debug('Checking detected text:', {
+            text: detection.text,
+            confidence,
+            meetsConfidence
+        });
+
+        return meetsConfidence && checkMatches(detection.text, tagSets, 'text');
+    });
+
     debug('Detected texts evaluation result:', result);
     return result;
 };
@@ -137,15 +150,20 @@ async function evaluate(labels = [], formattedDetectedTexts = [], projectSetting
     const contentTagSets = createNormalizedSet(contentTags);
     const textTagSets = createNormalizedSet(textTags);
 
-    const textMatchResult = formattedDetectedTexts.length === 0 || evaluateDetectedTexts(formattedDetectedTexts, textTagSets);
+    const textMatchResult = formattedDetectedTexts.length === 0 ||
+        evaluateDetectedTexts(formattedDetectedTexts, textTagSets, projectSettings);
     const labelMatchResult = labels.length === 0 || evaluateLabels(labels, contentTagSets, detectionConfidence);
 
     debug('Evaluation results:', {
         textMatch: textMatchResult,
-        labelMatch: labelMatchResult
+        labelMatch: labelMatchResult,
+        contentTagSets,
+        textTagSets,
+        formattedDetectedTexts,
+        labels
     });
 
-    const finalResult = textMatchResult && labelMatchResult;
+    const finalResult = textMatchResult || labelMatchResult;
     debug(`Evaluation complete: ${finalResult ? 'Matches found' : 'No matches found'}`);
 
     return finalResult;

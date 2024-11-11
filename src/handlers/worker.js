@@ -3,7 +3,7 @@ const { COMPLETED, WAITING_FOR_REVIEW, EXCLUDED } = require('../utils/config');
 const { processImageProperties } = require('../services/imageProcessingService');
 const { validateImageQuality } = require('../services/qualityService');
 const { formatLabels, createHash, formatTexts } = require('../utils/helpers');
-const { duplicateImageDetection, labelDetection } = require('../utils/worker/imageProcessing');
+const { duplicateImageDetection, labelDetection, detectTextsFromImage } = require('../utils/worker/imageProcessing');
 const dynamoService = require('../services/dynamoService');
 const { evaluationMapper, evaluate } = require('../utils/worker/evaluation');
 
@@ -21,6 +21,8 @@ exports.handler = async (event, context) => {
 
         console.log('999 Processing image:', { bucket, s3ObjectKey, jobId, imageId });
 
+        let preserveFileDays
+
         try {
             const projectSettings = await fetchProjectSettingRules(jobId);
             console.log('projectSettings', projectSettings);
@@ -28,7 +30,7 @@ exports.handler = async (event, context) => {
             const manualReviewRequired = projectSettings.manualReviewRequired;
             console.log('manualReviewRequired', manualReviewRequired);
 
-            const preserveFileDays = projectSettings.preserveFileDays;
+            preserveFileDays = projectSettings.preserveFileDays;
             console.log('preserveFileDays', preserveFileDays);
 
             // Step 1: Check for duplicates if enabled
@@ -37,7 +39,8 @@ exports.handler = async (event, context) => {
                     bucket,
                     s3ObjectKey,
                     jobId,
-                    imageId
+                    imageId,
+                    preserveFileDays
                 });
                 if (isDuplicate) return;
             }
@@ -60,14 +63,13 @@ exports.handler = async (event, context) => {
             console.log('999 Image properties processed. Validating image quality...');
 
             // Step 3: Validate image quality if enabled
-            if (projectSettings.blurryImages || projectSettings.removeLowResolution) {
+            if (projectSettings.removeLowResolution) {
                 const qualityResult = await validateImageQuality({
                     bucket,
                     key: processedImageKey,
                     settings: {
-                        checkBlur: projectSettings.blurryImages,
                         checkResolution: projectSettings.removeLowResolution,
-                        minResolution: projectSettings.minimumResolution
+                        minResolution: projectSettings.minimumResolution?.split(' ')[0]
                     }
                 });
 
@@ -98,7 +100,7 @@ exports.handler = async (event, context) => {
 
             let detectedTexts = [];
             if (projectSettings?.textTags?.length > 0) {
-                detectedTexts = await detectText({
+                detectedTexts = await detectTextsFromImage({
                     bucket,
                     s3ObjectKey: processedImageKey,
                 });
@@ -130,7 +132,7 @@ exports.handler = async (event, context) => {
                 reason,
                 processingDetails: {
                     wasResized: processedImageKey !== s3ObjectKey,
-                    qualityChecked: projectSettings.blurryImages || projectSettings.removeLowResolution,
+                    qualityChecked: projectSettings.removeLowResolution,
                     detectionPerformed: labels.length > 0 || detectedTexts.length > 0,
                     formattedLabels,
                     formattedTexts,
@@ -154,7 +156,7 @@ exports.handler = async (event, context) => {
                     taskId: imageId,
                     imageS3Key: s3ObjectKey,
                     reason: error.message,
-                    preserveFileDays: projectSettings.preserveFileDays
+                    preserveFileDays: preserveFileDays
                 });
             } catch (retryUpdateError) {
                 logger.error('Error updating task status to FAILED in TASK_TABLE', { error: retryUpdateError.message, jobId, taskId: imageId });

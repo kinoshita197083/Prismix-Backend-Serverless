@@ -92,7 +92,8 @@ const dynamoService = {
         duplicateOf,
         duplicateOfS3Key,
         reason,
-        processingDetails
+        processingDetails,
+        expirationTime
     }) {
         console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, processingDetails, evaluation, duplicateOf, duplicateOfS3Key, reason, expirationTime });
 

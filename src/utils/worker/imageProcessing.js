@@ -24,7 +24,7 @@ async function labelDetection({ bucket, s3ObjectKey }) {
     return labels;
 }
 
-async function detectText({ bucket, s3ObjectKey }) {
+async function detectTextsFromImage({ bucket, s3ObjectKey }) {
     // Perform text detection
     console.log('Performing text detection...');
     const detectTextCommand = new DetectTextCommand({
@@ -101,7 +101,7 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 
 }
 
 
-async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId }) {
+async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId, preserveFileDays }) {
     const { calculateImageHash } = require('../helpers');
 
     // Calculate image hash
@@ -117,7 +117,14 @@ async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId }) 
 
     if (isDuplicate) {
         console.log('Duplicate image found', { originalImageId, originalImageS3Key, currentImageId: imageId });
-        const response = await dynamoService.updateTaskStatusAsDuplicate({ jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key });
+        const response = await dynamoService.updateTaskStatusAsDuplicate({
+            jobId,
+            imageId,
+            s3ObjectKey,
+            originalImageId,
+            originalImageS3Key,
+            expirationTime: new Date(Date.now() + preserveFileDays * 24 * 60 * 60 * 1000).toISOString()
+        });
         console.log('Task status updated to COMPLETED and marked as duplicate', response);
         return true;
     } else {
@@ -128,5 +135,6 @@ async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId }) 
 
 module.exports = {
     labelDetection,
+    detectTextsFromImage,
     duplicateImageDetection
 };

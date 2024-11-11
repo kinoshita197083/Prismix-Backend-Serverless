@@ -3,7 +3,7 @@ const s3Service = require('./s3Service');
 const { RESOLUTION_THRESHOLDS } = require('../utils/config');
 
 exports.validateImageQuality = async ({ bucket, key, settings }) => {
-    const { checkBlur, checkResolution, minResolution } = settings;
+    const { checkResolution, minResolution } = settings;
     const issues = [];
 
     const imageBuffer = await s3Service.getFileBuffer(bucket, key);
@@ -14,12 +14,6 @@ exports.validateImageQuality = async ({ bucket, key, settings }) => {
         if (metadata.height < minHeight) {
             issues.push(`Resolution below ${minResolution} standard`);
         }
-    }
-
-    if (checkBlur) {
-        // Implement blur detection logic here
-        // You can use sharp's stats() to analyze image entropy
-        // or implement more sophisticated blur detection algorithms
     }
 
     return {
