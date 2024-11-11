@@ -1,11 +1,14 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
-const { S3Client } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const logger = require('../utils/logger');
 const { createZipStream, uploadZipToS3 } = require('../utils/s3Streams');
 const ZipArchiveProgressService = require('../services/zipArchiveProgressService');
 const ZipMergeService = require('../services/zipMergeService');
+const { PassThrough } = require('stream');
+const { Upload } = require('@aws-sdk/lib-storage');
+const archiver = require('archiver');
 
 // Initialize AWS clients
 const ddbClient = new DynamoDBClient();
@@ -78,14 +81,14 @@ async function fetchEligibleTasks(jobId, lastEvaluatedKey = null) {
 
     const params = {
         TableName: process.env.TASKS_TABLE,
-        KeyConditionExpression: 'JobId = :jobId',
+        KeyConditionExpression: 'JobID = :jobId',
         FilterExpression: 'Evaluation = :evaluation',
         ExpressionAttributeValues: {
             ':jobId': jobId,
             ':evaluation': 'ELIGIBLE'
         },
         Limit: PAGINATION_CONFIG.maxBatchSize,
-        ExclusiveStartKey: lastEvaluatedKey
+        ...(lastEvaluatedKey && { ExclusiveStartKey: lastEvaluatedKey })
     };
 
     try {
@@ -130,32 +133,75 @@ async function processChunk(jobId, chunk, allImageKeys) {
         endIndex
     });
 
-    // Create chunk-specific ZIP file name
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const zipKey = `archives/${jobId}/chunks/${chunk.chunkId}_${timestamp}.zip`;
 
     try {
-        const archive = await createZipStream(
-            s3Client,
-            process.env.SOURCE_BUCKET,
-            chunkImageKeys,
-            (progress) => {
-                logger.info(`ZIP progress for chunk ${chunk.chunkId}:`, {
-                    jobId,
-                    filesProcessed: progress.entries.processed,
-                    totalBytes: progress.fs.processedBytes
-                });
-            }
-        );
+        // Create a PassThrough stream to pipe data through
+        const passThrough = new PassThrough();
 
+        // Create and configure the archiver
+        const archive = archiver('zip', {
+            zlib: { level: 9 }
+        });
+
+        // Handle archive warnings
+        archive.on('warning', (err) => {
+            if (err.code === 'ENOENT') {
+                logger.warn('Archive warning', { warning: err.message });
+            } else {
+                throw err;
+            }
+        });
+
+        // Handle archive errors
+        archive.on('error', (err) => {
+            throw err;
+        });
+
+        // Pipe archive data to the PassThrough stream
+        archive.pipe(passThrough);
+
+        // Add files to archive
+        for (const key of chunkImageKeys) {
+            const s3Stream = await getS3ReadStream(s3Client, process.env.SOURCE_BUCKET, key);
+            archive.append(s3Stream, { name: key.split('/').pop() });
+        }
+
+        // Create upload manager with the PassThrough stream
+        const upload = new Upload({
+            client: s3Client,
+            params: {
+                Bucket: process.env.DELIVERY_BUCKET,
+                Key: zipKey,
+                Body: passThrough
+            },
+            tags: [{ Key: 'jobId', Value: jobId }],
+            queueSize: 4, // number of concurrent uploads
+            partSize: 1024 * 1024 * 5, // 5MB part size
+        });
+
+        // Handle archive events
+        archive.on('progress', (progress) => {
+            logger.info(`ZIP progress for chunk ${chunk.chunkId}:`, {
+                jobId,
+                filesProcessed: progress.entries.processed,
+                totalBytes: progress.fs.processedBytes
+            });
+        });
+
+        // Create promises for both the upload and archive completion
+        const uploadPromise = upload.done();
+        const archivePromise = new Promise((resolve, reject) => {
+            archive.on('end', resolve);
+            archive.on('error', reject);
+        });
+
+        // Finalize the archive (this is important!)
         archive.finalize();
 
-        await uploadZipToS3(
-            s3Client,
-            archive,
-            process.env.DELIVERY_BUCKET,
-            zipKey
-        );
+        // Wait for both the upload and archive to complete
+        await Promise.all([uploadPromise, archivePromise]);
 
         logger.info('Successfully processed chunk', {
             jobId,
@@ -163,9 +209,14 @@ async function processChunk(jobId, chunk, allImageKeys) {
             zipKey
         });
 
-        await zipArchiveProgressService.updateChunkStatus(jobId, chunk.chunkId, 'COMPLETED', null, zipKey);
+        await zipArchiveProgressService.updateChunkStatus(
+            jobId,
+            chunk.chunkId,
+            'COMPLETED',
+            null,
+            zipKey
+        );
 
-        // Check if all chunks are complete
         const isComplete = await zipArchiveProgressService.isJobComplete(jobId);
         if (isComplete) {
             await handleJobCompletion(jobId);
@@ -173,7 +224,7 @@ async function processChunk(jobId, chunk, allImageKeys) {
 
         return zipKey;
     } catch (error) {
-        logger.error(`Error processing chunk`, {
+        logger.error('Error processing chunk', {
             jobId,
             chunkId: chunk.chunkId,
             error: error.message,
@@ -189,6 +240,15 @@ async function processChunk(jobId, chunk, allImageKeys) {
 
         throw error;
     }
+}
+
+// Helper function to get S3 read stream
+async function getS3ReadStream(s3Client, bucket, key) {
+    const { Body } = await s3Client.send(new GetObjectCommand({
+        Bucket: bucket,
+        Key: key
+    }));
+    return Body;
 }
 
 /**
@@ -258,6 +318,63 @@ async function reEnqueueForNextChunk(jobId) {
             stack: error.stack
         });
         throw error;
+    }
+}
+
+/**
+ * Process eligible tasks from the iterator
+ * @param {string} jobId - The ID of the job
+ * @param {AsyncGenerator} taskIterator - Iterator for eligible tasks
+ */
+async function processEligibleTasks(jobId, taskIterator) {
+    let allImageKeys = [];
+    let totalTasks = 0;
+
+    // Collect all image keys from eligible tasks
+    for await (const batch of taskIterator) {
+        const imageKeys = batch.items
+            .filter(task => task.ImageS3Key)
+            .map(task => task.ImageS3Key);
+
+        allImageKeys = [...allImageKeys, ...imageKeys];
+        totalTasks += batch.items.length;
+    }
+
+    logger.info('Collected all eligible tasks', {
+        jobId,
+        totalTasks,
+        totalImages: allImageKeys.length
+    });
+
+    if (allImageKeys.length === 0) {
+        logger.info('No eligible images found to process', { jobId });
+        return;
+    }
+
+    // Calculate chunk size and create chunks
+    const chunkSize = Math.ceil(allImageKeys.length / PAGINATION_CONFIG.maxBatchSize);
+    const chunks = Array.from({ length: chunkSize }, (_, index) => ({
+        chunkId: `chunk_${index}`,
+        startIndex: index * PAGINATION_CONFIG.maxBatchSize,
+        endIndex: Math.min((index + 1) * PAGINATION_CONFIG.maxBatchSize, allImageKeys.length)
+    }));
+
+    logger.info('Created chunks for processing', {
+        jobId,
+        numberOfChunks: chunks.length,
+        chunkSize: PAGINATION_CONFIG.maxBatchSize
+    });
+
+    // Process first chunk and re-enqueue for remaining chunks if any
+    const firstChunk = chunks[0];
+    await processChunk(jobId, firstChunk, allImageKeys);
+
+    if (chunks.length > 1) {
+        logger.info('Re-enqueueing for remaining chunks', {
+            jobId,
+            remainingChunks: chunks.length - 1
+        });
+        await reEnqueueForNextChunk(jobId);
     }
 }
 

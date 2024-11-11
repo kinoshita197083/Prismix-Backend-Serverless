@@ -18,7 +18,7 @@ async function createZipStream(s3Client, sourceBucket, keys, progressCallback) {
 
     // Initialize archiver with compression
     const archive = archiver('zip', {
-        zlib: { level: 5 } // Balanced compression level
+        zlib: { level: 9 } // Balanced compression level
     });
 
     // Set up error handling

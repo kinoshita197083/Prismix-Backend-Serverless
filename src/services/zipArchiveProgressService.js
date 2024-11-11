@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const CHUNK_SIZE = 1000; // Number of files per chunk
 const MAX_CHUNK_RETRIES = 3;
 const TTL_DAYS = 7;
+const CHUNK_TTL_DAYS = 90;
 
 /**
  * Service responsible for managing and tracking the progress of ZIP archive creation
@@ -155,56 +156,95 @@ class ZipArchiveProgressService {
      * @param {string} [zipKey] - Optional S3 key of the chunk ZIP
      */
     async updateChunkStatus(jobId, chunkId, status, error = null, zipKey = null) {
-        logger.info('Updating chunk status', {
-            jobId,
-            chunkId,
-            status,
-            error: error || 'none'
-        });
-
-        const updateExpressions = [];
-        const expressionValues = {
-            ':status': status
-        };
-
-        // Build dynamic update expression based on provided values
-        updateExpressions.push('SET Chunks[?].status = :status');
-
-        if (error) {
-            updateExpressions.push('Chunks[?].error = :error');
-            expressionValues[':error'] = error;
-        }
-
-        if (zipKey) {
-            updateExpressions.push('Chunks[?].zipKey = :zipKey');
-            expressionValues[':zipKey'] = zipKey;
-        }
-
-        if (status === 'COMPLETED') {
-            updateExpressions.push('CompletedChunks = CompletedChunks + :increment');
-            expressionValues[':increment'] = 1;
-        }
-
         try {
-            await this.docClient.send(new UpdateCommand({
+            // Calculate expiration timestamp (90 days from now)
+            const expirationTime = Math.floor(Date.now() / 1000) + (CHUNK_TTL_DAYS * 24 * 60 * 60);
+
+            // First update the chunk record
+            const params = {
                 TableName: this.tableName,
                 Key: {
                     JobId: jobId,
-                    ChunkId: 'metadata'
+                    ChunkId: chunkId
                 },
-                UpdateExpression: updateExpressions.join(', '),
-                ExpressionAttributeValues: expressionValues
+                UpdateExpression: 'SET #st = :status, UpdatedAt = :updatedAt, ExpirationTime = :expTime',
+                ExpressionAttributeNames: {
+                    '#st': 'Status'
+                },
+                ExpressionAttributeValues: {
+                    ':status': status,
+                    ':updatedAt': Date.now().toString(),
+                    ':expTime': expirationTime
+                }
+            };
+
+            if (zipKey) {
+                params.UpdateExpression += ', ZipKey = :zipKey';
+                params.ExpressionAttributeValues[':zipKey'] = zipKey;
+            }
+
+            if (error) {
+                params.UpdateExpression += ', ErrorMessage = :error';
+                params.ExpressionAttributeValues[':error'] = error;
+            }
+
+            await this.docClient.send(new UpdateCommand(params));
+
+            // Then update the metadata record
+            // First get the current metadata to update the Chunks array
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: this.tableName,
+                KeyConditionExpression: 'JobId = :jobId AND ChunkId = :metadataId',
+                ExpressionAttributeValues: {
+                    ':jobId': jobId,
+                    ':metadataId': 'metadata'
+                }
             }));
 
-            logger.info('Successfully updated chunk status', {
+            const metadata = result.Items[0];
+            if (metadata && metadata.Chunks) {
+                const chunkIndex = parseInt(chunkId.split('_')[1]);
+                const updatedChunks = [...metadata.Chunks];
+                updatedChunks[chunkIndex] = {
+                    ...updatedChunks[chunkIndex],
+                    status,
+                    updatedAt: Date.now().toString()
+                };
+
+                if (zipKey) {
+                    updatedChunks[chunkIndex].zipKey = zipKey;
+                }
+
+                if (error) {
+                    updatedChunks[chunkIndex].error = error;
+                }
+
+                // Update the entire Chunks array
+                await this.docClient.send(new UpdateCommand({
+                    TableName: this.tableName,
+                    Key: {
+                        JobId: jobId,
+                        ChunkId: 'metadata'
+                    },
+                    UpdateExpression: 'SET Chunks = :chunks',
+                    ExpressionAttributeValues: {
+                        ':chunks': updatedChunks
+                    }
+                }));
+            }
+
+            logger.info('Successfully updated chunk status in both records', {
                 jobId,
                 chunkId,
-                status
+                status,
+                zipKey: zipKey || 'none',
+                expirationTime: new Date(expirationTime * 1000).toISOString()
             });
         } catch (error) {
             logger.error('Failed to update chunk status', {
                 jobId,
                 chunkId,
+                status,
                 error: error.message,
                 stack: error.stack
             });
@@ -229,14 +269,52 @@ class ZipArchiveProgressService {
             }));
 
             const metadata = result.Items[0];
-            const isComplete = metadata.CompletedChunks === metadata.TotalChunks;
+            if (!metadata || !metadata.Chunks) {
+                return false;
+            }
 
-            logger.info('Checked job completion status', {
-                jobId,
-                completedChunks: metadata.CompletedChunks,
-                totalChunks: metadata.TotalChunks,
-                isComplete
-            });
+            // Count completed chunks
+            const completedChunks = metadata.Chunks.filter(
+                chunk => chunk.status === 'COMPLETED'
+            ).length;
+
+            const isComplete = completedChunks === metadata.TotalChunks;
+
+            // If all chunks are complete but job status isn't updated yet
+            if (isComplete && metadata.Status !== 'COMPLETED') {
+                try {
+                    // Update the metadata record with completed status
+                    await this.docClient.send(new UpdateCommand({
+                        TableName: this.tableName,
+                        Key: {
+                            JobId: jobId,
+                            ChunkId: 'metadata'
+                        },
+                        UpdateExpression: 'SET #st = :status, CompletedChunks = :completedChunks, UpdatedAt = :updatedAt',
+                        ExpressionAttributeNames: {
+                            '#st': 'Status'  // Use ExpressionAttributeNames for Status
+                        },
+                        ExpressionAttributeValues: {
+                            ':status': 'COMPLETED',
+                            ':completedChunks': completedChunks,
+                            ':updatedAt': Date.now().toString()
+                        }
+                    }));
+
+                    logger.info('Updated job status to COMPLETED', {
+                        jobId,
+                        completedChunks,
+                        totalChunks: metadata.TotalChunks
+                    });
+                } catch (error) {
+                    logger.error('Failed to update job completion status', {
+                        jobId,
+                        error: error.message,
+                        stack: error.stack
+                    });
+                    throw error;
+                }
+            }
 
             return isComplete;
         } catch (error) {
@@ -270,19 +348,83 @@ class ZipArchiveProgressService {
     }
 
     async updateFinalZipLocation(jobId, finalZipKey) {
-        await this.docClient.send(new UpdateCommand({
+        try {
+            // Modify the finalZipKey to use the standardized name
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const standardizedZipKey = `archives/${jobId}/final/prismix-job-results-${timestamp}.zip`;
+
+            await this.docClient.send(new UpdateCommand({
+                TableName: this.tableName,
+                Key: {
+                    JobId: jobId,
+                    ChunkId: 'metadata'
+                },
+                UpdateExpression: 'SET #st = :status, FinalZipKey = :zipKey, CompletedAt = :completedAt',
+                ExpressionAttributeNames: {
+                    '#st': 'Status'
+                },
+                ExpressionAttributeValues: {
+                    ':status': 'COMPLETED',
+                    ':zipKey': standardizedZipKey,
+                    ':completedAt': Date.now().toString()
+                }
+            }));
+
+            logger.info('Successfully updated final ZIP location', {
+                jobId,
+                finalZipKey: standardizedZipKey
+            });
+        } catch (error) {
+            logger.error('Failed to update final ZIP location', {
+                jobId,
+                finalZipKey,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    // Add to ZipArchiveProgressService class
+    async updateJobStatus(jobId, status, version) {
+        const params = {
             TableName: this.tableName,
             Key: {
                 JobId: jobId,
                 ChunkId: 'metadata'
             },
-            UpdateExpression: 'SET FinalZipKey = :zipKey, Status = :status, CompletedAt = :completedAt',
+            UpdateExpression: 'SET #st = :status, version = :newVersion, updatedAt = :updatedAt',
+            ExpressionAttributeNames: {
+                '#st': 'Status'
+            },
             ExpressionAttributeValues: {
-                ':zipKey': finalZipKey,
-                ':status': 'COMPLETED',
-                ':completedAt': Date.now().toString()
+                ':status': status,
+                ':newVersion': (version || 0) + 1,
+                ':updatedAt': Date.now().toString()
             }
-        }));
+        };
+
+        if (version !== undefined) {
+            params.ConditionExpression = 'attribute_not_exists(version) OR version = :currentVersion';
+            params.ExpressionAttributeValues[':currentVersion'] = version;
+        }
+
+        try {
+            await this.docClient.send(new UpdateCommand(params));
+            logger.info('Successfully updated job status', {
+                jobId,
+                status,
+                version: (version || 0) + 1
+            });
+        } catch (error) {
+            logger.error('Failed to update job status', {
+                jobId,
+                status,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
     }
 }
 

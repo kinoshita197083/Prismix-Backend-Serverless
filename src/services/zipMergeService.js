@@ -1,8 +1,9 @@
 const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const { Readable } = require('stream');
+const { Readable, PassThrough } = require('stream');
 const archiver = require('archiver');
 const logger = require('../utils/logger');
 const { uploadZipToS3 } = require('../utils/s3Streams');
+const { Upload } = require('@aws-sdk/lib-storage');
 
 /**
  * Service responsible for merging multiple ZIP chunks into a single final ZIP file
@@ -21,94 +22,71 @@ class ZipMergeService {
      * @returns {Promise<string>} The S3 key of the final merged ZIP file
      */
     async mergeChunks(jobId, chunkKeys, deliveryBucket) {
-        logger.info('Starting ZIP merge process', {
-            jobId,
-            numberOfChunks: chunkKeys.length,
-            deliveryBucket
-        });
-
-        // Initialize archiver with compression level 5 (balanced between speed and size)
-        const archive = archiver('zip', {
-            zlib: { level: 5 }
-        });
-
-        // Set up error handling for the archive creation process
-        archive.on('error', (err) => {
-            logger.error('Archive creation error:', {
-                jobId,
-                error: err.message,
-                stack: err.stack
-            });
-            throw err;
-        });
-
-        // Set up progress tracking for monitoring the merge process
-        archive.on('progress', (progress) => {
-            logger.info('ZIP merge progress:', {
-                jobId,
-                entriesProcessed: progress.entries.processed,
-                entriesTotal: progress.entries.total,
-                bytesProcessed: progress.fs.processedBytes,
-                bytesTotal: progress.fs.totalBytes
-            });
-        });
-
-        // Process each chunk sequentially to maintain order and manage memory
-        for (const [index, chunkKey] of chunkKeys.entries()) {
-            logger.debug(`Processing chunk ${index + 1}/${chunkKeys.length}`, {
-                jobId,
-                chunkKey
-            });
-
-            try {
-                await this.appendChunkToArchive(archive, deliveryBucket, chunkKey);
-                logger.debug(`Successfully appended chunk to archive`, {
-                    jobId,
-                    chunkKey,
-                    chunkNumber: index + 1
-                });
-            } catch (error) {
-                logger.error(`Failed to process chunk`, {
-                    jobId,
-                    chunkKey,
-                    chunkNumber: index + 1,
-                    error: error.message,
-                    stack: error.stack
-                });
-                throw error;
-            }
-        }
-
-        // Generate final ZIP key with timestamp for uniqueness
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const finalZipKey = `archives/${jobId}/final/${timestamp}_complete.zip`;
+        const finalZipKey = `archives/${jobId}/final/prismix-job-results-${timestamp}.zip`;
 
-        logger.info('Finalizing archive and starting upload', {
-            jobId,
-            finalZipKey,
-            deliveryBucket
-        });
-
-        // Finalize the archive (required before upload)
-        archive.finalize();
-
-        // Upload the final ZIP to S3
         try {
-            await uploadZipToS3(
-                this.s3Client,
-                archive,
-                deliveryBucket,
-                finalZipKey
-            );
+            // Create a PassThrough stream
+            const passThrough = new PassThrough();
 
-            logger.info('Successfully uploaded final ZIP', {
-                jobId,
-                finalZipKey,
-                deliveryBucket
+            // Create and configure archive
+            const archive = archiver('zip', {
+                zlib: { level: 9 }
             });
 
-            // Clean up temporary chunk files
-            await this.cleanupChunks(deliveryBucket, chunkKeys);
+            // Handle warnings
+            archive.on('warning', (err) => {
+                if (err.code === 'ENOENT') {
+                    logger.warn('Archive warning', { warning: err.message });
+                } else {
+                    throw err;
+                }
+            });
+
+            // Handle errors
+            archive.on('error', (err) => {
+                throw err;
+            });
+
+            // Pipe archive to PassThrough
+            archive.pipe(passThrough);
+
+            // Create upload manager
+            const upload = new Upload({
+                client: this.s3Client,
+                params: {
+                    Bucket: deliveryBucket,
+                    Key: finalZipKey,
+                    Body: passThrough
+                },
+                tags: [{ Key: 'jobId', Value: jobId }],
+                queueSize: 4,
+                partSize: 1024 * 1024 * 5
+            });
+
+            // Process each chunk
+            for (const chunkKey of chunkKeys) {
+                const chunkStream = await this.getS3ReadStream(deliveryBucket, chunkKey);
+                archive.append(chunkStream, { name: chunkKey.split('/').pop() });
+            }
+
+            // Create promises for both operations
+            const uploadPromise = upload.done();
+            const archivePromise = new Promise((resolve, reject) => {
+                archive.on('end', resolve);
+                archive.on('error', reject);
+            });
+
+            // Finalize the archive
+            archive.finalize();
+
+            // Wait for both operations to complete
+            await Promise.all([uploadPromise, archivePromise]);
+
+            logger.info('Successfully created final ZIP', {
+                jobId,
+                finalZipKey
+            });
 
             return finalZipKey;
         } catch (error) {
@@ -210,6 +188,16 @@ class ZipMergeService {
             });
             // Don't throw as the main operation was successful
         }
+    }
+
+    // Helper method to get S3 read stream
+    async getS3ReadStream(bucket, key) {
+        const command = new GetObjectCommand({
+            Bucket: bucket,
+            Key: key
+        });
+        const response = await this.s3Client.send(command);
+        return response.Body;
     }
 }
 
