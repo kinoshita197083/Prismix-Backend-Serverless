@@ -15,6 +15,9 @@ Resources:
           AttributeType: S
         - AttributeName: evaluation
           AttributeType: N
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime  # TTL attribute name
+        Enabled: true
       KeySchema:
         - AttributeName: JobID
           KeyType: HASH
@@ -68,6 +71,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: JobId
           AttributeType: S
+      TimeToLiveSpecification:
+        AttributeName: expiresAt  # TTL attribute name
+        Enabled: true
       KeySchema:
         - AttributeName: JobId
           KeyType: HASH

@@ -22,6 +22,24 @@ Resources:
             AllowedOrigins:
               - '*'
             MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          # Default 180-day expiration rule
+          - Id: DefaultExpirationRule
+            Status: Enabled
+            ExpirationInDays: 180
+            TagFilters:
+              - Key: preserve
+                Value: ''
+            
+          # Permanent preservation rule
+          - Id: CustomPreservationRule
+            Status: Enabled
+            TagFilters:
+              - Key: preserve
+                Value: permanent
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 180
 
   PrismixImageCloudfrontDistribution:
     Type: AWS::CloudFront::Distribution

@@ -46,29 +46,26 @@ const getEmailFooter = () => `
 
 const getEmailStyles = () => `
     body { 
-        font-family: Arial, sans-serif; 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         line-height: 1.6; 
-        color: #1C1C1C; 
+        color: #2C3E50; 
         margin: 0; 
         padding: 0; 
-        background-color: #F6F6F6;
+        background-color: #F8F9FA;
     }
     .container { 
-        max-width: 640px; 
-        margin: 32px auto; 
+        max-width: 600px; 
+        margin: 40px auto; 
         background-color: #FFFFFF;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
     }
     .header { 
-        background-color: #121212; 
+        background-color: #1A365D; 
         color: #FFFFFF; 
         padding: 32px 40px; 
         text-align: left;
-    }
-    .logo {
-        height: 32px;
-        margin-bottom: 24px;
-        display: block;
+        border-radius: 6px 6px 0 0;
     }
     .content { 
         padding: 40px;
@@ -77,85 +74,73 @@ const getEmailStyles = () => `
     .footer { 
         text-align: center; 
         padding: 32px 40px;
-        font-size: 12px; 
-        color: #666666;
-        background-color: #F9F9F9;
-        border-top: 1px solid #E0E0E0;
-    }
-    .footer-links {
-        margin-bottom: 16px;
-    }
-    .footer-links a {
-        color: #666666;
-        text-decoration: none;
-    }
-    .footer-links a:hover {
-        text-decoration: underline;
-    }
-    .footer-copyright {
-        margin: 8px 0;
-    }
-    .footer-note {
-        color: #999999;
-        margin: 8px 0;
+        font-size: 13px; 
+        color: #718096;
+        background-color: #F8F9FA;
+        border-top: 1px solid #E2E8F0;
+        border-radius: 0 0 6px 6px;
     }
     .job-id { 
-        background-color: #F5F5F5; 
+        background-color: #EDF2F7; 
         padding: 8px 12px; 
-        border-radius: 3px; 
-        font-family: 'Courier New', monospace;
+        border-radius: 4px; 
+        font-family: 'SF Mono', Consolas, Monaco, monospace;
         font-size: 14px;
-        color: #333333;
-        border: 1px solid #E0E0E0;
+        color: #2D3748;
+        border: 1px solid #E2E8F0;
         display: inline-block;
     }
     .status-box {
         padding: 24px;
-        background-color: #F9F9F9;
-        border-radius: 4px;
+        background-color: #F8FAFC;
+        border-radius: 6px;
         margin: 24px 0;
+        border: 1px solid #E2E8F0;
     }
     h1 { 
         font-size: 24px; 
-        font-weight: 700; 
+        font-weight: 600; 
         margin: 0; 
-        letter-spacing: -0.5px;
+        letter-spacing: -0.025em;
     }
     p { 
         margin: 16px 0; 
         font-size: 15px;
-        color: #333333;
+        color: #4A5568;
+        line-height: 1.7;
     }
     .warning { 
-        color: #D32F2F;
+        color: #C53030;
         font-weight: 500;
         font-size: 15px;
     }
     .deadline { 
-        color: #1C1C1C; 
+        color: #2D3748; 
         font-weight: 600;
-        background-color: #FFF9C4;
-        padding: 2px 4px;
+        background-color: #FEFCBF;
+        padding: 2px 6px;
+        border-radius: 3px;
     }
     .error-details { 
-        background-color: #FFEBEE; 
+        background-color: #FFF5F5; 
         padding: 24px; 
-        border-radius: 4px; 
+        border-radius: 6px; 
         margin: 24px 0;
-        border-left: 4px solid #EF5350;
+        border-left: 4px solid #FC8181;
     }
     .button {
         display: inline-block;
         padding: 12px 24px;
-        background-color: #121212;
+        background-color: #1A365D;
         color: #FFFFFF;
         text-decoration: none;
         border-radius: 4px;
         margin: 16px 0;
         font-weight: 500;
+        transition: background-color 0.2s ease;
     }
     .button:hover {
-        background-color: #2C2C2C;
+        background-color: #2C5282;
     }
 `;
 

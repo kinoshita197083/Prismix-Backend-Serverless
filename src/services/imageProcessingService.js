@@ -43,15 +43,22 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
         `processed_${Date.now()}_$1`
     );
 
-    // Upload processed image
+    // Get existing metadata from the original object
+    const originalMetadata = await s3Service.getObjectMetadata(bucket, s3ObjectKey);
+
+    // Merge existing metadata with new metadata
+    const mergedMetadata = {
+        ...originalMetadata,
+        resized: "true"  // Add or update the resized flag
+    };
+
+    // Upload with merged metadata
     await s3Service.uploadFile({
         Bucket: bucket,
         Key: newKey,
         Body: processedBuffer,
         ContentType: `image/${outputFormat}`,
-        Metadata: {
-            resized: "true"  // When upload to S3, it does not trigger subsequent processing
-        }
+        Metadata: mergedMetadata // When upload to S3, it does not trigger subsequent processing
     });
 
     return newKey;

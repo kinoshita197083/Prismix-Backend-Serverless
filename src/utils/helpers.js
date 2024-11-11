@@ -54,6 +54,19 @@ const formatLabels = (labels) => {
     return [];
 }
 
+const formatTexts = (detectedTexts) => {
+    if (detectedTexts && Array.isArray(detectedTexts) && detectedTexts.length > 0) {
+        // Process text detections
+        return detectedTexts.map((detection) => ({
+            text: detection.DetectedText,
+            confidence: detection.Confidence,
+            type: detection.Type,
+        }));
+    }
+
+    return [];
+}
+
 const createHash = (value) => {
     const crypto = require('crypto');
     return crypto.createHash('md5').update(value).digest('hex');
@@ -73,5 +86,6 @@ module.exports = {
     calculateImageHash,
     formatLabels,
     createHash,
-    chunkArray
+    chunkArray,
+    formatTexts
 };

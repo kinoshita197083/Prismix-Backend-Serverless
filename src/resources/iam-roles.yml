@@ -135,6 +135,9 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
+                  - s3:PutObjectTagging
+                  - s3:PutObjectMetadata
+                  - s3:GetObjectMetadata
                 Resource: 
                   - Fn::Join:
                     - ""
@@ -403,6 +406,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
+                  - s3:PutObjectTagging
+                  - s3:PutObjectMetadata
+                  - s3:GetObjectMetadata
                 Resource:
                   - Fn::Join:
                     - ""

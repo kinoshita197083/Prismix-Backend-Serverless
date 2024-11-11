@@ -1,4 +1,4 @@
-const { DetectLabelsCommand, RekognitionClient } = require('@aws-sdk/client-rekognition');
+const { DetectLabelsCommand, DetectTextCommand, RekognitionClient } = require('@aws-sdk/client-rekognition');
 const dynamoService = require('../../services/dynamoService');
 
 const rekognitionClient = new RekognitionClient({ region: process.env.AWS_REGION });
@@ -22,6 +22,25 @@ async function labelDetection({ bucket, s3ObjectKey }) {
     console.log('Object detection labels:', labels);
 
     return labels;
+}
+
+async function detectText({ bucket, s3ObjectKey }) {
+    // Perform text detection
+    console.log('Performing text detection...');
+    const detectTextCommand = new DetectTextCommand({
+        Image: {
+            S3Object: {
+                Bucket: bucket,
+                Name: s3ObjectKey,
+            },
+        },
+    });
+
+    const rekognitionResult = await rekognitionClient.send(detectTextCommand);
+    const text = rekognitionResult.TextDetections || [];
+    console.log('Text detection:', text);
+
+    return text;
 }
 
 async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 3) {

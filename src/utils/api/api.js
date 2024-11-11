@@ -15,6 +15,17 @@ async function fetchProjectSettingRules(jobId) {
     }
 }
 
+async function fetchPreserveFileDays(jobId) {
+    try {
+        const jobProgress = await dynamoService.getItem(process.env.JOB_PROGRESS_TABLE, { JobId: jobId });
+        return jobProgress?.preserveFileDays;
+    } catch (error) {
+        console.log('dynamoService.getItem() failed', { error, jobId });
+        throw error;
+    }
+}
+
 module.exports = {
-    fetchProjectSettingRules
+    fetchProjectSettingRules,
+    fetchPreserveFileDays
 };

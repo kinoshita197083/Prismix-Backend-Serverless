@@ -94,7 +94,7 @@ const dynamoService = {
         reason,
         processingDetails
     }) {
-        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, processingDetails, evaluation, duplicateOf, duplicateOfS3Key, reason });
+        console.log('Updating task status with:', { jobId, taskId, imageS3Key, status, labels, processingDetails, evaluation, duplicateOf, duplicateOfS3Key, reason, expirationTime });
 
         const updateExpression = [
             'TaskStatus = :status',
@@ -125,6 +125,11 @@ const dynamoService = {
         if (reason) {
             updateExpression.push('Reason = :reason')
             expressionAttributeValues[':reason'] = reason;
+        }
+
+        if (expirationTime) {
+            updateExpression.push('ExpirationTime = :expirationTime')
+            expressionAttributeValues[':expirationTime'] = expirationTime;
         }
 
         if (processingDetails) {
@@ -205,14 +210,15 @@ const dynamoService = {
         await docClient.send(command);
     },
 
-    async updateTaskStatusAsFailed({ jobId, taskId, imageS3Key, reason }) {
+    async updateTaskStatusAsFailed({ jobId, taskId, imageS3Key, reason, preserveFileDays }) {
         return await this.updateTaskStatus({
             jobId,
             taskId,
             status: COMPLETED,
             evaluation: FAILED,
             imageS3Key,
-            reason
+            reason,
+            expirationTime: (Date.now() + preserveFileDays * 24 * 60 * 60 * 1000).toString(), // User defined number of days to preserve the file
         });
     },
 

@@ -2,7 +2,7 @@ const logger = require('../utils/logger');
 const { COMPLETED, WAITING_FOR_REVIEW, EXCLUDED } = require('../utils/config');
 const { processImageProperties } = require('../services/imageProcessingService');
 const { validateImageQuality } = require('../services/qualityService');
-const { formatLabels, createHash } = require('../utils/helpers');
+const { formatLabels, createHash, formatTexts } = require('../utils/helpers');
 const { duplicateImageDetection, labelDetection } = require('../utils/worker/imageProcessing');
 const dynamoService = require('../services/dynamoService');
 const { evaluationMapper, evaluate } = require('../utils/worker/evaluation');
@@ -27,6 +27,9 @@ exports.handler = async (event, context) => {
 
             const manualReviewRequired = projectSettings.manualReviewRequired;
             console.log('manualReviewRequired', manualReviewRequired);
+
+            const preserveFileDays = projectSettings.preserveFileDays;
+            console.log('preserveFileDays', preserveFileDays);
 
             // Step 1: Check for duplicates if enabled
             if (projectSettings.detectDuplicates) {
@@ -57,13 +60,13 @@ exports.handler = async (event, context) => {
             console.log('999 Image properties processed. Validating image quality...');
 
             // Step 3: Validate image quality if enabled
-            if (projectSettings.blurryImages || projectSettings.lowResolution) {
+            if (projectSettings.blurryImages || projectSettings.removeLowResolution) {
                 const qualityResult = await validateImageQuality({
                     bucket,
                     key: processedImageKey,
                     settings: {
                         checkBlur: projectSettings.blurryImages,
-                        checkResolution: projectSettings.lowResolution,
+                        checkResolution: projectSettings.removeLowResolution,
                         minResolution: projectSettings.minimumResolution
                     }
                 });
@@ -83,7 +86,7 @@ exports.handler = async (event, context) => {
 
             // Step 4: Perform content detection if any detection settings are enabled
             let labels = [];
-            if (projectSettings?.contentTags?.length > 0 || projectSettings?.textTags?.length > 0) {
+            if (projectSettings?.contentTags?.length > 0) {
                 labels = await labelDetection({
                     bucket,
                     s3ObjectKey: processedImageKey,
@@ -91,10 +94,21 @@ exports.handler = async (event, context) => {
             }
             const formattedLabels = formatLabels(labels);
 
-            console.log('999 Content detection performed. Evaluating results...');
+            console.log('Content detection performed successfully. Performing text detection...');
+
+            let detectedTexts = [];
+            if (projectSettings?.textTags?.length > 0) {
+                detectedTexts = await detectText({
+                    bucket,
+                    s3ObjectKey: processedImageKey,
+                });
+            }
+            const formattedTexts = formatTexts(detectedTexts);
+
+            console.log('999 Text detection performed successfully. Evaluating results...');
 
             // Step 5: Evaluate results and update status
-            const evaluation = await evaluate(formattedLabels, projectSettings);
+            const evaluation = await evaluate(formattedLabels, formattedTexts, projectSettings);
             let finalEvaluation = evaluationMapper[evaluation];
             let status = COMPLETED;
             let reason = finalEvaluation === EXCLUDED ? 'Labels excluded by project settings' : undefined;
@@ -116,11 +130,13 @@ exports.handler = async (event, context) => {
                 reason,
                 processingDetails: {
                     wasResized: processedImageKey !== s3ObjectKey,
-                    qualityChecked: projectSettings.blurryImages || projectSettings.lowResolution,
-                    detectionPerformed: labels.length > 0,
+                    qualityChecked: projectSettings.blurryImages || projectSettings.removeLowResolution,
+                    detectionPerformed: labels.length > 0 || detectedTexts.length > 0,
                     formattedLabels,
+                    formattedTexts,
                     needsReview: status === WAITING_FOR_REVIEW
-                }
+                },
+                expirationTime: (Date.now() + preserveFileDays * 24 * 60 * 60 * 1000).toString(), // User defined number of days to preserve the file
             });
 
         } catch (error) {
@@ -137,7 +153,8 @@ exports.handler = async (event, context) => {
                     jobId,
                     taskId: imageId,
                     imageS3Key: s3ObjectKey,
-                    reason: error.message
+                    reason: error.message,
+                    preserveFileDays: projectSettings.preserveFileDays
                 });
             } catch (retryUpdateError) {
                 logger.error('Error updating task status to FAILED in TASK_TABLE', { error: retryUpdateError.message, jobId, taskId: imageId });
@@ -153,7 +170,8 @@ async function fetchProjectSettingRules(jobId) {
         console.log('Fetch project setting rules response:', response);
         const projectSettingsWithManualReview = {
             ...response?.projectSetting,
-            manualReviewRequired: response?.manualReviewRequired
+            manualReviewRequired: response?.manualReviewRequired,
+            preserveFileDays: response?.preserveFileDays
         };
         return projectSettingsWithManualReview;
     } catch (error) {

@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const { fetchGoogleRefreshToken, getAllImagesFromDrive, processImageBatch, setUpGoogleDriveClient } = require('../utils/googleDrive/googleDrive');
 const dynamoService = require('../services/dynamoService');
 const { FAILED, COMPLETED } = require('../utils/config');
+const { fetchPreserveFileDays } = require('../utils/api/api');
 
 const s3Client = new S3Client();
 
@@ -49,16 +50,27 @@ async function processRecord(record) {
 
         // await updateJobProgress(jobId, failedUploads, skippedUploads, images.length);
         // Update task status as COMPLETED with FAILED evaluation for downstream aggregation in job summary
-        const updatePromises = [...failedUploads, ...skippedUploads].map(async (upload) => {
-            return dynamoService.updateTaskStatus({
-                jobId,
-                taskId: upload.fileName,
-                status: COMPLETED,
-                evaluation: FAILED,
-                reason: `${upload.reason} - ${upload.attempt} attempts`
+        const failedImages = [...failedUploads, ...skippedUploads];
+
+        if (failedImages.length > 0) {
+            console.log('----> Updating task status as COMPLETED with FAILED evaluation for downstream aggregation in job summary', { failedImages });
+
+            // Fetch the preserve file days for the job from the job progress table
+            const preserveFileDays = await fetchPreserveFileDays(jobId); // User defined TTL for the file
+
+            const updatePromises = failedImages.map(async (upload) => {
+                return dynamoService.updateTaskStatus({
+                    jobId,
+                    taskId: upload.fileName,
+                    status: COMPLETED,
+                    evaluation: FAILED,
+                    reason: `${upload.reason} - ${upload.attempt} attempts`,
+                    preserveFileDays: preserveFileDays
+                });
             });
-        });
-        await Promise.all(updatePromises);
+            await Promise.all(updatePromises);
+        }
+
         await updateProcessedDriveInfo(jobId, driveIds, folderIds);
 
         console.log(`----> Image uploader processed successfully for ${successCount.length} images, failed ${failedUploads.length} and skipped ${skippedUploads.length}`);

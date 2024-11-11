@@ -5,65 +5,150 @@ const evaluationMapper = {
     true: EXCLUDED
 };
 
-async function evaluate(labels, projectSettings) {
-    const { detectionConfidence, contentTags } = projectSettings;
-    const minConfidence = detectionConfidence;
+const debug = (message, ...args) => {
+    console.log(`[Evaluation] ${message}`, ...args);
+};
 
-    // Normalize content tags for case-insensitive comparison
-    const normalizedContentTags = new Set(
-        contentTags.map(tag => tag.value.toLowerCase())
-    );
+// Helper functions for text normalization
+const normalizeWord = (word) => {
+    const normalized = word.toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .replace(/(?:s|es|ing|ed)$/, '');
+    debug('Normalized word:', { original: word, normalized });
+    return normalized;
+};
 
-    // Create a stemming/normalization function for better matching
-    const normalizeWord = (word) => {
-        // Remove common suffixes and standardize terms
-        return word.toLowerCase()
-            .replace(/[^\w\s]/g, '') // Remove punctuation
-            .replace(/(?:s|es|ing|ed)$/, ''); // Remove common endings
+const createNormalizedSet = (contentTags) => {
+    debug('Creating normalized tag sets from:', contentTags);
+    const normalizedTags = new Set(contentTags.map(tag => tag.value.toLowerCase()));
+    const fuzzyTags = new Set([...normalizedTags].map(normalizeWord));
+
+    debug('Created tag sets:', {
+        direct: [...normalizedTags],
+        fuzzy: [...fuzzyTags]
+    });
+
+    return {
+        direct: normalizedTags,
+        fuzzy: fuzzyTags
     };
+};
 
-    // Create normalized versions of content tags for fuzzy matching
-    const normalizedContentTagsSet = new Set(
-        [...normalizedContentTags].map(normalizeWord)
-    );
+// Matching functions
+const hasDirectMatch = (text, tagSet) => {
+    const normalizedText = text.toLowerCase();
+    const hasMatch = tagSet.has(normalizedText);
+    debug('Direct match check:', {
+        text,
+        normalizedText,
+        hasMatch
+    });
+    return hasMatch;
+};
 
-    // Check each label
-    for (const label of labels) {
-        const confidence = parseFloat(label.confidence);
+const hasFuzzyMatch = (text, tagSet) => {
+    const normalizedText = normalizeWord(text.toLowerCase());
+    const hasMatch = tagSet.has(normalizedText);
+    debug('Fuzzy match check:', {
+        text,
+        normalizedText,
+        hasMatch
+    });
+    return hasMatch;
+};
 
-        // Skip if confidence is too low
-        if (confidence < minConfidence) {
-            continue;
-        }
+const hasPartialMatch = (text, tagSet) => {
+    const words = text.toLowerCase().split(/\s+/);
+    debug('Partial match check - words:', { text, words });
 
-        const normalizedLabelName = label.name.toLowerCase();
+    const hasMatch = words.some(word => {
+        const normalizedWord = normalizeWord(word);
+        const matched = tagSet.has(normalizedWord);
+        debug('Partial match word check:', {
+            word,
+            normalizedWord,
+            matched
+        });
+        return matched;
+    });
 
-        // Direct match check
-        if (normalizedContentTags.has(normalizedLabelName)) {
-            console.log('Direct match found:', label.name);
-            return true;
-        }
+    return hasMatch;
+};
 
-        // Normalized/fuzzy match check
-        const normalizedLabel = normalizeWord(normalizedLabelName);
-        if (normalizedContentTagsSet.has(normalizedLabel)) {
-            console.log('Normalized match found:', label.name);
-            return true;
-        }
+const checkMatches = (text, tagSets, source) => {
+    debug(`Checking matches for ${source}:`, { text });
 
-        // Word-by-word check for multi-word labels
-        const labelWords = normalizedLabelName.split(/\s+/);
-        for (const word of labelWords) {
-            const normalizedWord = normalizeWord(word);
-            if (normalizedContentTagsSet.has(normalizedWord)) {
-                console.log('Partial match found:', label.name);
-                return true;
-            }
-        }
+    if (hasDirectMatch(text, tagSets.direct)) {
+        debug(`Direct ${source} match found:`, text);
+        return true;
+    }
+    if (hasFuzzyMatch(text, tagSets.fuzzy)) {
+        debug(`Normalized ${source} match found:`, text);
+        return true;
+    }
+    if (hasPartialMatch(text, tagSets.fuzzy)) {
+        debug(`Partial ${source} match found:`, text);
+        return true;
     }
 
-    console.log('No match found');
+    debug(`No ${source} matches found for:`, text);
     return false;
+};
+
+// Main evaluation functions
+const evaluateDetectedTexts = (texts, tagSets) => {
+    debug('Evaluating detected texts:', texts);
+    const result = texts.some(text => checkMatches(text, tagSets, 'text'));
+    debug('Detected texts evaluation result:', result);
+    return result;
+};
+
+const evaluateLabels = (labels, tagSets, minConfidence) => {
+    debug('Evaluating labels:', { labels, minConfidence });
+
+    const result = labels.some(label => {
+        const confidence = parseFloat(label.confidence);
+        const meetsConfidence = confidence >= minConfidence;
+
+        debug('Checking label:', {
+            label: label.name,
+            confidence,
+            meetsConfidence
+        });
+
+        return meetsConfidence && checkMatches(label.name, tagSets, 'label');
+    });
+
+    debug('Labels evaluation result:', result);
+    return result;
+};
+
+// Main evaluation function
+async function evaluate(labels = [], formattedDetectedTexts = [], projectSettings) {
+    debug('Starting evaluation with:', {
+        labelsCount: labels.length,
+        textsCount: formattedDetectedTexts.length,
+        settings: projectSettings
+    });
+
+    const { detectionConfidence, contentTags, textTags } = projectSettings;
+    console.log('detectionConfidence: ', detectionConfidence);
+
+    const contentTagSets = createNormalizedSet(contentTags);
+    const textTagSets = createNormalizedSet(textTags);
+
+    const textMatchResult = formattedDetectedTexts.length === 0 || evaluateDetectedTexts(formattedDetectedTexts, textTagSets);
+    const labelMatchResult = labels.length === 0 || evaluateLabels(labels, contentTagSets, detectionConfidence);
+
+    debug('Evaluation results:', {
+        textMatch: textMatchResult,
+        labelMatch: labelMatchResult
+    });
+
+    const finalResult = textMatchResult && labelMatchResult;
+    debug(`Evaluation complete: ${finalResult ? 'Matches found' : 'No matches found'}`);
+
+    return finalResult;
 }
 
 module.exports = { evaluationMapper, evaluate };
