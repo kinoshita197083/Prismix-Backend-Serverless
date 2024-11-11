@@ -149,3 +149,22 @@ jobProgressDLQProcessor:
   role: JobProgressDLQProcessorRole
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+zipArchiveProcessor:
+  handler: src/handlers/zipArchiveProcessor.handler
+  memorySize: 2048  # Higher memory for handling large datasets
+  timeout: 900      # 15 minutes max
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [ZipDeliveryQueue, Arn]
+        batchSize: 1  # Process one completion message at a time
+  environment:
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    SOURCE_BUCKET: ${self:custom.bucketName}
+    DELIVERY_BUCKET: ${self:service}-${self:provider.stage}-delivery-bucket
+    ZIP_ARCHIVE_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-zip-archive-progress
+    ZIP_DELIVERY_QUEUE_URL: !Ref ZipDeliveryQueue
+  role: !GetAtt ZipArchiveProcessorRole.Arn
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:archiver-layer:1

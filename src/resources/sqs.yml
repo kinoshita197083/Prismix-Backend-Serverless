@@ -183,3 +183,42 @@ Resources:
               Service: events.amazonaws.com
             Action: sqs:SendMessage
             Resource: !GetAtt JobProgressQueue.Arn
+
+  ZipDeliveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-zip-delivery-queue
+      VisibilityTimeout: 900  # 15 minutes
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ZipDeliveryDLQ, Arn]
+        maxReceiveCount: 3
+
+  ZipDeliveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-zip-delivery-dlq
+
+  ZipDeliveryQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ZipDeliveryQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt ZipDeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  ZipDeliveryTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt ZipDeliveryQueue.Arn

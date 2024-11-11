@@ -79,3 +79,33 @@ Resources:
           KeyType: HASH
       # StreamSpecification:
       #   StreamViewType: NEW_IMAGE
+
+  ZipArchiveProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-zip-archive-progress
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: JobId
+          AttributeType: S
+        - AttributeName: ChunkId
+          AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: JobId
+          KeyType: HASH
+        - AttributeName: ChunkId
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime
+        Enabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: JobIdStatusIndex
+          KeySchema:
+            - AttributeName: JobId
+              KeyType: HASH
+            - AttributeName: Status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
