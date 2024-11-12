@@ -168,3 +168,4 @@ zipArchiveProcessor:
   role: !GetAtt ZipArchiveProcessorRole.Arn
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:archiver-layer:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1

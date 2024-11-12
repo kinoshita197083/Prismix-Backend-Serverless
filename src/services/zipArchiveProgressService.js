@@ -345,10 +345,7 @@ class ZipArchiveProgressService {
 
     async updateFinalZipLocation(jobId, finalZipKey) {
         try {
-            // Modify the finalZipKey to use the standardized name
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const standardizedZipKey = `archives/${jobId}/final/prismix-job-results-${timestamp}.zip`;
-
+            console.log('Updating final ZIP location', { jobId, finalZipKey });
             await this.docClient.send(new UpdateCommand({
                 TableName: this.tableName,
                 Key: {
@@ -361,14 +358,14 @@ class ZipArchiveProgressService {
                 },
                 ExpressionAttributeValues: {
                     ':status': 'COMPLETED',
-                    ':zipKey': standardizedZipKey,
+                    ':zipKey': finalZipKey,
                     ':completedAt': Date.now().toString()
                 }
             }));
 
             logger.info('Successfully updated final ZIP location', {
                 jobId,
-                finalZipKey: standardizedZipKey
+                finalZipKey
             });
         } catch (error) {
             logger.error('Failed to update final ZIP location', {
@@ -480,4 +477,4 @@ class ZipArchiveProgressService {
     }
 }
 
-module.exports = ZipArchiveProgressService; 
+module.exports = ZipArchiveProgressService;

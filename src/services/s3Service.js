@@ -4,6 +4,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListO
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { streamToBuffer } = require('../utils/helpers');
 const { Upload } = require("@aws-sdk/lib-storage");
+const { PassThrough } = require('stream');
 
 const s3 = new S3Client();
 
@@ -132,6 +133,42 @@ class S3Service {
         });
         return (await this.s3Client.send(command)).Body;
     }
+
+    async getS3ReadStream(bucket, key) {
+        try {
+            const command = new GetObjectCommand({
+                Bucket: bucket,
+                Key: key
+            });
+            const response = await this.s3Client.send(command);
+            return response.Body;
+        } catch (error) {
+            logger.error('Failed to get S3 read stream', {
+                bucket,
+                key,
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
+    createUploadStream(bucket, key) {
+        const passThrough = new PassThrough();
+
+        const upload = new Upload({
+            client: this.s3Client,
+            params: {
+                Bucket: bucket,
+                Key: key,
+                Body: passThrough
+            },
+            queueSize: 4,
+            partSize: 5 * 1024 * 1024
+        });
+
+        return { passThrough, upload };
+    }
+
 };
 
 module.exports = new S3Service(s3);

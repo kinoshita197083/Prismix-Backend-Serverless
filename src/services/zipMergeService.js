@@ -1,4 +1,4 @@
-const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { Readable, PassThrough } = require('stream');
 const archiver = require('archiver');
 const logger = require('../utils/logger');
@@ -203,4 +203,4 @@ class ZipMergeService {
     }
 }
 
-module.exports = ZipMergeService; 
+module.exports = ZipMergeService;

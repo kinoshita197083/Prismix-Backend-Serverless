@@ -479,18 +479,23 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource: 
-                  - !GetAtt TasksTable.Arn
+                  - Fn::GetAtt: [TasksTable, Arn]
               - Effect: Allow
                 Action:
                   - s3:GetObject
                 Resource: 
-                  - !Join ['', ['arn:aws:s3:::', '${self:custom.bucketName}', '/*']]
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
               - Effect: Allow
                 Action:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt ZipDeliveryQueue.Arn
+                Resource: 
+                  - Fn::GetAtt: [ZipDeliveryQueue, Arn]
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -500,4 +505,6 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:BatchWriteItem
                   - dynamodb:DeleteItem
-                Resource: !GetAtt ZipArchiveProgressTable.Arn
+                Resource: 
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [ZipArchiveProgressTable, Arn]
