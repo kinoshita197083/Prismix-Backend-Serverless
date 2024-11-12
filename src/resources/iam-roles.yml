@@ -456,44 +456,6 @@ Resources:
                   - Fn::GetAtt: [JobProgressQueue, Arn]
                   - Fn::GetAtt: [JobProgressDLQ, Arn]
 
-  JobCleanupRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: ${self:service}-${self:provider.stage}-job-cleanup-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-      Policies:
-        - PolicyName: job-cleanup-policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                  - dynamodb:UpdateItem
-                Resource:
-                  - Fn::GetAtt: [JobProgressTable, Arn]
-                  - Fn::GetAtt: [TasksTable, Arn]
-              - Effect: Allow
-                Action:
-                  - sns:Publish
-                Resource:
-                  Ref: JobCompletionTopic
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
-                Resource: "*"
-
   ZipArchiveProcessorRole:
     Type: AWS::IAM::Role
     Properties:
@@ -506,6 +468,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
         - PolicyName: zip-archive-processor-policy
           PolicyDocument:
@@ -534,4 +497,7 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
                   - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
                 Resource: !GetAtt ZipArchiveProgressTable.Arn

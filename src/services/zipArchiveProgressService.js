@@ -1,4 +1,4 @@
-const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand, BatchWriteCommand } = require('@aws-sdk/lib-dynamodb');
 const logger = require('../utils/logger');
 
 /**
@@ -17,6 +17,8 @@ class ZipArchiveProgressService {
     constructor(docClient) {
         this.docClient = docClient;
         this.tableName = process.env.ZIP_ARCHIVE_PROGRESS_TABLE;
+        this.metadataCache = new Map(); // Simple in-memory cache
+        this.cacheTTL = 60000; // 1 minute
     }
 
     /**
@@ -98,47 +100,44 @@ class ZipArchiveProgressService {
      * @returns {Promise<Object|null>} The next chunk to process or null if none available
      */
     async getNextPendingChunk(jobId) {
-        logger.debug('Fetching next pending chunk', { jobId });
-
         try {
-            const result = await this.docClient.send(new QueryCommand({
-                TableName: this.tableName,
-                KeyConditionExpression: 'JobId = :jobId',
-                ExpressionAttributeValues: {
-                    ':jobId': jobId
-                }
-            }));
-
-            const metadata = result.Items.find(item => item.ChunkId === 'metadata');
+            const metadata = await this.getJobMetadata(jobId);
 
             if (!metadata) {
                 logger.warn('No metadata found for job', { jobId });
-                return null;
+                return false;
             }
 
             if (metadata.Status === 'COMPLETED') {
-                logger.info('Job already completed', { jobId });
-                return null;
+                logger.info('Job already completed, no more chunks to process', { jobId });
+                return false;
             }
 
-            // Find first pending chunk that hasn't exceeded retry limit
+            // Find the first truly pending chunk (not IN_PROGRESS or COMPLETED)
             const pendingChunk = metadata.Chunks.find(chunk =>
-                chunk.status === 'PENDING' && chunk.retryCount < MAX_CHUNK_RETRIES
+                chunk.status === 'PENDING' &&
+                chunk.status !== 'IN_PROGRESS' &&
+                chunk.status !== 'COMPLETED'
             );
 
-            if (pendingChunk) {
-                logger.info('Found pending chunk', {
-                    jobId,
-                    chunkId: pendingChunk.chunkId,
-                    retryCount: pendingChunk.retryCount
-                });
-            } else {
+            if (!pendingChunk) {
                 logger.info('No pending chunks available', { jobId });
+                return false;
             }
 
-            return pendingChunk;
+            logger.info('Found pending chunk', {
+                jobId,
+                chunkId: pendingChunk.chunkId,
+                retryCount: pendingChunk.retryCount || 0
+            });
+
+            return {
+                ...pendingChunk,
+                startIndex: pendingChunk.startIndex,
+                endIndex: pendingChunk.endIndex
+            };
         } catch (error) {
-            logger.error('Error fetching pending chunk', {
+            logger.error('Error getting next pending chunk', {
                 jobId,
                 error: error.message,
                 stack: error.stack
@@ -269,19 +268,17 @@ class ZipArchiveProgressService {
             }));
 
             const metadata = result.Items[0];
-            if (!metadata || !metadata.Chunks) {
-                return false;
+            if (!metadata || !metadata.Chunks || metadata.Status === 'COMPLETED') {
+                return false;  // Already completed or invalid state
             }
 
-            // Count completed chunks
             const completedChunks = metadata.Chunks.filter(
                 chunk => chunk.status === 'COMPLETED'
             ).length;
 
             const isComplete = completedChunks === metadata.TotalChunks;
 
-            // If all chunks are complete but job status isn't updated yet
-            if (isComplete && metadata.Status !== 'COMPLETED') {
+            if (isComplete) {
                 try {
                     // Update the metadata record with completed status
                     await this.docClient.send(new UpdateCommand({
@@ -292,13 +289,14 @@ class ZipArchiveProgressService {
                         },
                         UpdateExpression: 'SET #st = :status, CompletedChunks = :completedChunks, UpdatedAt = :updatedAt',
                         ExpressionAttributeNames: {
-                            '#st': 'Status'  // Use ExpressionAttributeNames for Status
+                            '#st': 'Status'
                         },
                         ExpressionAttributeValues: {
                             ':status': 'COMPLETED',
                             ':completedChunks': completedChunks,
                             ':updatedAt': Date.now().toString()
-                        }
+                        },
+                        ConditionExpression: '#st <> :status'  // Only update if not already completed
                     }));
 
                     logger.info('Updated job status to COMPLETED', {
@@ -307,11 +305,9 @@ class ZipArchiveProgressService {
                         totalChunks: metadata.TotalChunks
                     });
                 } catch (error) {
-                    logger.error('Failed to update job completion status', {
-                        jobId,
-                        error: error.message,
-                        stack: error.stack
-                    });
+                    if (error.name === 'ConditionalCheckFailedException') {
+                        return false;  // Already marked as completed by another process
+                    }
                     throw error;
                 }
             }
@@ -420,6 +416,62 @@ class ZipArchiveProgressService {
             logger.error('Failed to update job status', {
                 jobId,
                 status,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async updateChunkStatuses(updates) {
+        const batchWrites = updates.map(({ jobId, chunkId, status, error, zipKey }) => ({
+            Put: {
+                TableName: this.tableName,
+                Item: {
+                    JobId: jobId,
+                    ChunkId: chunkId,
+                    Status: status,
+                    UpdatedAt: Date.now().toString(),
+                    ExpirationTime: Math.floor(Date.now() / 1000) + (CHUNK_TTL_DAYS * 24 * 60 * 60),
+                    ...(zipKey && { ZipKey: zipKey }),
+                    ...(error && { ErrorMessage: error })
+                }
+            }
+        }));
+
+        // Process in batches of 25 (DynamoDB limit)
+        for (let i = 0; i < batchWrites.length; i += 25) {
+            const batch = batchWrites.slice(i, i + 25);
+            await this.docClient.send(new BatchWriteCommand({
+                RequestItems: {
+                    [this.tableName]: batch
+                }
+            }));
+        }
+    }
+
+    async getJobMetadata(jobId) {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: this.tableName,
+                KeyConditionExpression: 'JobId = :jobId AND ChunkId = :metadataId',
+                ExpressionAttributeValues: {
+                    ':jobId': jobId,
+                    ':metadataId': 'metadata'
+                }
+            }));
+
+            const metadata = result.Items?.[0];
+
+            if (!metadata) {
+                logger.warn('No metadata found for job', { jobId });
+                return null;
+            }
+
+            return metadata;
+        } catch (error) {
+            logger.error('Error fetching job metadata', {
+                jobId,
                 error: error.message,
                 stack: error.stack
             });

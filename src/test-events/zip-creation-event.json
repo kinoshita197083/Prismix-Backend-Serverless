@@ -1,12 +1,12 @@
 {
     "Records": [
         {
-            "messageId": "a485ba2e-75f8-446b-b552-c0939c687764",
-            "receiptHandle": "AQEBdAGJRib1b7G2t1E+pCjypsZM3F0uklDl5s6lxdc5aCvUjRHqsA5h1GCEbAsJ6wU3gpmy3keFJ4N+NfkxFF0LV+HJD38BAoDgKnOFPcOT2QcpOKXzcUKy+u+1jfOa2x06tUOwCrWTGF/SmbRfMPPNeaxnP0tJMIP6VuquJP+USHg+nsy2DypUkJ/jfzTJuGxDQGrXxMUoCbP+cLgItEegqT5Hyec23K04I2+T+9Pdk1Ig6Izktf7nD4sIeG+AFGzaF82rCv4zUHjFHWQNqsRvvaB6hvv5skdp55eu47rcCrtt3UJq7Gu2bqWZlHxsDg84jQEZlHXHQKFIqEaQMWPtslm8UKk7VApJrGLp9tmNBRrjUYWpG5v2ebISIWVFDgZfy4N3marsVTQPDgc4sqMYmZ4sKFOMmP7AlRG701JWSPw=",
-            "body": "{\n  \"Type\": \"Notification\",\n  \"MessageId\": \"47490c1b-756b-54b4-879b-53b09e42393c\",\n  \"SequenceNumber\": \"10000000000000036000\",\n  \"TopicArn\": \"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo\",\n  \"Message\": \"{\\\"jobId\\\":\\\"9e2ca4c8-a035-46bf-992d-714bb35cb4d3\\\",\\\"status\\\":\\\"COMPLETED\\\",\\\"additionalData\\\":{\\\"completedAt\\\":\\\"1731324137304\\\",\\\"status\\\":\\\"COMPLETED\\\"}}\",\n  \"Timestamp\": \"2024-11-11T11:22:17.352Z\",\n  \"UnsubscribeURL\": \"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo:8eb7c844-083c-436b-9f18-7485636ff8b4\"\n}",
+            "messageId": "1a6e7114-d3a5-4301-9967-92c9c392856b",
+            "receiptHandle": "AQEBJggnpSMqP5xtTOU7zXG2tO+eeS5qdW5bNiyIJew4l8FfiiaY1jmtd/xXK3IJD04yfm3PFnyarEOHeArzNHZWuj3YNfDHaW8ueUEe/VtXsMeCgR+VVqooFfIXylHjGrFkAmniGExqQIvyjrOtSNRlQk299F+hvlA1rkaWM9jrc2SWKLRRVNxiIJWwjQkaUS/QAqvddWnIWjTw+gA2u1uNuyjqrDQUB1K8S/hPglru5zeUU06HrOndWuRD56872XfV+I32dDLO0EDnJ/fkXTtx/vQxrmLFSPgjBnTPypxaFmSBTLOtcDB1sXtl14SkuEEJCOe/arvhia2ak/OhI037CI/j7lsKMn1UrtLpPZYu1cJWAkVRotvsFycERGvG7i63xz/rpL+7QFCmeblvqliHC57eaAUlCz2IWhMB1TwGI+s=",
+            "body": "{\"Type\":\"Notification\",\"MessageId\":\"caed209d-4ad3-5a78-aa62-7f31fa28ae32\",\"SequenceNumber\":\"10000000000000044000\",\"TopicArn\":\"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo\",\"Message\":\"{\\\"jobId\\\":\\\"a00bc713-9688-4c56-a007-7263c8137efb\\\",\\\"status\\\":\\\"COMPLETED\\\",\\\"additionalData\\\":{\\\"completedAt\\\":\\\"1731374779046\\\",\\\"status\\\":\\\"COMPLETED\\\"}}\",\"Timestamp\":\"2024-11-12T01:26:19.109Z\",\"UnsubscribeURL\":\"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo:8eb7c844-083c-436b-9f18-7485636ff8b4\"}",
             "attributes": {},
             "messageAttributes": {},
-            "md5OfBody": "1b1209dd2a109f01df275d01ce2d0f13",
+            "md5OfBody": "e29d9f12bf54a479cf120aad51d6177f",
             "eventSource": "aws:sqs",
             "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-zip-delivery-queue",
             "awsRegion": "us-east-1"
