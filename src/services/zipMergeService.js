@@ -2,8 +2,14 @@ const { GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { Readable, PassThrough } = require('stream');
 const archiver = require('archiver');
 const logger = require('../utils/logger');
-const { uploadZipToS3 } = require('../utils/s3Streams');
+// const { uploadZipToS3 } = require('../utils/s3Streams');
 const { Upload } = require('@aws-sdk/lib-storage');
+
+let pLimit;
+(async () => {
+    const module = await import('p-limit');
+    pLimit = module.default;
+})();
 
 /**
  * Service responsible for merging multiple ZIP chunks into a single final ZIP file
@@ -25,11 +31,11 @@ class ZipMergeService {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const finalZipKey = `archives/${jobId}/final/prismix-job-results-${timestamp}.zip`;
 
-        try {
-            // Create a PassThrough stream for piping
-            const passThrough = new PassThrough();
+        const passThrough = new PassThrough();
+        const archive = archiver('zip', { zlib: { level: 6 } });
 
-            // Set up the S3 upload
+        try {
+            // Configure S3 multipart upload
             const upload = new Upload({
                 client: this.s3Client,
                 params: {
@@ -37,19 +43,13 @@ class ZipMergeService {
                     Key: finalZipKey,
                     Body: passThrough
                 },
-                queueSize: 4, // Parallel upload parts
-                partSize: 5 * 1024 * 1024 // 5MB parts
+                queueSize: 4,
+                partSize: 5 * 1024 * 1024
             });
 
-            // Create and configure archive
-            const archive = archiver('zip', {
-                zlib: { level: 6 }
-            });
-
-            // Pipe archive to the upload stream
             archive.pipe(passThrough);
 
-            // Log archive progress
+            // Track archive progress
             archive.on('progress', (progress) => {
                 logger.info('Merge progress', {
                     jobId,
@@ -58,19 +58,39 @@ class ZipMergeService {
                 });
             });
 
-            // Process chunks in parallel
-            await Promise.all(chunkKeys.map(async (key) => {
-                logger.info('Adding chunk to final ZIP', { jobId, chunkKey: key });
-                const stream = await this.getS3ReadStream(deliveryBucket, key);
-                archive.append(stream, { name: key.split('/').pop() });
-            }));
+            // Handle errors on archive and passThrough streams
+            archive.on('error', (err) => {
+                logger.error('Archive error', { jobId, error: err.message });
+                throw err;
+            });
+            passThrough.on('error', (err) => {
+                logger.error('PassThrough stream error', { jobId, error: err.message });
+                throw err;
+            });
+
+            // Process chunks concurrently with controlled concurrency
+            const limit = pLimit(5); // Limit to 5 concurrent streams (adjustable based on Lambda memory allocation)
+            await Promise.all(chunkKeys.map((key) =>
+                limit(async () => {
+                    logger.info('Adding chunk to final ZIP', { jobId, chunkKey: key });
+                    const stream = await this.getS3ReadStream(deliveryBucket, key);
+
+                    // Handle stream errors individually
+                    stream.on('error', (err) => {
+                        logger.error('S3 stream error', { jobId, chunkKey: key, error: err.message });
+                        throw err;
+                    });
+
+                    archive.append(stream, { name: key.split('/').pop() });
+                })
+            ));
 
             logger.info('Finalizing archive', { jobId });
 
-            // Important: Wait for archive to finalize
+            // Finalize archive and complete upload
             await archive.finalize();
 
-            // Important: Wait for upload to complete
+            // Ensure the upload finishes successfully
             await upload.done();
 
             logger.info('Successfully merged chunks', {
@@ -79,19 +99,29 @@ class ZipMergeService {
                 chunkCount: chunkKeys.length
             });
 
-            // Clean up chunk files
+            // Cleanup temporary chunk files after successful upload
             await this.cleanupChunks(deliveryBucket, chunkKeys);
 
             return finalZipKey;
+
         } catch (error) {
             logger.error('Failed to merge chunks', {
                 jobId,
                 error: error.message,
                 stack: error.stack
             });
+
+            if (!archive.closed) {
+                archive.abort();
+            }
+
             throw error;
+        } finally {
+            // Always end the passThrough stream in both success and error cases
+            passThrough.end();
         }
     }
+
 
     /**
      * Appends a single chunk file to the archive
@@ -191,6 +221,17 @@ class ZipMergeService {
                 Key: key
             });
             const response = await this.s3Client.send(command);
+
+            if (!(response.Body instanceof Readable)) {
+                const error = new Error(`Invalid stream type for S3 object ${key}`);
+                logger.error('Stream type error', {
+                    bucket,
+                    key,
+                    streamType: typeof response.Body
+                });
+                throw error;
+            }
+
             return response.Body;
         } catch (error) {
             logger.error('Failed to get S3 read stream', {

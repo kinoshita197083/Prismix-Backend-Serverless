@@ -9,6 +9,16 @@ const JobService = require('../services/jobService');
 const JobProgressService = require('../services/jobProgressService');
 const s3Service = require('../services/s3Service');
 const ArchiveService = require('../services/archiveService');
+const { PassThrough } = require('stream');
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
+const archiver = require('archiver');
+const { Upload } = require("@aws-sdk/lib-storage");
+
+let pLimit;
+(async () => {
+    const module = await import('p-limit');
+    pLimit = module.default;
+})();
 
 // Initialize AWS clients
 const ddbClient = new DynamoDBClient();
@@ -26,6 +36,9 @@ const jobProgressService = new JobProgressService(docClient, null, {
 const jobService = new JobService(jobProgressService, zipArchiveProgressService, docClient);
 const archiveService = new ArchiveService(s3Service);
 
+const FILE_PROCESSING_TIMEOUT = 120000 / 2; // 1 minutes per file
+const CHUNK_PROCESSING_TIMEOUT = 600000; // 10 minutes
+
 /**
  * Processes a single chunk of files
  * @param {string} jobId - The ID of the job
@@ -33,35 +46,191 @@ const archiveService = new ArchiveService(s3Service);
  * @param {string[]} allImageKeys - Array of all image S3 keys
  */
 async function processChunk(jobId, chunk, allImageKeys) {
+    // Ensure pLimit is loaded
+    if (!pLimit) {
+        const module = await import('p-limit');
+        pLimit = module.default;
+    }
+
     const { startIndex, endIndex, chunkId } = chunk;
     const chunkImageKeys = allImageKeys.slice(startIndex, endIndex);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const zipKey = `archives/${jobId}/chunks/${chunkId}_${timestamp}.zip`;
 
-    const { archive, upload } = await archiveService.createArchiveStream(
-        jobId,
-        zipKey,
-        process.env.DELIVERY_BUCKET
-    );
+    // Step 1: Set up streams and error handling
+    const passThrough = new PassThrough();
+    const archive = archiver('zip', {
+        zlib: { level: 1 },
+        store: true,
+        forceZip64: true,
+        statConcurrency: 4,
+        highWaterMark: 1024 * 1024
+    });
+
+    // Step 2: Set up S3 upload
+    const upload = new Upload({
+        client: s3Client,
+        params: {
+            Bucket: process.env.DELIVERY_BUCKET,
+            Key: zipKey,
+            Body: passThrough,
+            ContentType: 'application/zip'
+        },
+        queueSize: 4,
+        partSize: 5 * 1024 * 1024,
+        leavePartsOnError: false
+    });
+
+    // Log when passThrough is closed
+    passThrough.on('close', () => {
+        logger.info('PassThrough stream closed.');
+    });
+
+    // Function to cleanly end passThrough
+    const endStream = () => {
+        if (!passThrough.destroyed) {
+            passThrough.end();
+            logger.info('PassThrough stream ended.');
+        }
+    };
 
     try {
-        await archiveService.streamFilesToArchive(archive, chunkImageKeys, process.env.SOURCE_BUCKET);
-        await archiveService.finalizeArchive(archive, upload);
+        // Step 3: Set up error handling and progress tracking
+        // Log archive progress - should be removed when lambda is fully tested
+        archive.on('progress', progress => {
+            logger.debug('Archive progress', {
+                jobId,
+                chunkId,
+                entries: progress.entries.processed,
+                bytes: progress.fs.processedBytes
+            });
+        });
 
+        // Step 4: Pipe archive to PassThrough
+        archive.pipe(passThrough);
+
+        // Step 5: Set up concurrent processing
+        const limit = pLimit(4); // Limit concurrent S3 operations
+        const processImage = async (imageKey) => {
+            try {
+                const fileName = imageKey.split('/').pop();
+                const s3Stream = await getS3ObjectStream(process.env.SOURCE_BUCKET, imageKey);
+
+                await new Promise((resolve, reject) => {
+                    let bytesProcessed = 0;
+
+                    s3Stream.on('data', chunk => {
+                        bytesProcessed += chunk.length;
+                    });
+
+                    s3Stream.on('end', () => {
+                        logger.debug('File processed', { jobId, chunkId, fileName, bytesProcessed });
+                        resolve();
+                    });
+
+                    s3Stream.on('error', reject);
+
+                    archive.append(s3Stream, { name: fileName })
+                        .on('error', reject);
+                });
+            } catch (error) {
+                logger.error('Error processing image', { jobId, chunkId, imageKey, error: error.message });
+                throw error;
+            }
+        };
+
+        // Wrapper with retry logic
+        const processImageWithRetry = async (imageKey, retries = 3) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    await processImage(imageKey);
+                    return;  // Exit if successful
+                } catch (error) {
+                    logger.warn(`Retrying ${imageKey} (${i + 1}/${retries}) due to error: ${error.message}`);
+                    if (i === retries - 1) throw error; // Re-throw after final attempt
+                }
+            }
+        };
+
+        // Step 6: Process all images with controlled concurrency
+        await Promise.all(
+            chunkImageKeys.map(imageKey =>
+                limit(() =>
+                    Promise.race([
+                        processImageWithRetry(imageKey),
+                        new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('File processing timeout')), FILE_PROCESSING_TIMEOUT)
+                        )
+                    ])
+                )
+            )
+        );
+
+        // Step 7: Finalize archive and wait for upload
+        await Promise.all([
+            new Promise((resolve, reject) => {
+                archive.on('end', resolve);
+                archive.on('error', reject);
+                archive.finalize();
+            }),
+            upload.done()
+        ]);
+
+        // Step 8: Update chunk status
         await zipArchiveProgressService.updateChunkStatus(
             jobId, chunkId, 'COMPLETED', null, zipKey
         );
 
-        const isComplete = await zipArchiveProgressService.isJobComplete(jobId);
-        if (isComplete) {
-            await handleJobCompletion(jobId);
-        }
-
         return zipKey;
     } catch (error) {
+        logger.error('Error in processChunk', {
+            jobId,
+            chunkId,
+            error: error.message,
+            stack: error.stack
+        });
+
+        if (archive && !archive.closed) {
+            archive.abort();
+        }
+
         await zipArchiveProgressService.updateChunkStatus(
-            jobId, chunkId, 'FAILED', error.message
+            jobId, chunkId, 'FAILED', error.message, null
         );
+
+        throw error;
+    } finally {
+        // Ensure passThrough is properly closed
+        endStream();
+    }
+}
+
+// Helper function with better error handling
+async function getS3ObjectStream(bucket, key) {
+    try {
+        const command = new GetObjectCommand({
+            Bucket: bucket,
+            Key: key
+        });
+
+        const response = await s3Client.send(command);
+
+        logger.debug('Retrieved S3 object metadata', {
+            bucket,
+            key,
+            contentLength: response.ContentLength,
+            contentType: response.ContentType
+        });
+
+        // Don't pipe through PassThrough, return the body stream directly
+        return response.Body;
+    } catch (error) {
+        logger.error('Error getting S3 object stream', {
+            bucket,
+            key,
+            error: error.message,
+            stack: error.stack
+        });
         throw error;
     }
 }
@@ -87,6 +256,24 @@ async function handleJobCompletion(jobId) {
             chunkKeys
         });
 
+        // If there's only one chunk, we can just use it as the final zip
+        if (chunkKeys.length === 1) {
+            const finalZipKey = chunkKeys[0];
+            logger.info('Single chunk detected, using as final ZIP', {
+                jobId,
+                finalZipKey
+            });
+
+            await zipArchiveProgressService.updateFinalZipLocation(jobId, finalZipKey);
+
+            logger.info('Successfully completed final merge', {
+                jobId,
+                finalZipKey
+            });
+            return;
+        }
+
+        // Otherwise, proceed with merge
         const finalZipKey = await zipMergeService.mergeChunks(
             jobId,
             chunkKeys,
@@ -100,9 +287,6 @@ async function handleJobCompletion(jobId) {
             finalZipKey
         });
 
-        // Here you might want to trigger a notification or update other systems
-        // about the availability of the final ZIP file
-
     } catch (error) {
         logger.error('Error during final merge', {
             jobId,
@@ -113,115 +297,218 @@ async function handleJobCompletion(jobId) {
     }
 }
 
-async function processChunkWithRetry(jobId, chunk, allImageKeys, retries = 3) {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            return await processChunk(jobId, chunk, allImageKeys);
-        } catch (error) {
-            logger.warn('Chunk processing attempt failed', {
-                jobId,
-                chunkId: chunk.chunkId,
-                attempt,
-                error: error.message
-            });
-
-            if (attempt === retries) {
-                logger.error('All retry attempts failed', {
+async function processChunkWithTimeout(jobId, chunk, allImageKeys) {
+    return Promise.race([
+        processChunk(jobId, chunk, allImageKeys),
+        new Promise((_, reject) =>
+            setTimeout(() => {
+                const err = new Error('Chunk processing timeout');
+                logger.error('Chunk processing timeout', {
                     jobId,
-                    chunkId: chunk.chunkId,
-                    error: error.message,
-                    stack: error.stack
+                    chunkId: chunk.chunkId
                 });
-                throw error;
-            }
+                reject(err);
+            }, CHUNK_PROCESSING_TIMEOUT)
+        )
+    ]);
+}
 
-            // Exponential backoff
-            await new Promise(resolve =>
-                setTimeout(resolve, Math.pow(2, attempt) * 1000)
-            );
-        }
+const BATCH_TIMEOUT = 840000; // 14 minutes (leaving 1 minute buffer for 15-minute Lambda)
+
+async function processWithTimeout(promise, timeoutMs, operationName) {
+    let timeoutId;
+
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error(`${operationName} operation timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+    });
+
+    try {
+        const result = await Promise.race([promise, timeoutPromise]);
+        clearTimeout(timeoutId);
+        return result;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
     }
 }
 
 async function processEligibleTasks(jobId, allImageKeys) {
-    const chunks = await jobService.collectPendingChunks(jobId);
-
-    if (chunks.length === 0) {
-        logger.info('No chunks to process', { jobId });
-        return;
-    }
-
-    const concurrencyLimit = 3;
-    const chunkBatches = jobService.chunk(chunks, concurrencyLimit);
-
-    for (const batch of chunkBatches) {
-        await Promise.all(
-            batch.map(chunk =>
-                processChunkWithRetry(jobId, chunk, allImageKeys)
-            )
-        );
-    }
-
-    logger.info('Completed processing all chunks', {
+    const logTaskStart = () => logger.info('Starting processEligibleTasks', {
         jobId,
-        processedChunks: chunks.length
+        imageKeysCount: allImageKeys.length
     });
+
+    const collectAndBatchChunks = async () => {
+        const chunks = await jobService.collectPendingChunks(jobId);
+        if (chunks.length === 0) {
+            logger.info('No chunks to process', { jobId });
+            return [];
+        }
+        return jobService.chunk(chunks, 3);
+    };
+
+    const processBatch = async (batch) => {
+        logger.info('Processing batch', {
+            jobId,
+            batchSize: batch.length
+        });
+
+        await processWithTimeout(
+            Promise.all(batch.map(chunk => processChunkWithTimeout(jobId, chunk, allImageKeys))),
+            BATCH_TIMEOUT,
+            'Batch processing'
+        );
+
+        logger.info('Batch processing completed', {
+            jobId,
+            batchSize: batch.length
+        });
+    };
+
+    const checkAllChunksStatus = async () => {
+        const allChunksStatus = await zipArchiveProgressService.getAllChunksStatus(jobId);
+        logger.info('Retrieved chunks status', {
+            jobId,
+            chunksCount: allChunksStatus.length,
+            statuses: allChunksStatus.map(chunk => ({
+                chunkId: chunk.chunkId,
+                status: chunk.status
+            }))
+        });
+
+        const allCompleted = allChunksStatus.every(chunk => chunk.status === 'COMPLETED');
+        const hasFailures = allChunksStatus.some(chunk => chunk.status === 'FAILED');
+
+        if (hasFailures) {
+            logger.error('Some chunks failed processing', {
+                jobId,
+                failedChunks: allChunksStatus.filter(chunk => chunk.status === 'FAILED').map(chunk => chunk.chunkId)
+            });
+            throw new Error('Some chunks failed processing');
+        }
+
+        return allCompleted;
+    };
+
+    try {
+        logTaskStart();
+        const chunkBatches = await collectAndBatchChunks();
+        if (chunkBatches.length === 0) return;
+
+        for (const batch of chunkBatches) {
+            await processBatch(batch);
+        }
+
+        logger.info('Completed processing all chunks', {
+            jobId,
+            processedChunks: chunkBatches.flat().length
+        });
+
+        if (await checkAllChunksStatus()) {
+            logger.info('All chunks completed, starting final merge', { jobId });
+            await handleJobCompletion(jobId);
+            logger.info('Job fully completed, exiting', { jobId });
+            return true;
+        } else {
+            logger.info('Not all chunks completed yet', { jobId });
+            return false;
+        }
+    } catch (error) {
+        logger.error('Error in processEligibleTasks', {
+            jobId,
+            error: error.message,
+            stack: error.stack
+        });
+        throw error;
+    }
 }
 
 /**
  * Main Lambda handler
  */
 exports.handler = async (event) => {
-    logger.info('Received event', {
-        recordCount: event?.Records?.length
+    const logHandlerStart = () => logger.info('Starting handler execution', {
+        recordCount: event?.Records?.length,
+        timestamp: new Date().toISOString()
     });
 
-    console.log('event', JSON.stringify(event, null, 2));
+    const parseRecord = (record) => {
+        const body = JSON.parse(record.body);
+        return body.Message ? JSON.parse(body.Message) : body;
+    };
 
-    const batchItemFailures = [];
+    const fetchTotalFiles = async (jobId, additionalData) => {
+        let totalFiles = additionalData?.finalStatistics?.eligible;
+        if (!totalFiles) {
+            logger.info('Fetching totalFiles from DB', { jobId });
+            const currentJobProgress = await jobProgressService.getCurrentJobProgress(jobId);
+            totalFiles = currentJobProgress?.statistics?.eligible || 0;
+            logger.info('Retrieved totalFiles', { jobId, totalFiles });
+        }
+        return totalFiles;
+    };
 
-    for (const record of event.Records) {
+    const processRecord = async (record) => {
+        logger.info('Processing record', {
+            messageId: record.messageId,
+            timestamp: new Date().toISOString()
+        });
+
         try {
-            const body = JSON.parse(record.body);
-
-            // Handle both SNS notifications and direct SQS messages
-            const message = body.Message ? JSON.parse(body.Message) : body;
+            const message = parseRecord(record);
             const { jobId, status, action, additionalData } = message;
 
-            console.log('additionalData', additionalData);
+            logger.info('Parsed message details', {
+                jobId,
+                status,
+                action,
+                timestamp: new Date().toISOString()
+            });
 
             if (status !== 'COMPLETED') {
-                console.log('job not completed, skipping');
-                continue;
+                logger.info('Skipping non-completed job', { jobId, status });
+                return;
             }
 
-            let totalFiles = additionalData?.finalStatistics?.eligible;
-
-            if (!totalFiles) {
-                console.log('no totalFiles being passed in, fetching from DB');
-                const currentJobProgress = await jobProgressService.getCurrentJobProgress(jobId);
-                totalFiles = currentJobProgress?.statistics?.eligible || 0;
-                console.log('totalFiles from DB', { currentJobProgress, totalFiles });
-            }
+            const totalFiles = await fetchTotalFiles(jobId, additionalData);
 
             if (!await jobService.initializeJobIfNeeded(jobId, totalFiles)) {
-                continue;
+                logger.info('Job initialization skipped', { jobId });
+                return;
             }
 
             if (action === 'PROCESS_NEXT_CHUNK' || status === 'COMPLETED') {
+                logger.info('Starting eligible tasks processing', { jobId });
                 const allImageKeys = await jobService.collectEligibleTasks(jobId);
-                await processEligibleTasks(jobId, allImageKeys);
-            }
+                const completed = await processEligibleTasks(jobId, allImageKeys);
 
+                if (completed) {
+                    logger.info('Job processing completed successfully', { jobId });
+                }
+            }
         } catch (error) {
             logger.error('Error processing record', {
                 messageId: record.messageId,
                 error: error.message,
-                stack: error.stack
+                stack: error.stack,
+                code: error.code,
+                name: error.name,
+                details: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                timestamp: new Date().toISOString()
             });
-            batchItemFailures.push({ itemIdentifier: record.messageId });
+            return { itemIdentifier: record.messageId };
         }
-    }
+    };
+
+    logHandlerStart();
+    const batchItemFailures = await Promise.all(event.Records.map(processRecord)).then(results => results.filter(Boolean));
+
+    logger.info('Handler execution completed', {
+        batchItemFailuresCount: batchItemFailures.length,
+        timestamp: new Date().toISOString()
+    });
 
     return { batchItemFailures };
 }; 

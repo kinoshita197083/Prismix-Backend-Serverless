@@ -345,7 +345,9 @@ class ZipArchiveProgressService {
 
     async updateFinalZipLocation(jobId, finalZipKey) {
         try {
-            console.log('Updating final ZIP location', { jobId, finalZipKey });
+            logger.info('Updating final ZIP location', { jobId, finalZipKey });
+
+            // Update metadata record
             await this.docClient.send(new UpdateCommand({
                 TableName: this.tableName,
                 Key: {
@@ -359,13 +361,15 @@ class ZipArchiveProgressService {
                 ExpressionAttributeValues: {
                     ':status': 'COMPLETED',
                     ':zipKey': finalZipKey,
-                    ':completedAt': Date.now().toString()
-                }
+                    ':completedAt': new Date().toISOString()
+                },
+                ReturnValues: 'ALL_NEW'
             }));
 
-            logger.info('Successfully updated final ZIP location', {
+            logger.info('Successfully updated final ZIP location and status', {
                 jobId,
-                finalZipKey
+                finalZipKey,
+                status: 'COMPLETED'
             });
         } catch (error) {
             logger.error('Failed to update final ZIP location', {
@@ -475,6 +479,73 @@ class ZipArchiveProgressService {
             throw error;
         }
     }
+
+    // Add this new function to zipArchiveProgressService
+    async getAllChunksStatus(jobId) {
+        try {
+            // First get the metadata record
+            const metadataResult = await this.docClient.send(new QueryCommand({
+                TableName: this.tableName,
+                KeyConditionExpression: 'JobId = :jobId AND ChunkId = :metadataId',
+                ExpressionAttributeValues: {
+                    ':jobId': jobId,
+                    ':metadataId': 'metadata'
+                }
+            }));
+
+            const metadata = metadataResult.Items?.[0];
+            if (!metadata) {
+                logger.warn('No metadata found for job', { jobId });
+                return [];
+            }
+
+            // If metadata status is COMPLETED, return early
+            if (metadata.Status === 'COMPLETED') {
+                logger.info('Job already completed', {
+                    jobId,
+                    finalZipKey: metadata.FinalZipKey
+                });
+                return [{
+                    chunkId: 'metadata',
+                    status: 'COMPLETED',
+                    zipKey: metadata.FinalZipKey
+                }];
+            }
+
+            // Get all chunk records
+            const chunksResult = await this.docClient.send(new QueryCommand({
+                TableName: this.tableName,
+                KeyConditionExpression: 'JobId = :jobId',
+                ExpressionAttributeValues: {
+                    ':jobId': jobId
+                }
+            }));
+
+            const chunks = chunksResult.Items
+                .filter(item => item.ChunkId !== 'metadata')
+                .map(item => ({
+                    chunkId: item.ChunkId,
+                    status: item.Status,
+                    zipKey: item.ZipKey
+                }));
+
+            logger.debug('Retrieved chunks status', {
+                jobId,
+                count: chunks.length,
+                metadataStatus: metadata.Status,
+                chunks: chunks.map(({ chunkId, status }) => ({ chunkId, status }))
+            });
+
+            return chunks;
+        } catch (error) {
+            logger.error('Error getting all chunks status', {
+                jobId,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    };
 }
 
 module.exports = ZipArchiveProgressService;

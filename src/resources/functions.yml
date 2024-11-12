@@ -152,8 +152,8 @@ jobProgressDLQProcessor:
 
 zipArchiveProcessor:
   handler: src/handlers/zipArchiveProcessor.handler
-  memorySize: 2048  # Higher memory for handling large datasets
-  timeout: 900      # 15 minutes max
+  memorySize: 3008  # Increased from 2048
+  timeout: 900      # 15 minutes
   events:
     - sqs:
         arn:
@@ -169,3 +169,4 @@ zipArchiveProcessor:
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:archiver-layer:1
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:p-limit-layer:1

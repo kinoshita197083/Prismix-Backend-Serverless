@@ -1,41 +1,23 @@
 const archiver = require('archiver');
-const logger = require('../utils/logger');
+const { Upload } = require("@aws-sdk/lib-storage");
+const { PassThrough } = require('stream');
+const { GetObjectCommand } = require("@aws-sdk/client-s3");
 
 class ArchiveService {
-    constructor(s3Service) {
-        this.s3Service = s3Service;
-    }
-
-    async createArchiveStream(jobId, zipKey, bucket) {
-        const { passThrough, upload } = this.s3Service.createUploadStream(bucket, zipKey);
-
-        const archive = archiver('zip', {
-            zlib: { level: 6 }
-        });
-
-        archive.pipe(passThrough);
-
-        archive.on('progress', (progress) => {
-            logger.info('Archive progress', {
-                jobId,
-                entriesProcessed: progress.entries.processed,
-                bytesProcessed: progress.fs.processedBytes
-            });
-        });
-
-        return { archive, upload };
+    constructor(s3Client) {
+        this.s3Client = s3Client;
     }
 
     async streamFilesToArchive(archive, imageKeys, sourceBucket) {
-        await Promise.all(imageKeys.map(async (key) => {
-            const stream = await this.s3Service.getS3ReadStream(sourceBucket, key);
-            archive.append(stream, { name: key.split('/').pop() });
-        }));
-    }
+        for (const imageKey of imageKeys) {
+            const command = new GetObjectCommand({
+                Bucket: sourceBucket,
+                Key: imageKey
+            });
 
-    async finalizeArchive(archive, upload) {
-        await archive.finalize();
-        await upload.done();
+            const response = await this.s3Client.send(command);
+            archive.append(response.Body, { name: imageKey.split('/').pop() });
+        }
     }
 }
 
