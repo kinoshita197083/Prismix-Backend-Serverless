@@ -32,7 +32,10 @@ class ZipMergeService {
         const finalZipKey = `archives/${jobId}/final/prismix-job-results-${timestamp}.zip`;
 
         const passThrough = new PassThrough();
-        const archive = archiver('zip', { zlib: { level: 6 } });
+        const archive = archiver('zip', {
+            zlib: { level: 2 },
+            highWaterMark: 4 * 1024 * 1024
+        });
 
         try {
             // Configure S3 multipart upload
@@ -43,8 +46,8 @@ class ZipMergeService {
                     Key: finalZipKey,
                     Body: passThrough
                 },
-                queueSize: 4,
-                partSize: 5 * 1024 * 1024
+                queueSize: 8,
+                partSize: 10 * 1024 * 1024
             });
 
             archive.pipe(passThrough);
@@ -69,7 +72,7 @@ class ZipMergeService {
             });
 
             // Process chunks concurrently with controlled concurrency
-            const limit = pLimit(5); // Limit to 5 concurrent streams (adjustable based on Lambda memory allocation)
+            const limit = pLimit(8); // Increased from 5
             await Promise.all(chunkKeys.map((key) =>
                 limit(async () => {
                     logger.info('Adding chunk to final ZIP', { jobId, chunkKey: key });

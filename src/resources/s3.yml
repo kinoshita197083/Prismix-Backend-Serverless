@@ -110,6 +110,12 @@ Resources:
             Status: Enabled
             ExpirationInDays: 90  # Automatically delete files after 90 days
 
+  DeliveryBucketOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: "OAI for DeliveryBucket"
+
   DeliveryBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -119,6 +125,11 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
+              CanonicalUser: !GetAtt DeliveryBucketOAI.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${DeliveryBucket.Arn}/*'
+          - Effect: Allow
+            Principal:
               AWS: !GetAtt ZipArchiveProcessorRole.Arn
             Action:
               - s3:PutObject
@@ -126,3 +137,35 @@ Resources:
               - s3:DeleteObject
             Resource: 
               - !Join ['', [!GetAtt DeliveryBucket.Arn, '/*']]
+
+  DeliveryBucketCloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          DefaultTTL: 86400  # 24 hours
+          ForwardedValues:
+            Headers:
+              - Authorization
+            QueryString: true
+          MaxTTL: 31536000  # 1 year
+          MinTTL: 0
+          SmoothStreaming: false
+          TargetOriginId: DeliveryBucketOrigin
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt DeliveryBucket.RegionalDomainName
+            Id: DeliveryBucketOrigin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${DeliveryBucketOAI}"
+        PriceClass: PriceClass_100  # Use only North America and Europe
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true

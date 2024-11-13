@@ -36,8 +36,13 @@ const jobProgressService = new JobProgressService(docClient, null, {
 const jobService = new JobService(jobProgressService, zipArchiveProgressService, docClient);
 const archiveService = new ArchiveService(s3Service);
 
-const FILE_PROCESSING_TIMEOUT = 120000 / 2; // 1 minutes per file
-const CHUNK_PROCESSING_TIMEOUT = 600000; // 10 minutes
+const CONCURRENT_S3_OPERATIONS = 8;  // Increased from 4
+const CONCURRENT_CHUNK_PROCESSING = 4;  // For batch processing
+const ARCHIVER_HIGH_WATER_MARK = 4 * 1024 * 1024;  // Increased to 4MB
+
+const FILE_PROCESSING_TIMEOUT = 180000;  // Increased to 3 minutes per file
+const CHUNK_PROCESSING_TIMEOUT = 780000; // 13 minutes (leaving 2-minute buffer)
+const BATCH_TIMEOUT = 780000;  // Matching chunk timeout
 
 /**
  * Processes a single chunk of files
@@ -60,11 +65,11 @@ async function processChunk(jobId, chunk, allImageKeys) {
     // Step 1: Set up streams and error handling
     const passThrough = new PassThrough();
     const archive = archiver('zip', {
-        zlib: { level: 1 },
+        zlib: { level: 2 },  // Decreased compression level for better speed
         store: true,
         forceZip64: true,
-        statConcurrency: 4,
-        highWaterMark: 1024 * 1024
+        statConcurrency: 8,  // Increased from 4
+        highWaterMark: ARCHIVER_HIGH_WATER_MARK
     });
 
     // Step 2: Set up S3 upload
@@ -76,8 +81,8 @@ async function processChunk(jobId, chunk, allImageKeys) {
             Body: passThrough,
             ContentType: 'application/zip'
         },
-        queueSize: 4,
-        partSize: 5 * 1024 * 1024,
+        queueSize: 8,  // Increased from 4
+        partSize: 10 * 1024 * 1024,  // Increased to 10MB
         leavePartsOnError: false
     });
 
@@ -110,7 +115,7 @@ async function processChunk(jobId, chunk, allImageKeys) {
         archive.pipe(passThrough);
 
         // Step 5: Set up concurrent processing
-        const limit = pLimit(4); // Limit concurrent S3 operations
+        const limit = pLimit(CONCURRENT_S3_OPERATIONS);
         const processImage = async (imageKey) => {
             try {
                 const fileName = imageKey.split('/').pop();
@@ -312,8 +317,6 @@ async function processChunkWithTimeout(jobId, chunk, allImageKeys) {
         )
     ]);
 }
-
-const BATCH_TIMEOUT = 840000; // 14 minutes (leaving 1 minute buffer for 15-minute Lambda)
 
 async function processWithTimeout(promise, timeoutMs, operationName) {
     let timeoutId;
