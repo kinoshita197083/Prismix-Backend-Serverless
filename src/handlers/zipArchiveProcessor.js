@@ -437,6 +437,8 @@ exports.handler = async (event) => {
         timestamp: new Date().toISOString()
     });
 
+    console.log('Received event:', JSON.stringify(event, null, 2));
+
     const parseRecord = (record) => {
         const body = JSON.parse(record.body);
         return body.Message ? JSON.parse(body.Message) : body;
@@ -478,7 +480,16 @@ exports.handler = async (event) => {
             // TODO: check output connection in job progress table and skip if not for local delivery
 
             // const totalFiles = await fetchTotalFiles(jobId, additionalData);
-            const { totalFiles, outputConnection } = await jobProgressService.getCurrentJobProgress(jobId);
+            const { statistics, outputConnection } = await jobProgressService.getCurrentJobProgress(jobId);
+            const totalFiles = statistics?.eligible;
+
+            console.log('[processRecord] totalFiles', totalFiles);
+            console.log('[processRecord] outputConnection', outputConnection);
+
+            if (!totalFiles) {
+                logger.info('No totalFiles found, skipping job', { jobId });
+                return;
+            }
 
             if (outputConnection !== 'local') {
                 logger.info('Skipping non-local job', { jobId, outputConnection });

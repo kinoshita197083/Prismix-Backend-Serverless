@@ -20,6 +20,7 @@ class JobService {
 
     async initializeJobIfNeeded(jobId, totalFiles) {
         const metadata = await this.zipArchiveProgressService.getJobMetadata(jobId);
+        console.log('[initializeJobIfNeeded] metadata', metadata);
 
         if (!metadata && totalFiles) {
             logger.info('Initializing metadata for job', { jobId, totalFiles });
