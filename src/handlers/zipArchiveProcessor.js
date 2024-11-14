@@ -442,16 +442,16 @@ exports.handler = async (event) => {
         return body.Message ? JSON.parse(body.Message) : body;
     };
 
-    const fetchTotalFiles = async (jobId, additionalData) => {
-        let totalFiles = additionalData?.finalStatistics?.eligible;
-        if (!totalFiles) {
-            logger.info('Fetching totalFiles from DB', { jobId });
-            const currentJobProgress = await jobProgressService.getCurrentJobProgress(jobId);
-            totalFiles = currentJobProgress?.statistics?.eligible || 0;
-            logger.info('Retrieved totalFiles', { jobId, totalFiles });
-        }
-        return totalFiles;
-    };
+    // const fetchTotalFiles = async (jobId, additionalData) => {
+    //     let totalFiles = additionalData?.finalStatistics?.eligible;
+    //     if (!totalFiles) {
+    //         logger.info('Fetching totalFiles from DB', { jobId });
+    //         const currentJobProgress = await jobProgressService.getCurrentJobProgress(jobId);
+    //         totalFiles = currentJobProgress?.statistics?.eligible || 0;
+    //         logger.info('Retrieved totalFiles', { jobId, totalFiles });
+    //     }
+    //     return totalFiles;
+    // };
 
     const processRecord = async (record) => {
         logger.info('Processing record', {
@@ -475,7 +475,15 @@ exports.handler = async (event) => {
                 return;
             }
 
-            const totalFiles = await fetchTotalFiles(jobId, additionalData);
+            // TODO: check output connection in job progress table and skip if not for local delivery
+
+            // const totalFiles = await fetchTotalFiles(jobId, additionalData);
+            const { totalFiles, outputConnection } = await jobProgressService.getCurrentJobProgress(jobId);
+
+            if (outputConnection !== 'local') {
+                logger.info('Skipping non-local job', { jobId, outputConnection });
+                return;
+            }
 
             if (!await jobService.initializeJobIfNeeded(jobId, totalFiles)) {
                 logger.info('Job initialization skipped', { jobId });

@@ -48,16 +48,16 @@ const getEmailStyles = () => `
     body { 
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         line-height: 1.6; 
-        color: #2C3E50; 
+        color: #E2E8F0; 
         margin: 0; 
         padding: 0; 
-        background-color: #F8F9FA;
+        background-color: #1A202C;
     }
     .container { 
         max-width: 600px; 
         margin: 40px auto; 
-        background-color: #FFFFFF;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        background-color: #2D3748;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         border-radius: 6px;
     }
     .header { 
@@ -69,33 +69,33 @@ const getEmailStyles = () => `
     }
     .content { 
         padding: 40px;
-        background-color: #FFFFFF;
+        background-color: #2D3748;
     }
     .footer { 
         text-align: center; 
         padding: 32px 40px;
         font-size: 13px; 
-        color: #718096;
-        background-color: #F8F9FA;
-        border-top: 1px solid #E2E8F0;
+        color: #A0AEC0;
+        background-color: #1A202C;
+        border-top: 1px solid #4A5568;
         border-radius: 0 0 6px 6px;
     }
     .job-id { 
-        background-color: #EDF2F7; 
+        background-color: #4A5568; 
         padding: 8px 12px; 
         border-radius: 4px; 
         font-family: 'SF Mono', Consolas, Monaco, monospace;
         font-size: 14px;
-        color: #2D3748;
-        border: 1px solid #E2E8F0;
+        color: #E2E8F0;
+        border: 1px solid #718096;
         display: inline-block;
     }
     .status-box {
         padding: 24px;
-        background-color: #F8FAFC;
+        background-color: #1A202C;
         border-radius: 6px;
         margin: 24px 0;
-        border: 1px solid #E2E8F0;
+        border: 1px solid #4A5568;
     }
     h1 { 
         font-size: 24px; 
@@ -106,23 +106,23 @@ const getEmailStyles = () => `
     p { 
         margin: 16px 0; 
         font-size: 15px;
-        color: #4A5568;
+        color: #E2E8F0;
         line-height: 1.7;
     }
     .warning { 
-        color: #C53030;
+        color: #FC8181;
         font-weight: 500;
         font-size: 15px;
     }
     .deadline { 
-        color: #2D3748; 
+        color: #1A202C; 
         font-weight: 600;
-        background-color: #FEFCBF;
+        background-color: #F6E05E;
         padding: 2px 6px;
         border-radius: 3px;
     }
     .error-details { 
-        background-color: #FFF5F5; 
+        background-color: #2D3748; 
         padding: 24px; 
         border-radius: 6px; 
         margin: 24px 0;
@@ -131,7 +131,7 @@ const getEmailStyles = () => `
     .button {
         display: inline-block;
         padding: 12px 24px;
-        background-color: #1A365D;
+        background-color: #4299E1;
         color: #FFFFFF;
         text-decoration: none;
         border-radius: 4px;
@@ -140,7 +140,7 @@ const getEmailStyles = () => `
         transition: background-color 0.2s ease;
     }
     .button:hover {
-        background-color: #2C5282;
+        background-color: #3182CE;
     }
 `;
 
