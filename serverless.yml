@@ -147,3 +147,77 @@ resources:
           Ref: LayersDeploymentBucket
         Export:
           Name: ${self:service}-${self:provider.stage}-ServerlessDeploymentBucketName
+
+  Resources:
+    S3TransferFunctionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-${self:provider.stage}-s3-transfer-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: s3-transfer-policy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # S3 Permissions for source bucket
+                - Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                    - s3:GetObject
+                  Resource:
+                    - arn:aws:s3:::${self:custom.sourceUserBucketArn}
+                    - arn:aws:s3:::${self:custom.sourceUserBucketArn}/*
+                
+                # S3 Permissions for destination bucket
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:PutObjectAcl
+                    - s3:PutObjectTagging
+                  Resource:
+                    - Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - ${self:custom.destinationBucketName}
+                        - "/*"
+                
+                # RDS Permissions
+                - Effect: Allow
+                  Action:
+                    - rds-db:connect
+                  Resource:
+                    - arn:aws:rds-db:${self:provider.region}:${aws:accountId}:dbuser:${self:custom.rds.resourceId}/${self:custom.rds.username}
+
+functions:
+  s3BucketTransfer:
+    handler: src/handlers/s3BucketTransfer.handler
+    timeout: 900 # 15 minutes
+    memorySize: 1024
+    environment:
+      DESTINATION_BUCKET: ${self:custom.destinationBucketName}
+      RDS_HOST: ${self:custom.rds.host}
+      RDS_PORT: ${self:custom.rds.port}
+      RDS_DATABASE: ${self:custom.rds.database}
+      RDS_USERNAME: ${self:custom.rds.username}
+      RDS_PASSWORD: ${self:custom.rds.password}
+    role: !GetAtt S3TransferFunctionRole.Arn
+
+custom:
+  destinationBucketName: prismix-image-bucket-${self:provider.stage}
+  sourceUserBucketArn: "*" # This allows access to any user bucket. You might want to restrict this.
+  rds:
+    host: ${ssm:/rds/host}
+    port: ${ssm:/rds/port}
+    database: ${ssm:/rds/database}
+    username: ${ssm:/rds/username}
+    password: ${ssm:/rds/password}
+    resourceId: ${ssm:/rds/resource-id}
