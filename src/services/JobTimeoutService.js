@@ -133,6 +133,13 @@ const createJobTimeoutService = (jobProgressService, notificationService, jobSch
                 return;
             }
 
+            // Handling inactivity timeout
+            if (timeoutInfo.reason === 'INACTIVITY') {
+                console.log('[handleJobTimeout] Handling inactivity timeout for job:', { jobId });
+                //TODO: await handleInactivityTimeout(jobId);
+                // return;
+            }
+
             // Cleanup scheduled checks
             await jobSchedulingService.cleanupScheduledChecks(jobId);
 
