@@ -30,7 +30,6 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.1.7",
-    "prisma": "^5.22.0",
     "serverless": "^3.39.0",
     "serverless-dotenv-plugin": "^6.0.0",
     "serverless-layers": "2.7.0",
@@ -49,7 +48,6 @@
     "@aws-sdk/lib-storage": "^3.689.0",
     "@aws-sdk/s3-request-presigner": "^3.678.0",
     "@aws-sdk/util-dynamodb": "^3.667.0",
-    "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.45.4",
     "archiver": "^7.0.1",
     "googleapis": "^144.0.0",
