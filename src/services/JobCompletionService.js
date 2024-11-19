@@ -76,8 +76,8 @@ const createJobCompletionService = (
             return 'WAITING_FOR_REVIEW';
         }
 
-        const allImagesProcessed = stats.totalProcessed === jobProgress.totalImages;
-        const allImagesAccounted = (stats.eligible + stats.excluded + stats.duplicates + stats.failed) === jobProgress.totalImages;
+        const allImagesProcessed = stats.totalProcessed >= jobProgress.totalImages;
+        const allImagesAccounted = (stats.eligible + stats.excluded + stats.duplicates + stats.failed) >= jobProgress.totalImages;
 
         if (!allImagesProcessed || !allImagesAccounted) {
             console.log('[determineJobStatus] Not all images processed:', {

@@ -40,7 +40,8 @@ const processNotification = async (message) => {
 
 const sendEmailNotification = async (user, jobId, status, additionalData, projectId) => {
     const template = EmailTemplateService.getEmailTemplate(status);
-    const content = template.getContent(user.name, jobId, additionalData, projectId);
+    const userName = user.preferredName || user.name || user.email;
+    const content = template.getContent(userName, jobId, additionalData, projectId);
 
     const params = {
         Destination: { ToAddresses: [user.email] },

@@ -1,7 +1,7 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { SNSClient } = require('@aws-sdk/client-sns');
-const { SQSClient } = require("@aws-sdk/client-sqs");
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
 const { EventBridgeClient } = require("@aws-sdk/client-eventbridge");
 const { CloudWatchClient } = require('@aws-sdk/client-cloudwatch');
 
