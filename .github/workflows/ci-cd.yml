@@ -76,13 +76,6 @@ jobs:
           exit 1
         fi
 
-    # - name: Generate Prisma Client
-    #   run: npx prisma generate
-
-    # Run migrations
-    # - name: Run migrations
-    #   run: npx prisma migrate deploy
-
     # Install Serverless
     - name: Install Serverless Framework
       run: npm install -g serverless@latest

@@ -9,6 +9,19 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
       LifecycleConfiguration:
         Rules:
           # Default 180-day expiration rule
@@ -32,10 +45,10 @@ Resources:
   #   Type: AWS::CloudFront::PublicKey
   #   Properties:
   #     PublicKeyConfig:
-  #       Name: !Sub ${AWS::StackName}-prismix-image-public-key
-  #       EncodedKey: ${self:custom.cloudfrontPublicKeyForImages}
-  #       Comment: "Public key for signing CloudFront URLs for image viewing"
-  #       CallerReference: !Sub '${AWS::StackName}-image-${AWS::Region}-${AWS::AccountId}-${self:provider.stage}'
+  #       Name: !Sub ${AWS::StackName}-image-public-key-${self:provider.stage}
+  #       EncodedKey: ${self:custom.cloudfrontKeys.image.public}
+  #       Comment: !Sub "Image public key for ${AWS::StackName} (${self:provider.stage})"
+  #       CallerReference: !Sub "${AWS::StackName}-image-${self:provider.stage}"
 
   # PrismixImageKeyGroup:
   #   Type: AWS::CloudFront::KeyGroup
@@ -53,7 +66,7 @@ Resources:
   #     Name: !Sub /${self:service}/${self:provider.stage}/cloudfront/prismix-image-key-pair-id
   #     Type: String
   #     Value: !Ref PrismixImagePublicKey
-  #     Description: "CloudFront key pair ID for image viewing signed URLs"
+  #     Description: "CloudFront key pair ID for image viewing signed URLs (${self:provider.stage})"
 
   PrismixImageCloudfrontDistribution:
     Type: AWS::CloudFront::Distribution
@@ -75,8 +88,8 @@ Resources:
           SmoothStreaming: false
           TargetOriginId: PrismixImageBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
-          # TrustedKeyGroups:
-          #   - !Ref PrismixImageKeyGroup
+          TrustedKeyGroups:
+            - "${self:custom.${self:provider.stage}CloudfrontTrustedKeyGroup.image}"
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
@@ -180,8 +193,8 @@ Resources:
           SmoothStreaming: false
           TargetOriginId: DeliveryBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
-          # TrustedKeyGroups:
-          #   - !Ref DeliveryKeyGroup
+          TrustedKeyGroups:
+            - "${self:custom.${self:provider.stage}CloudfrontTrustedKeyGroup.delivery}"
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
@@ -194,15 +207,14 @@ Resources:
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
 
-  # CloudFront signing
   # DeliveryPublicKey:
   #   Type: AWS::CloudFront::PublicKey
   #   Properties:
   #     PublicKeyConfig:
-  #       Name: !Sub ${AWS::StackName}-delivery-public-key
-  #       EncodedKey: ${self:custom.cloudfrontPublicKeyForLocalDelivery}
-  #       Comment: "Public key for signing CloudFront URLs for delivery bucket"
-  #       CallerReference: !Sub '${AWS::StackName}-delivery-${AWS::Region}-${AWS::AccountId}-${self:provider.stage}'
+  #       Name: !Sub ${AWS::StackName}-delivery-public-key-${self:provider.stage}
+  #       EncodedKey: ${self:custom.cloudfrontKeys.delivery.public}
+  #       Comment: !Sub "Delivery public key for ${AWS::StackName} (${self:provider.stage})"
+  #       CallerReference: !Sub "${AWS::StackName}-delivery-${self:provider.stage}"
 
   # DeliveryKeyGroup:
   #   Type: AWS::CloudFront::KeyGroup
@@ -220,4 +232,4 @@ Resources:
   #     Name: !Sub /${self:service}/${self:provider.stage}/cloudfront/prismix-delivery-key-pair-id
   #     Type: String
   #     Value: !Ref DeliveryPublicKey
-  #     Description: "CloudFront key pair ID for delivery bucket signed URLs"
+  #     Description: "CloudFront key pair ID for delivery bucket signed URLs (${self:provider.stage})"
