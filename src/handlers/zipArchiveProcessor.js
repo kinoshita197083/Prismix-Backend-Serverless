@@ -488,11 +488,17 @@ exports.handler = async (event) => {
 
             if (!totalFiles) {
                 logger.info('No totalFiles found, skipping job', { jobId });
+                await jobProgressService.updateJobProgress(jobId, {
+                    zipArchiveStatus: 'SKIPPED'
+                });
                 return;
             }
 
             if (outputConnection !== 'local') {
                 logger.info('Skipping non-local job', { jobId, outputConnection });
+                await jobProgressService.updateJobProgress(jobId, {
+                    zipArchiveStatus: 'SKIPPED'
+                });
                 return;
             }
 

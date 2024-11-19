@@ -101,12 +101,13 @@ async function checkAndStoreImageHash(hash, jobId, imageId, s3Key, maxRetries = 
 }
 
 
-async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId, preserveFileDays }) {
+async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId, expiresAt }) {
     const { calculateImageHash } = require('../helpers');
 
     // Calculate image hash
     const imageHash = await calculateImageHash(bucket, s3ObjectKey);
     console.log('Calculated image hash:', imageHash);
+    console.log('expiresAt', expiresAt);
 
     // Check and store the hash
     const {
@@ -123,7 +124,7 @@ async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId, pr
             s3ObjectKey,
             originalImageId,
             originalImageS3Key,
-            expirationTime: new Date(Date.now() + preserveFileDays * 24 * 60 * 60 * 1000).toISOString()
+            expirationTime: expiresAt
         });
         console.log('Task status updated to COMPLETED and marked as duplicate', response);
         return true;

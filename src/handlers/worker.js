@@ -21,7 +21,7 @@ exports.handler = async (event, context) => {
 
         console.log('999 Processing image:', { bucket, s3ObjectKey, jobId, imageId });
 
-        let preserveFileDays
+        let expiresAt;
 
         try {
             const projectSettings = await fetchProjectSettingRules(jobId);
@@ -30,8 +30,8 @@ exports.handler = async (event, context) => {
             const manualReviewRequired = projectSettings.manualReviewRequired;
             console.log('manualReviewRequired', manualReviewRequired);
 
-            preserveFileDays = projectSettings.preserveFileDays;
-            console.log('preserveFileDays', preserveFileDays);
+            expiresAt = projectSettings.expiresAt;
+            console.log('expiresAt', expiresAt);
 
             // Step 1: Check for duplicates if enabled
             if (projectSettings.detectDuplicates) {
@@ -40,7 +40,7 @@ exports.handler = async (event, context) => {
                     s3ObjectKey,
                     jobId,
                     imageId,
-                    preserveFileDays
+                    expiresAt
                 });
                 if (isDuplicate) return;
             }
@@ -138,7 +138,7 @@ exports.handler = async (event, context) => {
                     formattedTexts,
                     needsReview: status === WAITING_FOR_REVIEW
                 },
-                expirationTime: (Date.now() + preserveFileDays * 24 * 60 * 60 * 1000).toString(), // User defined number of days to preserve the file
+                expirationTime: expiresAt,
             });
 
         } catch (error) {
@@ -156,7 +156,7 @@ exports.handler = async (event, context) => {
                     taskId: imageId,
                     imageS3Key: s3ObjectKey,
                     reason: error.message,
-                    preserveFileDays: preserveFileDays
+                    expiresAt
                 });
             } catch (retryUpdateError) {
                 logger.error('Error updating task status to FAILED in TASK_TABLE', { error: retryUpdateError.message, jobId, taskId: imageId });
@@ -173,11 +173,10 @@ async function fetchProjectSettingRules(jobId) {
         const projectSettingsWithManualReview = {
             ...response?.projectSetting,
             manualReviewRequired: response?.manualReviewRequired,
-            preserveFileDays: response?.preserveFileDays
+            expiresAt: response?.expiresAt
         };
         return projectSettingsWithManualReview;
     } catch (error) {
-        // logger.error('Error fetching project setting rules', { error, jobId });
         console.log('dynamoService.getItem() failed', { error, jobId });
         throw error;
     }

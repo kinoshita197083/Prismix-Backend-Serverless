@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const { fetchGoogleRefreshToken, getAllImagesFromDrive, processImageBatch, setUpGoogleDriveClient } = require('../utils/googleDrive/googleDrive');
 const dynamoService = require('../services/dynamoService');
 const { FAILED, COMPLETED } = require('../utils/config');
-const { fetchPreserveFileDays } = require('../utils/api/api');
+const { fetchExpiresAt } = require('../utils/api/api');
 
 const s3Client = new S3Client();
 
@@ -55,8 +55,8 @@ async function processRecord(record) {
         if (failedImages.length > 0) {
             console.log('----> Updating task status as COMPLETED with FAILED evaluation for downstream aggregation in job summary', { failedImages });
 
-            // Fetch the preserve file days for the job from the job progress table
-            const preserveFileDays = await fetchPreserveFileDays(jobId); // User defined TTL for the file
+            // Fetch the expiresAt for the job from the job progress table
+            const expiresAt = await fetchExpiresAt(jobId);
 
             const updatePromises = failedImages.map(async (upload) => {
                 return dynamoService.updateTaskStatus({
@@ -65,7 +65,7 @@ async function processRecord(record) {
                     status: COMPLETED,
                     evaluation: FAILED,
                     reason: `${upload.reason} - ${upload.attempt} attempts`,
-                    preserveFileDays: preserveFileDays
+                    expirationTime: expiresAt
                 });
             });
             await Promise.all(updatePromises);

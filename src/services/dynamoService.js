@@ -211,7 +211,7 @@ const dynamoService = {
         await docClient.send(command);
     },
 
-    async updateTaskStatusAsFailed({ jobId, taskId, imageS3Key, reason, preserveFileDays }) {
+    async updateTaskStatusAsFailed({ jobId, taskId, imageS3Key, reason, expiresAt }) {
         return await this.updateTaskStatus({
             jobId,
             taskId,
@@ -219,7 +219,7 @@ const dynamoService = {
             evaluation: FAILED,
             imageS3Key,
             reason,
-            expirationTime: (Date.now() + preserveFileDays * 24 * 60 * 60 * 1000).toString(), // User defined number of days to preserve the file
+            expirationTime: expiresAt
         });
     },
 
@@ -228,12 +228,12 @@ const dynamoService = {
         imageId,
         s3ObjectKey,
         originalImageId,
-        originalImageS3Key
+        originalImageS3Key,
+        expirationTime
     }) {
         console.log('Updating task status to COMPLETED and marking as duplicate...',
             { jobId, imageId, s3ObjectKey, originalImageId, originalImageS3Key });
 
-        // Update task status to COMPLETED and mark as duplicate
         return await this.updateTaskStatus({
             jobId,
             taskId: imageId,
@@ -243,6 +243,7 @@ const dynamoService = {
             duplicateOf: originalImageId,
             duplicateOfS3Key: originalImageS3Key,
             updatedAt: Date.now().toString(),
+            expirationTime
         });
     },
 
