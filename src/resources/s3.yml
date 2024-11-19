@@ -9,19 +9,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - PUT
-              - POST
-              - DELETE
-              - HEAD
-            AllowedOrigins:
-              - '*'
-            MaxAge: 3000
       LifecycleConfiguration:
         Rules:
           # Default 180-day expiration rule
@@ -40,6 +27,33 @@ Resources:
                 Value: permanent
             NoncurrentVersionExpiration:
               NoncurrentDays: 180
+
+  # PrismixImagePublicKey:
+  #   Type: AWS::CloudFront::PublicKey
+  #   Properties:
+  #     PublicKeyConfig:
+  #       Name: !Sub ${AWS::StackName}-prismix-image-public-key
+  #       EncodedKey: ${self:custom.cloudfrontPublicKeyForImages}
+  #       Comment: "Public key for signing CloudFront URLs for image viewing"
+  #       CallerReference: !Sub '${AWS::StackName}-image-${AWS::Region}-${AWS::AccountId}-${self:provider.stage}'
+
+  # PrismixImageKeyGroup:
+  #   Type: AWS::CloudFront::KeyGroup
+  #   Properties:
+  #     KeyGroupConfig:
+  #       Items:
+  #         - !Ref PrismixImagePublicKey
+  #       Name: !Sub ${AWS::StackName}-prismix-image-key-group
+  #       Comment: "Key group for image viewing signed URLs"
+
+  # Add SSM parameters to store the key pair ID
+  # PrismixImageKeyPairIdParameter:
+  #   Type: AWS::SSM::Parameter
+  #   Properties:
+  #     Name: !Sub /${self:service}/${self:provider.stage}/cloudfront/prismix-image-key-pair-id
+  #     Type: String
+  #     Value: !Ref PrismixImagePublicKey
+  #     Description: "CloudFront key pair ID for image viewing signed URLs"
 
   PrismixImageCloudfrontDistribution:
     Type: AWS::CloudFront::Distribution
@@ -61,6 +75,8 @@ Resources:
           SmoothStreaming: false
           TargetOriginId: PrismixImageBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
+          # TrustedKeyGroups:
+          #   - !Ref PrismixImageKeyGroup
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
@@ -164,8 +180,8 @@ Resources:
           SmoothStreaming: false
           TargetOriginId: DeliveryBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
-          TrustedKeyGroups:
-            - !Ref DeliveryKeyGroup
+          # TrustedKeyGroups:
+          #   - !Ref DeliveryKeyGroup
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
@@ -179,29 +195,29 @@ Resources:
           CloudFrontDefaultCertificate: true
 
   # CloudFront signing
-  DeliveryPublicKey:
-    Type: AWS::CloudFront::PublicKey
-    Properties:
-      PublicKeyConfig:
-        Name: !Sub ${AWS::StackName}-delivery-public-key
-        EncodedKey: ${self:custom.cloudfrontPublicKeyForLocalDelivery} # custom section
-        Comment: "Public key for signing CloudFront URLs for delivery bucket"
-        CallerReference: !Ref AWS::StackName
+  # DeliveryPublicKey:
+  #   Type: AWS::CloudFront::PublicKey
+  #   Properties:
+  #     PublicKeyConfig:
+  #       Name: !Sub ${AWS::StackName}-delivery-public-key
+  #       EncodedKey: ${self:custom.cloudfrontPublicKeyForLocalDelivery}
+  #       Comment: "Public key for signing CloudFront URLs for delivery bucket"
+  #       CallerReference: !Sub '${AWS::StackName}-delivery-${AWS::Region}-${AWS::AccountId}-${self:provider.stage}'
 
-  DeliveryKeyGroup:
-    Type: AWS::CloudFront::KeyGroup
-    Properties:
-      KeyGroupConfig:
-        Items:
-          - !Ref DeliveryPublicKey
-        Name: !Sub ${AWS::StackName}-delivery-key-group
-        Comment: "Key group for delivery bucket signed URLs"
+  # DeliveryKeyGroup:
+  #   Type: AWS::CloudFront::KeyGroup
+  #   Properties:
+  #     KeyGroupConfig:
+  #       Items:
+  #         - !Ref DeliveryPublicKey
+  #       Name: !Sub ${AWS::StackName}-delivery-key-group
+  #       Comment: "Key group for delivery bucket signed URLs"
 
-  # Add SSM parameters to store the key pair ID
-  DeliveryKeyPairIdParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub /${self:service}/${self:provider.stage}/cloudfront/delivery-key-pair-id
-      Type: String
-      Value: !Ref DeliveryPublicKey
-      Description: "CloudFront key pair ID for delivery bucket signed URLs"
+  # # Add SSM parameters to store the key pair ID
+  # DeliveryKeyPairIdParameter:
+  #   Type: AWS::SSM::Parameter
+  #   Properties:
+  #     Name: !Sub /${self:service}/${self:provider.stage}/cloudfront/prismix-delivery-key-pair-id
+  #     Type: String
+  #     Value: !Ref DeliveryPublicKey
+  #     Description: "CloudFront key pair ID for delivery bucket signed URLs"
