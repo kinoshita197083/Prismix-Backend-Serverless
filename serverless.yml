@@ -29,6 +29,9 @@ provider:
     SUPABASE_API_KEY: ${env:SUPABASE_API_KEY}
     DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:service}-${self:provider.stage}-deliveryProcessor
     JOB_PROGRESS_QUEUE_URL: ${env:JOB_PROGRESS_QUEUE_URL}
+    CLOUDFRONT_DOMAIN: !GetAtt DeliveryBucketCloudfrontDistribution.DomainName
+    CLOUDFRONT_KEY_PAIR_ID: !Ref DeliveryPublicKey
+    CLOUDFRONT_PRIVATE_KEY_SECRET: /${self:service}/${self:provider.stage}/cloudfront/private-key
   iam:
     role: BaseCloudWatchRole
   logRetentionInDays: ${self:custom.logRetention.${self:provider.stage}}
@@ -63,6 +66,7 @@ custom:
   deadLetterQueueName: ${self:service}-${self:provider.stage}-dlq
   serverless-offline:
     region: ${self:provider.region}
+  cloudfrontPublicKeyForLocalDelivery: ${file(./cloudfront-public-key.pem)}
   # serverless-layers:
   #   dependenciesPath: ./package.json
   #   layersDeploymentBucket: prismix-lambda-layers

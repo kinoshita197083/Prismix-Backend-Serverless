@@ -150,6 +150,12 @@ Resources:
           Compress: true
           DefaultTTL: 86400  # 24 hours
           ForwardedValues:
+            Cookies:
+              Forward: whitelist
+              WhitelistedNames:
+                - CloudFront-Key-Pair-Id
+                - CloudFront-Policy
+                - CloudFront-Signature
             Headers:
               - Authorization
             QueryString: true
@@ -158,6 +164,8 @@ Resources:
           SmoothStreaming: false
           TargetOriginId: DeliveryBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
+          TrustedKeyGroups:
+            - !Ref DeliveryKeyGroup
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
@@ -166,6 +174,34 @@ Resources:
             Id: DeliveryBucketOrigin
             S3OriginConfig:
               OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${DeliveryBucketOAI}"
-        PriceClass: PriceClass_100  # Use only North America and Europe
+        PriceClass: PriceClass_100
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
+
+  # CloudFront signing
+  DeliveryPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        Name: !Sub ${AWS::StackName}-delivery-public-key
+        EncodedKey: ${self:custom.cloudfrontPublicKeyForLocalDelivery} # custom section
+        Comment: "Public key for signing CloudFront URLs for delivery bucket"
+        CallerReference: !Ref AWS::StackName
+
+  DeliveryKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Items:
+          - !Ref DeliveryPublicKey
+        Name: !Sub ${AWS::StackName}-delivery-key-group
+        Comment: "Key group for delivery bucket signed URLs"
+
+  # Add SSM parameters to store the key pair ID
+  DeliveryKeyPairIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${self:service}/${self:provider.stage}/cloudfront/delivery-key-pair-id
+      Type: String
+      Value: !Ref DeliveryPublicKey
+      Description: "CloudFront key pair ID for delivery bucket signed URLs"
