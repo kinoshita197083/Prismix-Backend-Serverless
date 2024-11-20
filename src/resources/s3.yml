@@ -72,35 +72,39 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        DefaultCacheBehavior:
-          AllowedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-          Compress: true
-          DefaultTTL: 86400
-          ForwardedValues:
-            Headers:
-              - Authorization
-            QueryString: true
-          MaxTTL: 31536000
-          MinTTL: 0
-          SmoothStreaming: false
-          TargetOriginId: PrismixImageBucketOrigin
-          ViewerProtocolPolicy: redirect-to-https
-          TrustedKeyGroups:
-            - "${self:custom.${self:provider.stage}CloudfrontTrustedKeyGroup.image}"
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
+        PriceClass: PriceClass_100
         Origins:
-          - DomainName: !GetAtt PrismixImageBucket.RegionalDomainName
-            Id: PrismixImageBucketOrigin
+          - Id: !Sub ${AWS::StackName}-image-origin
+            DomainName: !GetAtt PrismixImageBucket.RegionalDomainName
             S3OriginConfig:
               OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${PrismixImageBucketOAI}"
-        PriceClass: PriceClass_100
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub ${AWS::StackName}-image-origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          DefaultTTL: 86400
+          MinTTL: 0
+          MaxTTL: 31536000
+          ForwardedValues:
+            Cookies:
+              Forward: whitelist
+              WhitelistedNames:
+                - CloudFront-Key-Pair-Id
+                - CloudFront-Policy
+                - CloudFront-Signature
+            QueryString: false
+          # TrustedKeyGroups:
+          #   - "${self:custom.${self:provider.stage}CloudfrontTrustedKeyGroup.image}"
+          # AllowedMethods:
+          #   - GET
+          #   - HEAD
+          #   - OPTIONS
+          # CachedMethods:
+          #   - GET
+          #   - HEAD
 
   PrismixImageBucketOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -127,7 +131,10 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
-            Resource: !Sub '${PrismixImageBucket.Arn}/*'
+              - 's3:ListBucket'
+            Resource: 
+              - !Sub '${PrismixImageBucket.Arn}/*'
+              - !Sub '${PrismixImageBucket.Arn}'
 
   DeliveryBucket:
     Type: AWS::S3::Bucket
@@ -187,6 +194,9 @@ Resources:
                 - CloudFront-Signature
             Headers:
               - Authorization
+              - Origin
+              - Access-Control-Request-Headers
+              - Access-Control-Request-Method
             QueryString: true
           MaxTTL: 31536000  # 1 year
           MinTTL: 0

@@ -1,20 +1,23 @@
 {
     "Records": [
         {
-            "messageId": "a75f4eb7-2d40-4108-9f9f-41b3ab7f9df8",
-            "receiptHandle": "AQEBMX0jrQVlXDHY3Izbj5r1+VTfLHNK6ec9glKuuTlYTxOhH7xXSqyMgXUPbu936CsyPFWnEDrFlXD8faQSo+u1hvijDO/8GxtSy4zcX15ufJSsUZVlH6RjEx7M1cexjlybjF6zAYDsGkBQh1BDqsLJd38j7xGfMAidiuwLI+MOThuBmrSRrcrSEjnRNeSHg4X+p05bnt0bSOot43vq9MnQ0h+CfBEoSrOiiWFdiokT44S1CuP77lEnTxo/4s8bc56dYEiGBvqXU+zfmrnZztsPBgChgG2ekO8buclCHDYxaqzGQSgkXSvO+26zY7VB0iwircNIT6AImQIR1cMZEvsZ7qTUIOzE3lH0F8TGDd5BnV0ZPRmBRIhd7JXec7C7dN+iYyVfqDYNNXirbjZMy+87KpP3HDG8HYvgHmToZWRo56E=",
-            "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"d4bf35bb-79a1-596e-b9cf-6a34847fbef1\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic\",\n  \"Message\" : \"{\\\"jobId\\\":\\\"514f3963-91f5-40f9-b60f-85e5ea649a3f\\\"}\",\n  \"Timestamp\" : \"2024-10-21T06:58:38.052Z\",\n  \"SignatureVersion\" : \"1\",\n  \"Signature\" : \"li7GmBmCe5dFDSEhU7mHEzh5DTqzfmJq7f+ZrrKjP6IBsaEI+fcK9fS582knmM7wajbPuNoHcBGAKRGJ2YDWD9gMx4x7Piv2ISnHhXL3d/Bty2wR4kGU3z+ZqZX6n8ndAhxIWUFPJjRLPM/dgpaoklW5DXbu96DVxGqfLwHXaAkrGBV2h/G+wDB+3AUkrIhx6iiW1c8esUza8ZjGQhADSwxg2yJjfAoB3F3IN7nrAv2TLseTha7oyPuotvYAIZgvneBlH5E873KgCWCmA3j5zT2MYpItQy46X1PfVXYXaQKFZ40VsM83WZGSJoaBm15Kz+ZzRQ0XxLzlZ5Kjvdddqg==\",\n  \"SigningCertURL\" : \"https://sns.us-east-1.amazonaws.com/SimpleNotificationService-60eadc530605d63b8e62a523676ef735.pem\",\n  \"UnsubscribeURL\" : \"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic:a4142f52-c67d-4dff-87b2-dc59dee16fa9\"\n}",
+            "messageId": "383f97ef-cba9-4134-90ac-424687c0eec5",
+            "receiptHandle": "AQEB/wCBxY3h8WTVKqN3AJuXuMPV2owgGzDriKjbwhF7gbq0xH64Zu9cma1uL/jZ09pp5EaIqQ9wo2mlVUYW/BIFqB55/DdlsUjrn4Uqy9tEtn8aaUblWWPzoUrBQG6+80uw5E0rq6hUt9ZJ9itVSBo9t7TMJtJQ6jfSkevivN0XB9zy+eKHZ5gAAZ0QKV9FUxFDC4fNf9d1N/fU2DTG6lG8MMkttLoa7iM3v5Gt21bYjm+BwuI5lW5/usFjMl3MEBs52jAJYci9hDeSWPA8jww1ugkL59kYM/E8pACU11HOu0+vTHOQ4qsT3F2pf1buOA96ZRJ8r+3WUd2ko2UIsGCXJQ==",
+            "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"e28cc69c-8a52-5218-a2eb-992bbff347f6\",\n  \"SequenceNumber\" : \"10000000000000137000\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo\",\n  \"Message\" : \"{\\\"jobId\\\":\\\"d965f99f-585f-4b2c-9d6d-cd0ae6447e34\\\",\\\"status\\\":\\\"COMPLETED\\\",\\\"additionalData\\\":{\\\"completedAt\\\":\\\"1732064097191\\\",\\\"status\\\":\\\"COMPLETED\\\"}}\",\n  \"Timestamp\" : \"2024-11-20T00:54:57.241Z\",\n  \"UnsubscribeURL\" : \"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo:14f252d2-f2e3-4918-9ac3-110836d0c9ab\"\n}",
             "attributes": {
                 "ApproximateReceiveCount": "1",
-                "AWSTraceHeader": "Root=1-6715fb9b-614db5eb04c6c8063a32a4dd;Parent=7f4521a047992352;Sampled=1;Lineage=1:4132df87:0",
-                "SentTimestamp": "1729493918085",
-                "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
-                "ApproximateFirstReceiveTimestamp": "1729493918093"
+                "AWSTraceHeader": "Root=1-673d335f-26eff9111c8a989dedbf0770;Parent=0b7cf8f92666eb84;Sampled=1;Lineage=1:4132df87:0",
+                "SentTimestamp": "1732064097327",
+                "SequenceNumber": "18890152482625263616",
+                "MessageGroupId": "d965f99f-585f-4b2c-9d6d-cd0ae6447e34-COMPLETED",
+                "SenderId": "AIDAYRRVD2ENU4DSO2WBX",
+                "MessageDeduplicationId": "d965f99f-585f-4b2c-9d6d-cd0ae6447e34-COMPLETED-1732064097",
+                "ApproximateFirstReceiveTimestamp": "1732064097327"
             },
             "messageAttributes": {},
-            "md5OfBody": "64a24e78f8fa990c65655006bce3b87b",
+            "md5OfBody": "b9ccf4247957a15200b1248dc6870ee9",
             "eventSource": "aws:sqs",
-            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-notification-queue",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-notification-queue.fifo",
             "awsRegion": "us-east-1"
         }
     ]
