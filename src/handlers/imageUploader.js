@@ -7,6 +7,7 @@ const { fetchGoogleRefreshToken, getAllImagesFromDrive, processImageBatch, setUp
 const dynamoService = require('../services/dynamoService');
 const { FAILED, COMPLETED } = require('../utils/config');
 const { fetchExpiresAt } = require('../utils/api/api');
+const { parseRecordBody } = require('../utils/helpers');
 
 const s3Client = new S3Client();
 
@@ -83,15 +84,6 @@ async function processRecord(record) {
             },
             parsedBody
         });
-    }
-}
-
-function parseRecordBody(record) {
-    try {
-        return JSON.parse(record.body);
-    } catch (error) {
-        logger.error('Failed to parse record body', { error, record });
-        return null;
     }
 }
 
