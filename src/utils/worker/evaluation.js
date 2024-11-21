@@ -19,11 +19,11 @@ const normalizeWord = (word) => {
 };
 
 const createNormalizedSet = (contentTags) => {
-    debug('Creating normalized tag sets from:', contentTags);
+    debug('[createNormalizedSet] Creating normalized tag sets from:', contentTags);
     const normalizedTags = new Set(contentTags.map(tag => tag.value.toLowerCase()));
     const fuzzyTags = new Set([...normalizedTags].map(normalizeWord));
 
-    debug('Created tag sets:', {
+    debug('[createNormalizedSet] Created tag sets:', {
         direct: [...normalizedTags],
         fuzzy: [...fuzzyTags]
     });
@@ -138,23 +138,32 @@ const evaluateLabels = (labels, tagSets, minConfidence) => {
 
 // Main evaluation function
 async function evaluate(labels = [], formattedDetectedTexts = [], projectSettings) {
-    debug('Starting evaluation with:', {
+    debug('[evaluate] Starting evaluation with:', {
         labelsCount: labels.length,
         textsCount: formattedDetectedTexts.length,
         settings: projectSettings
     });
 
     const { detectionConfidence, contentTags, textTags } = projectSettings;
-    console.log('detectionConfidence: ', detectionConfidence);
+    debug('[evaluate] projectSettings: ', { detectionConfidence, contentTags, textTags });
 
-    const contentTagSets = createNormalizedSet(contentTags);
-    const textTagSets = createNormalizedSet(textTags);
+    // Early return if both tag sets are empty
+    if ((!contentTags?.length) && (!textTags?.length)) {
+        debug('Both contentTags and textTags are empty, skipping evaluation');
+        return false;
+    }
 
-    const textMatchResult = formattedDetectedTexts.length === 0 ||
-        evaluateDetectedTexts(formattedDetectedTexts, textTagSets, projectSettings);
-    const labelMatchResult = labels.length === 0 || evaluateLabels(labels, contentTagSets, detectionConfidence);
+    const contentTagSets = createNormalizedSet(contentTags || []);
+    const textTagSets = createNormalizedSet(textTags || []);
 
-    debug('Evaluation results:', {
+    // const textMatchResult = formattedDetectedTexts.length === 0 ||
+    //     evaluateDetectedTexts(formattedDetectedTexts, textTagSets, projectSettings);
+    // const labelMatchResult = labels.length === 0 || evaluateLabels(labels, contentTagSets, detectionConfidence);
+
+    const textMatchResult = evaluateDetectedTexts(formattedDetectedTexts, textTagSets, projectSettings);
+    const labelMatchResult = evaluateLabels(labels, contentTagSets, detectionConfidence);
+
+    debug('[evaluate] Evaluation results:', {
         textMatch: textMatchResult,
         labelMatch: labelMatchResult,
         contentTagSets,
