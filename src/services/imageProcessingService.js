@@ -7,6 +7,7 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
     // If the output format is original and no dimensions are specified, return the original image
     if (outputFormat === 'original' && !maxWidth && !maxHeight) {
+        console.log('[processImageProperties] No dimensions specified, returning original image');
         return s3ObjectKey;
     }
 
@@ -29,6 +30,7 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
     // Set format and quality
     if (outputFormat !== 'original') {
+        console.log('[processImageProperties] Setting format and quality');
         pipeline = pipeline.toFormat(outputFormat, {
             quality: quality
         });
@@ -36,12 +38,14 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
     // Process image
     const processedBuffer = await pipeline.toBuffer();
+    console.log('[processImageProperties] Image processed');
 
     // Generate new key for processed image
     const newKey = s3ObjectKey.replace(
         /([^\/]+)$/,
         `processed_${Date.now()}_$1`
     );
+    console.log('[processImageProperties] New key generated');
 
     // Get existing metadata from the original object
     const originalMetadata = await s3Service.getObjectMetadata(bucket, s3ObjectKey);
