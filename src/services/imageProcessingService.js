@@ -14,10 +14,8 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
     // Get original image
     const imageBuffer = await s3Service.getFileBuffer(bucket, s3ObjectKey);
 
-    // Initialize sharp pipeline with auto-orientation
-    let pipeline = sharp(imageBuffer)
-        .rotate() // This applies the EXIF orientation
-        .autoOrient(); // This removes the EXIF orientation tag after applying it
+    // Initialize sharp pipeline
+    let pipeline = sharp(imageBuffer);
 
     // Apply resize if dimensions are specified
     if (maxWidth || maxHeight) {
@@ -33,13 +31,15 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
             withoutEnlargement: true
         };
 
-        if (isPortrait && maxWidth && maxHeight) {
+        if (isPortrait) {
+            // For portrait images, ensure the height is larger than width
             pipeline = pipeline.resize(
-                Math.min(maxHeight, maxWidth),
-                Math.max(maxHeight, maxWidth),
+                Math.min(maxWidth || metadata.width, maxHeight || metadata.height),
+                Math.max(maxWidth || metadata.width, maxHeight || metadata.height),
                 resizeOptions
             );
         } else {
+            // For landscape images, use dimensions as provided
             pipeline = pipeline.resize(maxWidth, maxHeight, resizeOptions);
         }
     }
