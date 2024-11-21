@@ -113,7 +113,7 @@ notificationProcessor:
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
 
-# From External Drive
+# From External Google Drive
 imageUploadProcessor:
   handler: src/handlers/imageUploader.handler
   memorySize: 2048
@@ -130,6 +130,21 @@ imageUploadProcessor:
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
     - arn:aws:lambda:us-east-1:980352750282:layer:google-api-layer:1
+
+# From External S3
+imageUploadFromS3Processor:
+  handler: src/handlers/imageUploader.handler
+  memorySize: 2048
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
+        batchSize: 10
+  environment:
+    IMAGE_BUCKET: ${self:custom.bucketName}
+  role: ImageUploadFromS3ProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
 
 jobProgressDLQProcessor:
   handler: src/handlers/jobProgressDLQProcessor.handler

@@ -7,28 +7,46 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
     // If the output format is original and no dimensions are specified, return the original image
     if (outputFormat === 'original' && !maxWidth && !maxHeight) {
+        console.log('[processImageProperties] No dimensions specified, returning original image');
         return s3ObjectKey;
     }
 
     // Get original image
     const imageBuffer = await s3Service.getFileBuffer(bucket, s3ObjectKey);
 
-    // Initialize sharp pipeline
-    let pipeline = sharp(imageBuffer);
+    // Initialize sharp pipeline with auto-orientation
+    let pipeline = sharp(imageBuffer)
+        .rotate() // This applies the EXIF orientation
+        .autoOrient(); // This removes the EXIF orientation tag after applying it
 
     // Apply resize if dimensions are specified
     if (maxWidth || maxHeight) {
-        // Validate and map resizeMode to Sharp's supported fit options
-        const fit = validFitOptions[resizeMode] || 'contain'; // Default to 'contain' if invalid
+        const fit = validFitOptions[resizeMode] || 'contain';
 
-        pipeline = pipeline.resize(maxWidth, maxHeight, {
+        // Get image metadata to check orientation
+        const metadata = await pipeline.metadata();
+        const isPortrait = metadata.height > metadata.width;
+
+        // If image is portrait, swap maxWidth and maxHeight to maintain orientation
+        const resizeOptions = {
             fit,
             withoutEnlargement: true
-        });
+        };
+
+        if (isPortrait && maxWidth && maxHeight) {
+            pipeline = pipeline.resize(
+                Math.min(maxHeight, maxWidth),
+                Math.max(maxHeight, maxWidth),
+                resizeOptions
+            );
+        } else {
+            pipeline = pipeline.resize(maxWidth, maxHeight, resizeOptions);
+        }
     }
 
     // Set format and quality
     if (outputFormat !== 'original') {
+        console.log('[processImageProperties] Setting format and quality');
         pipeline = pipeline.toFormat(outputFormat, {
             quality: quality
         });
@@ -36,12 +54,14 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
     // Process image
     const processedBuffer = await pipeline.toBuffer();
+    console.log('[processImageProperties] Image processed');
 
     // Generate new key for processed image
     const newKey = s3ObjectKey.replace(
         /([^\/]+)$/,
         `processed_${Date.now()}_$1`
     );
+    console.log('[processImageProperties] New key generated');
 
     // Get existing metadata from the original object
     const originalMetadata = await s3Service.getObjectMetadata(bucket, s3ObjectKey);

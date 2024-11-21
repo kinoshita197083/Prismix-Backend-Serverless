@@ -80,6 +80,15 @@ const chunkArray = (array, size) => {
     );
 };
 
+function parseRecordBody(record) {
+    try {
+        return JSON.parse(record.body);
+    } catch (error) {
+        console.error('Failed to parse record body', { error, record });
+        return null;
+    }
+}
+
 module.exports = {
     sleep,
     streamToBuffer,
@@ -87,5 +96,6 @@ module.exports = {
     formatLabels,
     createHash,
     chunkArray,
-    formatTexts
+    formatTexts,
+    parseRecordBody
 };
