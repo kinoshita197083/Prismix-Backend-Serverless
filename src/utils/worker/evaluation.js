@@ -150,15 +150,14 @@ async function evaluate(labels = [], formattedDetectedTexts = [], projectSetting
     // Early return if both tag sets are empty
     if ((!contentTags?.length) && (!textTags?.length)) {
         debug('Both contentTags and textTags are empty, skipping evaluation');
-        return false;
+        return {
+            result: false,
+            reason: 'No content or text tags configured for evaluation'
+        };
     }
 
     const contentTagSets = createNormalizedSet(contentTags || []);
     const textTagSets = createNormalizedSet(textTags || []);
-
-    // const textMatchResult = formattedDetectedTexts.length === 0 ||
-    //     evaluateDetectedTexts(formattedDetectedTexts, textTagSets, projectSettings);
-    // const labelMatchResult = labels.length === 0 || evaluateLabels(labels, contentTagSets, detectionConfidence);
 
     const textMatchResult = evaluateDetectedTexts(formattedDetectedTexts, textTagSets, projectSettings);
     const labelMatchResult = evaluateLabels(labels, contentTagSets, detectionConfidence);
@@ -173,9 +172,28 @@ async function evaluate(labels = [], formattedDetectedTexts = [], projectSetting
     });
 
     const finalResult = textMatchResult || labelMatchResult;
-    debug(`Evaluation complete: ${finalResult ? 'Matches found' : 'No matches found'}`);
+    const reason = generateEvaluationReason(textMatchResult, labelMatchResult, contentTags, textTags);
 
-    return finalResult;
+    debug(`Evaluation complete: ${finalResult ? 'Matches found' : 'No matches found'}, Reason: ${reason}`);
+
+    return {
+        result: finalResult,
+        reason
+    };
+}
+
+function generateEvaluationReason(textMatch, labelMatch, contentTags, textTags) {
+    const reasons = [];
+
+    if (contentTags?.length > 0 && !labelMatch) {
+        reasons.push('Content matches excluded by configured content tags');
+    }
+
+    if (textTags?.length > 0 && !textMatch) {
+        reasons.push('Text matches excluded by configured text tags');
+    }
+
+    return reasons.length > 0 ? reasons.join(' and ') : 'No exclusion criteria met';
 }
 
 module.exports = { evaluationMapper, evaluate };

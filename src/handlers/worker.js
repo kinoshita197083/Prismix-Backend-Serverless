@@ -110,10 +110,10 @@ exports.handler = async (event, context) => {
             console.log('999 Text detection performed successfully. Evaluating results...');
 
             // Step 5: Evaluate results and update status
-            const evaluation = await evaluate(formattedLabels, formattedTexts, projectSettings);
+            const { result: evaluation, reason: evaluationReason } = await evaluate(formattedLabels, formattedTexts, projectSettings);
             let finalEvaluation = evaluationMapper[evaluation];
             let status = COMPLETED;
-            let reason = finalEvaluation === EXCLUDED ? 'Labels excluded by project settings' : undefined;
+            let reason = finalEvaluation === EXCLUDED ? evaluationReason : undefined;
 
             // If manual review is required and the evaluation would be EXCLUDED,
             // change status to WAITING_FOR_REVIEW instead
