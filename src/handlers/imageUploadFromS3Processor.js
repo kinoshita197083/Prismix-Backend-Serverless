@@ -10,9 +10,6 @@ const BATCH_SIZE = 25;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
-// Initialize S3 client (for our bucket)
-const s3Client = new S3Client();
-
 exports.handler = async (event) => {
     logger.info('S3 Image upload processor started', { event });
     const results = await Promise.allSettled(event.Records.map(processRecord));
@@ -30,12 +27,41 @@ async function processRecord(record) {
     const parsedBody = JSON.parse(record.body);
     if (!parsedBody) return;
 
-    const { userId, projectId, jobId, projectSettingId, s3Connection } = parsedBody;
-    logger.info('Processing record', { userId, projectId, jobId, s3Connection });
+    const {
+        userId,
+        projectId,
+        jobId,
+        projectSettingId,
+        bucketName,
+        region,
+        importAll,
+        folderPaths,
+        projectSetting,
+        expressProcessing
+    } = parsedBody;
+
+    logger.info('Processing record', {
+        userId,
+        projectId,
+        jobId,
+        bucketName,
+        importAll,
+        folderPaths,
+        expressProcessing
+    });
 
     try {
-        // Initialize source S3 client with user's bucket region
-        const sourceS3Client = new S3Client({ region: s3Connection.region });
+        // Initialize source S3 client with user's bucket region and acceleration if needed
+        const sourceS3Client = new S3Client({
+            region,
+            // useAccelerateEndpoint: expressProcessing
+        });
+
+        // Initialize destination S3 client with acceleration if needed
+        const destinationS3Client = new S3Client({
+            useAccelerateEndpoint: expressProcessing
+        });
+
         const destinationBucket = process.env.IMAGE_BUCKET;
 
         // Fetch job expiration time
@@ -50,22 +76,23 @@ async function processRecord(record) {
         do {
             const { images, nextToken } = await listImagesFromBucket(
                 sourceS3Client,
-                s3Connection.bucketName,
-                continuationToken
+                bucketName,
+                continuationToken,
+                importAll ? null : folderPaths
             );
 
             if (images.length === 0) {
-                logger.info('No images found in the bucket');
+                logger.info('No images found in the bucket/folders');
                 break;
             }
 
             // Process batch of images
             const batchResults = await processImageBatch(
                 sourceS3Client,
-                s3Client,
+                destinationS3Client,
                 images,
                 {
-                    sourceBucket: s3Connection.bucketName,
+                    sourceBucket: bucketName,
                     destinationBucket,
                     userId,
                     projectId,
@@ -116,14 +143,48 @@ async function processRecord(record) {
     }
 }
 
-async function listImagesFromBucket(s3Client, bucket, continuationToken) {
+async function listImagesFromBucket(s3Client, bucket, continuationToken, folderPaths) {
     try {
-        const command = new ListObjectsV2Command({
+        const baseCommand = {
             Bucket: bucket,
             MaxKeys: BATCH_SIZE,
             ContinuationToken: continuationToken
-        });
+        };
 
+        // If specific folders are provided, process them one at a time
+        if (folderPaths && folderPaths.length > 0) {
+            const allImages = [];
+
+            for (const folderPath of folderPaths) {
+                const command = new ListObjectsV2Command({
+                    ...baseCommand,
+                    Prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`
+                });
+
+                const response = await s3Client.send(command);
+                const folderImages = response.Contents.filter(obj =>
+                    obj.Key.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                );
+
+                allImages.push(...folderImages);
+
+                // If we've collected enough images for a batch, break
+                if (allImages.length >= BATCH_SIZE) {
+                    return {
+                        images: allImages.slice(0, BATCH_SIZE),
+                        nextToken: response.NextContinuationToken
+                    };
+                }
+            }
+
+            return {
+                images: allImages,
+                nextToken: null
+            };
+        }
+
+        // If no specific folders, list all objects
+        const command = new ListObjectsV2Command(baseCommand);
         const response = await s3Client.send(command);
         const images = response.Contents.filter(obj =>
             obj.Key.match(/\.(jpg|jpeg|png|gif|webp)$/i)
@@ -136,7 +197,8 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken) {
     } catch (error) {
         logger.error('Error listing images from bucket', {
             error: error.message,
-            bucket
+            bucket,
+            folderPaths
         });
         throw error;
     }

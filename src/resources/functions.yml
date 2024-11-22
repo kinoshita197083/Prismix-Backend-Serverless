@@ -133,7 +133,7 @@ imageUploadProcessor:
 
 # From External S3
 imageUploadFromS3Processor:
-  handler: src/handlers/imageUploader.handler
+  handler: src/handlers/imageUploadFromS3Processor.handler
   memorySize: 2048
   events:
     - sqs:

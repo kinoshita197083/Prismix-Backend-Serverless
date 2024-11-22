@@ -458,12 +458,23 @@ Resources:
                   - s3:PutObjectTagging
                   - s3:PutObjectMetadata
                   - s3:GetObjectMetadata
+                  - s3:GetAccelerateConfiguration
+                  - s3:UseAccelerateEndpoint
                 Resource:
                   - Fn::Join:
                     - ""
                     - - "arn:aws:s3:::"
                       - ${self:custom.bucketName}
                       - "/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:GetAccelerateConfiguration
+                  - s3:UseAccelerateEndpoint
+                Resource:
+                  - "*"
 
   JobProgressDLQProcessorRole:
     Type: AWS::IAM::Role
