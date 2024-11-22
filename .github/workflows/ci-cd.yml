@@ -58,6 +58,8 @@ jobs:
           echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_DEV}}" >> $GITHUB_ENV
           echo "JOB_PROGRESS_QUEUE_URL=${{ secrets.JOB_PROGRESS_QUEUE_URL_DEV }}" >> $GITHUB_ENV
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_DEV }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
         elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
@@ -71,6 +73,8 @@ jobs:
           echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_PROD}}" >> $GITHUB_ENV
           echo "JOB_PROGRESS_QUEUE_URL=${{ secrets.JOB_PROGRESS_QUEUE_URL_PROD }}" >> $GITHUB_ENV
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_PROD }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
         else
           echo "Unsupported branch for deployment"
           exit 1

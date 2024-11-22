@@ -73,8 +73,8 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
 
     const scheduleWithSQS = async (jobId, delaySeconds, currentStatus, options = {}) => {
         const { eventType = 'PROGRESS_CHECK', priority = 'normal' } = options;
-        const messageGroupId = `${jobId}-${currentStatus}`;
 
+        // Base message attributes
         const messageAttributes = {
             eventType: {
                 DataType: 'String',
@@ -83,15 +83,23 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
             priority: {
                 DataType: 'String',
                 StringValue: priority
-            },
-            MessageGroupId: {
-                DataType: 'String',
-                StringValue: messageGroupId
             }
         };
 
+        // Check if queue URL indicates a FIFO queue
+        const isFifoQueue = config.jobProgressQueueUrl.endsWith('.fifo');
+
+        // Only add MessageGroupId for FIFO queues
+        const messageGroupId = isFifoQueue ? `${jobId}-${currentStatus}` : undefined;
+        if (isFifoQueue) {
+            messageAttributes.MessageGroupId = {
+                DataType: 'String',
+                StringValue: messageGroupId
+            };
+        }
+
         try {
-            await sqs.send(new SendMessageCommand({
+            const params = {
                 QueueUrl: config.jobProgressQueueUrl,
                 MessageBody: JSON.stringify({
                     jobId,
@@ -102,9 +110,10 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
                 }),
                 MessageAttributes: messageAttributes,
                 DelaySeconds: Math.min(delaySeconds, 900),
-                MessageGroupId: messageGroupId
-            }));
+                ...(isFifoQueue && { MessageGroupId: messageGroupId })
+            };
 
+            await sqs.send(new SendMessageCommand(params));
             console.log(`Scheduled ${eventType} check with SQS for job ${jobId} in ${delaySeconds} seconds`);
             return true;
         } catch (error) {

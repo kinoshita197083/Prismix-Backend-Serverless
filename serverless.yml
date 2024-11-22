@@ -17,7 +17,8 @@ provider:
   region: ${opt:region, 'us-east-1'}
   memorySize: ${self:custom.memorySize.${self:provider.stage}}
   environment:
-    ENVIRONMENT: ${self:provider.stage}
+    SERVICE_NAME: ${self:service}
+    STAGE: ${self:provider.stage}
     TASKS_TABLE: ${self:service}-${self:provider.stage}-Tasks
     JOB_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-JobProgress
     IMAGE_HASH_TABLE: ${self:service}-${self:provider.stage}-ImageHashes
@@ -111,6 +112,7 @@ resources:
   - ${file(src/resources/sqs.yml)}
   - ${file(src/resources/dynamodb.yml)}
   - ${file(src/resources/iam-roles.yml)}
+  - ${file(src/resources/secretsmanager.yml)}
   - Resources:
       LayersDeploymentBucket:
         Type: AWS::S3::Bucket

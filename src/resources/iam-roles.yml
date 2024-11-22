@@ -449,6 +449,8 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:Query
                 Resource:
                   - Fn::GetAtt: [JobProgressTable, Arn]
                   - Fn::GetAtt: [TasksTable, Arn]
@@ -468,13 +470,9 @@ Resources:
                       - "/*"
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                  - s3:ListBucket
-                  - s3:PutObject
-                  - s3:GetAccelerateConfiguration
-                  - s3:UseAccelerateEndpoint
+                  - secretsmanager:GetSecretValue
                 Resource:
-                  - "*"
+                  - !Ref PrismixUserCredentials
 
   JobProgressDLQProcessorRole:
     Type: AWS::IAM::Role
@@ -568,3 +566,30 @@ Resources:
                 Resource: 
                   - Fn::GetAtt: [JobProgressTable, Arn]
                   - Fn::GetAtt: [ZipArchiveProgressTable, Arn]
+
+  # Cross-account access role for S3
+  PrismixS3AccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: PrismixS3AccessRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: s3-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - 'arn:aws:s3:::*'
+                  - 'arn:aws:s3:::*/*'

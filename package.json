@@ -22,7 +22,8 @@
     "test:delivery-processor": "npx dotenv -e .env.dev -- serverless invoke local --function deliveryProcessor --path src/test-events/delivery-event.json",
     "test:job-progress-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobProgressChecker --path src/test-events/job-progress-event.json",
     "test:external-image-import": "npx dotenv -e .env.dev -- serverless invoke local --function imageUploadProcessor --path src/test-events/external-image-import-event.json",
-    "test:zip-archive-processor": "npx dotenv -e .env.dev -- serverless invoke local --function zipArchiveProcessor --path src/test-events/zip-creation-event.json"
+    "test:zip-archive-processor": "npx dotenv -e .env.dev -- serverless invoke local --function zipArchiveProcessor --path src/test-events/zip-creation-event.json",
+    "test:s3-image-import-processor": "npx dotenv -e .env.dev -- serverless invoke local --function imageUploadFromS3Processor --path src/test-events/s3-image-import-event.json"
   },
   "keywords": [],
   "author": "",
@@ -41,6 +42,7 @@
     "@aws-sdk/client-lambda": "^3.667.0",
     "@aws-sdk/client-rekognition": "^3.667.0",
     "@aws-sdk/client-s3": "^3.670.0",
+    "@aws-sdk/client-secrets-manager": "^3.699.0",
     "@aws-sdk/client-ses": "^3.670.0",
     "@aws-sdk/client-sns": "^3.667.0",
     "@aws-sdk/client-sqs": "^3.667.0",
