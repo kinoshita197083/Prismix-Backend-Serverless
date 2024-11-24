@@ -247,3 +247,48 @@ Resources:
       TopicArn: !Ref JobCompletionTopic
       Protocol: sqs
       Endpoint: !GetAtt ZipDeliveryQueue.Arn
+
+  S3DeliveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-s3-delivery-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+      VisibilityTimeout: 900  # 15 minutes, matching Lambda timeout
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [S3DeliveryDLQ, Arn]
+        maxReceiveCount: 3
+
+  S3DeliveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-s3-delivery-dlq.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+
+  S3DeliveryQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref S3DeliveryQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt S3DeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  S3DeliveryTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt S3DeliveryQueue.Arn

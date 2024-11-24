@@ -19,7 +19,7 @@ exports.handler = async (event, context) => {
         const { bucket, key: s3ObjectKey, jobId } = message;
         const imageId = createHash(s3ObjectKey.split('/').pop());
 
-        console.log('999 Processing image:', { bucket, s3ObjectKey, jobId, imageId });
+        logger.info('Starting image processing', { bucket, s3ObjectKey, jobId, imageId });
 
         let expiresAt;
 
@@ -31,7 +31,6 @@ exports.handler = async (event, context) => {
             console.log('manualReviewRequired', manualReviewRequired);
 
             expiresAt = projectSettings.expiresAt;
-            console.log('expiresAt', expiresAt);
 
             // Step 1: Check for duplicates if enabled
             if (projectSettings.detectDuplicates) {

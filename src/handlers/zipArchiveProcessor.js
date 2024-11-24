@@ -287,6 +287,10 @@ async function handleJobCompletion(jobId) {
 
         await zipArchiveProgressService.updateFinalZipLocation(jobId, finalZipKey);
 
+        await jobProgressService.updateJobProgress(jobId, {
+            deliveryStatus: 'COMPLETED'
+        });
+
         logger.info('Successfully completed final merge', {
             jobId,
             finalZipKey
@@ -444,17 +448,6 @@ exports.handler = async (event) => {
         return body.Message ? JSON.parse(body.Message) : body;
     };
 
-    // const fetchTotalFiles = async (jobId, additionalData) => {
-    //     let totalFiles = additionalData?.finalStatistics?.eligible;
-    //     if (!totalFiles) {
-    //         logger.info('Fetching totalFiles from DB', { jobId });
-    //         const currentJobProgress = await jobProgressService.getCurrentJobProgress(jobId);
-    //         totalFiles = currentJobProgress?.statistics?.eligible || 0;
-    //         logger.info('Retrieved totalFiles', { jobId, totalFiles });
-    //     }
-    //     return totalFiles;
-    // };
-
     const processRecord = async (record) => {
         logger.info('Processing record', {
             messageId: record.messageId,
@@ -489,7 +482,7 @@ exports.handler = async (event) => {
             if (!totalFiles) {
                 logger.info('No totalFiles found, skipping job', { jobId });
                 await jobProgressService.updateJobProgress(jobId, {
-                    downloadZipStatus: 'SKIPPED'
+                    deliveryStatus: 'SKIPPED'
                 });
                 return;
             }
@@ -497,7 +490,7 @@ exports.handler = async (event) => {
             if (outputConnection !== 'local') {
                 logger.info('Skipping non-local job', { jobId, outputConnection });
                 await jobProgressService.updateJobProgress(jobId, {
-                    downloadZipStatus: 'SKIPPED'
+                    deliveryStatus: 'SKIPPED'
                 });
                 return;
             }
@@ -506,6 +499,11 @@ exports.handler = async (event) => {
                 logger.info('Job initialization skipped', { jobId });
                 return;
             }
+
+            // Set job delivery status to IN_PROGRESS
+            await jobProgressService.updateJobProgress(jobId, {
+                deliveryStatus: 'IN_PROGRESS'
+            });
 
             if (action === 'PROCESS_NEXT_CHUNK' || status === 'COMPLETED') {
                 logger.info('Starting eligible tasks processing', { jobId });
@@ -526,6 +524,12 @@ exports.handler = async (event) => {
                 details: JSON.stringify(error, Object.getOwnPropertyNames(error)),
                 timestamp: new Date().toISOString()
             });
+
+            // Set job delivery status to FAILED
+            await jobProgressService.updateJobProgress(jobId, {
+                deliveryStatus: 'FAILED'
+            });
+
             return { itemIdentifier: record.messageId };
         }
     };

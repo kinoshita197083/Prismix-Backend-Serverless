@@ -33,6 +33,8 @@ const RESOLUTION_THRESHOLDS = {
     '4k': 2160
 };
 
+const DEFAULT_EXPIRATION_TIME = Date.now().toString() + 1000 * 60 * 60 * 24 * 180 // 180 days from now
+
 module.exports = {
     ELIGIBLE,
     FAILED,
@@ -46,5 +48,6 @@ module.exports = {
     WAITING_FOR_REVIEW,
     IMAGE_HASH_EXPIRATION_TIME,
     RESOLUTION_THRESHOLDS,
-    validFitOptions
+    validFitOptions,
+    DEFAULT_EXPIRATION_TIME
 };

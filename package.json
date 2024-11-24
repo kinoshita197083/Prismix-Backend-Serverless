@@ -23,7 +23,8 @@
     "test:job-progress-checker": "npx dotenv -e .env.dev -- serverless invoke local --function jobProgressChecker --path src/test-events/job-progress-event.json",
     "test:external-image-import": "npx dotenv -e .env.dev -- serverless invoke local --function imageUploadProcessor --path src/test-events/external-image-import-event.json",
     "test:zip-archive-processor": "npx dotenv -e .env.dev -- serverless invoke local --function zipArchiveProcessor --path src/test-events/zip-creation-event.json",
-    "test:s3-image-import-processor": "npx dotenv -e .env.dev -- serverless invoke local --function imageUploadFromS3Processor --path src/test-events/s3-image-import-event.json"
+    "test:s3-image-import-processor": "npx dotenv -e .env.dev -- serverless invoke local --function imageUploadFromS3Processor --path src/test-events/s3-image-import-event.json",
+    "test:s3-delivery-processor": "npx dotenv -e .env.dev -- serverless invoke local --function s3DeliveryProcessor --path src/test-events/s3-delivery-event.json"
   },
   "keywords": [],
   "author": "",

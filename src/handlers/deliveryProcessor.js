@@ -8,6 +8,8 @@ const s3Service = require('../services/s3Service');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const dynamoService = require('../services/dynamoService');
 const lambdaClient = new LambdaClient();
+const createTaskService = require('../services/taskService');
+const JobProgressService = require('../services/jobProgressService');
 
 const dynamoClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -41,6 +43,17 @@ const PAGINATION_CONFIG = {
     s3ListLimit: 1000,       // Number of objects per S3 list request
     maxPages: 100           // Safety limit for pagination loops
 };
+
+// Initialize with custom pagination config
+const taskService = createTaskService({
+    dynamoPageSize: PAGINATION_CONFIG.dynamoPageSize,
+    maxPages: PAGINATION_CONFIG.maxPages
+});
+
+const jobProgressService = new JobProgressService(docClient, null, {
+    tasksTable: process.env.TASKS_TABLE,
+    jobProgressTable: process.env.JOB_PROGRESS_TABLE
+});
 
 exports.handler = async (event) => {
     const startTime = Date.now();
@@ -85,7 +98,12 @@ exports.handler = async (event) => {
             console.log('----> folderId', folderId);
 
             // Fetch eligible tasks using LastEvaluatedKey for pagination
-            const taskGenerator = fetchAllEligibleTasks(jobId, lastEvaluatedKey);
+            const taskGenerator = taskService.fetchAllEligibleTasks(jobId, lastEvaluatedKey);
+
+            // Set job delivery status to IN_PROGRESS
+            await jobProgressService.updateJobProgress(jobId, {
+                deliveryStatus: 'IN_PROGRESS'
+            });
 
             for await (const taskBatch of taskGenerator) {
                 lastTaskBatch = taskBatch;
@@ -128,6 +146,9 @@ exports.handler = async (event) => {
                 }
             }
 
+            // Set job delivery status to COMPLETED
+            handleDeliveryCompletion(jobId);
+
         } catch (error) {
             logger.error(`Error processing delivery for job ${jobId}:`, {
                 error: error.message,
@@ -142,26 +163,23 @@ exports.handler = async (event) => {
                     s3Key: task.ImageS3Key,
                     error: 'Delivery failed: ' + error.message
                 }));
-                // await updateFailedImagesToJobProgress(jobId, failedTasks);
-
-                // Update task status as COMPLETED with FAILED evaluation for downstream aggregation in job summary
-                const updatePromises = failedTasks.map(async (task) => {
-                    return dynamoService.updateTaskStatus({
-                        jobId,
-                        taskId: task.taskId,
-                        status: COMPLETED,
-                        evaluation: FAILED,
-                        s3ObjectKey: task.s3Key,
-                        reason: `${task.error}`
-                    });
-                });
-                await Promise.all(updatePromises);
             }
+
+            // Set job delivery status to FAILED
+            await jobProgressService.updateJobProgress(jobId, {
+                deliveryStatus: 'FAILED'
+            });
         }
     }
 
     logger.info('Delivery processor finished');
 };
+
+async function handleDeliveryCompletion(jobId) {
+    await jobProgressService.updateJobProgress(jobId, {
+        deliveryStatus: COMPLETED
+    });
+}
 
 async function fetchProvider(jobId) {
     const params = {
@@ -183,120 +201,6 @@ async function fetchProvider(jobId) {
     } catch (error) {
         logger.error(`Error fetching provider for job ${jobId}:`, { error: error.message });
         throw error;
-    }
-}
-
-async function fetchEligibleTasks(jobId, lastEvaluatedKey = null) {
-    logger.info(`Fetching eligible tasks for job ${jobId}`, {
-        lastEvaluatedKey: lastEvaluatedKey ? JSON.stringify(lastEvaluatedKey) : null
-    });
-
-    const params = {
-        TableName: process.env.TASKS_TABLE,
-        KeyConditionExpression: 'JobID = :jobId',
-        FilterExpression: 'Evaluation = :evaluation',
-        ExpressionAttributeValues: {
-            ':jobId': jobId,
-            ':evaluation': ELIGIBLE
-        },
-        Limit: PAGINATION_CONFIG.dynamoPageSize
-    };
-
-    // Only add ExclusiveStartKey if it's a valid DynamoDB key
-    if (lastEvaluatedKey && typeof lastEvaluatedKey === 'object') {
-        params.ExclusiveStartKey = lastEvaluatedKey;
-    }
-
-    try {
-        const command = new QueryCommand(params);
-        const result = await docClient.send(command);
-
-        logger.info(`Fetched batch of eligible tasks`, {
-            count: result.Items.length,
-            hasMore: !!result.LastEvaluatedKey,
-            lastEvaluatedKey: result.LastEvaluatedKey
-        });
-
-        return {
-            items: result.Items,
-            lastEvaluatedKey: result.LastEvaluatedKey
-        };
-    } catch (error) {
-        logger.error(`Error fetching eligible tasks for job ${jobId}:`, {
-            error: error.message,
-            params
-        });
-        throw error;
-    }
-}
-
-async function* fetchAllEligibleTasks(jobId, lastEvaluatedKey) {
-    let pageCount = 0;
-
-    do {
-        if (pageCount >= PAGINATION_CONFIG.maxPages) {
-            logger.warn(`Reached maximum page limit for job ${jobId}`);
-            break;
-        }
-
-        const result = await fetchEligibleTasks(jobId, lastEvaluatedKey);
-        lastEvaluatedKey = result.lastEvaluatedKey;
-        pageCount++;
-
-        yield {
-            items: result.items,
-            lastEvaluatedKey  // Include this in the yield to save progress
-        };
-    } while (lastEvaluatedKey);
-
-    logger.info(`Completed fetching all eligible tasks`, {
-        jobId,
-        totalPages: pageCount
-    });
-}
-
-async function updateFailedImagesToJobProgress(jobId, failedImages) {
-    if (!failedImages || failedImages.length === 0) {
-        logger.info('No failed images to update');
-        return;
-    }
-
-    logger.info(`Updating ${failedImages.length} failed images to job progress`, {
-        jobId,
-        failedCount: failedImages.length
-    });
-
-    const deliveryDetails = {
-        failedImages,
-        lastUpdated: new Date().toISOString(),
-        totalFailures: failedImages.length
-    };
-
-    const params = {
-        TableName: process.env.JOB_PROGRESS_TABLE,
-        Key: { JobId: jobId },
-        UpdateExpression: 'SET deliveryDetails = :details',
-        ExpressionAttributeValues: {
-            ':details': deliveryDetails,
-            // ':failedCount': failedImages.length
-        },
-        ReturnValues: 'UPDATED_NEW'
-    };
-
-    try {
-        const command = new UpdateCommand(params);
-        const result = await docClient.send(command);
-
-        logger.info(`Successfully updated failed images for job ${jobId}`, {
-            updatedAttributes: result.Attributes
-        });
-    } catch (error) {
-        logger.error(`Error updating failed images for job ${jobId}:`, {
-            error: error.message,
-            failedImagesCount: failedImages.length
-        });
-        // Don't throw here to prevent the entire process from failing
-        // but make sure to log the error for monitoring
     }
 }
 

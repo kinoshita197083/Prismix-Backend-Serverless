@@ -185,3 +185,22 @@ zipArchiveProcessor:
     - arn:aws:lambda:us-east-1:980352750282:layer:archiver-layer:1
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
     - arn:aws:lambda:us-east-1:980352750282:layer:p-limit-layer:1
+
+s3DeliveryProcessor:
+  handler: src/handlers/s3DeliveryProcessor.handler
+  timeout: 900
+  memorySize: 3008
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [S3DeliveryQueue, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+    SOURCE_BUCKET: ${self:custom.bucketName}
+    BUCKET_NAME: ${self:custom.bucketName}
+  role: S3DeliveryProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1

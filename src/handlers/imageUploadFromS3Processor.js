@@ -8,7 +8,7 @@ const { COMPLETED, FAILED } = require('../utils/config');
 const { fetchExpiresAt } = require('../utils/api/api');
 const JobProgressService = require('../services/jobProgressService');
 const { JobProcessingError } = require('../utils/errors');
-const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+const secretsService = require('../services/secretsService');
 
 // Constants for batch processing and retries
 const BATCH_SIZE = 25;
@@ -237,28 +237,10 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
     });
 
     try {
-        // Get credentials from Secrets Manager
-        const secretsManager = new SecretsManagerClient();
+        // Get credentials using the shared service
+        const credentials = await secretsService.getCredentials();
 
-        let secretResponse;
-        try {
-            secretResponse = await secretsManager.send(
-                new GetSecretValueCommand({
-                    SecretId: `${process.env.SERVICE_NAME}/${process.env.STAGE}/prismix-user-credentials`,
-                    VersionStage: "AWSCURRENT"
-                })
-            );
-        } catch (err) {
-            throw err;
-        }
-
-        const credentials = JSON.parse(secretResponse.SecretString);
-        console.log('----> credentials retrieved', {
-            accessKeyId: !!credentials.accessKeyId,
-            secretAccessKey: credentials.secretAccessKey.length
-        });
-
-        // Create S3 client with Prismix user credentials
+        // Create cross-account client
         const crossAccountS3Client = new S3Client({
             credentials: {
                 accessKeyId: credentials.accessKeyId,
