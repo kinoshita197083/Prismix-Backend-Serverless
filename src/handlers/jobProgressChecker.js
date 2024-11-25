@@ -215,7 +215,27 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
             console.log('Checking memory usage for jobId:', jobId);
             const memoryCheckResult = await jobHealthService.checkMemoryUsage(jobId, stats.lastEvaluatedKey);
             console.log('Memory check result:', memoryCheckResult);
+
             if (memoryCheckResult) {
+                const continuationCount = jobProgress.continuationCount || 0;
+                const MAX_CONTINUATIONS = 10;
+
+                if (continuationCount >= MAX_CONTINUATIONS) {
+                    console.warn(`Maximum continuations reached for job ${jobId}`);
+                    await jobProgressService.updateJobProgress(jobId, {
+                        status: 'FAILED',
+                        error: {
+                            code: 'MAX_CONTINUATIONS_EXCEEDED',
+                            message: 'Job exceeded maximum number of consecutive continuations'
+                        }
+                    });
+                    return;
+                }
+
+                await jobProgressService.updateJobProgress(jobId, {
+                    continuationCount: continuationCount + 1
+                });
+
                 console.log('Scheduling immediate continuation for jobId:', jobId);
                 await scheduleImmediateContinuation(jobId, stats.lastEvaluatedKey);
                 return;
@@ -268,6 +288,13 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
             console.log('Handling job completion for jobId:', jobId);
             await jobCompletionService.handleJobCompletion(jobId, newStatus);
         }
+
+        // If we complete a full check without needing continuation, reset the counter
+        if (!stats.lastEvaluatedKey && jobProgress.continuationCount) {
+            await jobProgressService.updateJobProgress(jobId, {
+                continuationCount: 0
+            });
+        }
     } catch (error) {
         console.error('[handleRegularProgressCheck] Error during progress check:', error);
         throw error;
@@ -277,6 +304,8 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
 // Helper function for scheduling immediate continuation
 const scheduleImmediateContinuation = async (jobId, lastEvaluatedKey) => {
     console.log('Scheduling immediate continuation for jobId:', jobId);
+    const MIN_DELAY_SECONDS = 5; // Add minimum 5-second delay
+
     await sqs.send(new SendMessageCommand({
         QueueUrl: process.env.JOB_PROGRESS_QUEUE_URL,
         MessageBody: JSON.stringify({
@@ -291,6 +320,6 @@ const scheduleImmediateContinuation = async (jobId, lastEvaluatedKey) => {
                 StringValue: 'PROGRESS_CHECK'
             }
         },
-        DelaySeconds: 0
+        DelaySeconds: MIN_DELAY_SECONDS
     }));
 };

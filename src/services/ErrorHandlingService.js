@@ -64,14 +64,14 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
             // If max retries exceeded or other error, handle as terminal
             await jobProgressService.updateJobProgress(jobId, {
                 status: FAILED,
-                processingDetails: {
+                systemError: [{
                     lastError: {
                         code: error.code,
                         message: error.message,
                         timestamp: Date.now().toString(),
                         details: error.details || {}
                     }
-                },
+                }],
                 completedAt: Date.now().toString()
             });
 
