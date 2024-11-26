@@ -1,6 +1,6 @@
 const { FAILED } = require("../utils/config");
 
-const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSchedulingService) => {
+const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSchedulingService, jobCompletionService) => {
     const TERMINAL_ERRORS = ['SYSTEM_ERROR', 'CONFIGURATION_ERROR'];
     const RETRYABLE_ERRORS = ['HEALTH_CHECK_FAILED', 'TEMPORARY_ERROR'];
     const MAX_HEALTH_CHECK_RETRIES = 3;
@@ -37,7 +37,7 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
 
                 await jobProgressService.updateJobProgress(jobId, {
                     // status: 'IN_PROGRESS',
-                    processingDetails: {
+                    healthCheckErrors: {
                         lastError: {
                             code: error.code,
                             message: error.message,
@@ -57,36 +57,15 @@ const createErrorHandlingService = (jobProgressService, cloudWatchService, jobSc
                 }, jobProgressService);
 
                 console.log('[handleProcessingError] Next check scheduled with backoff');
-
                 return;
             }
 
             // If max retries exceeded or other error, handle as terminal
-            await jobProgressService.updateJobProgress(jobId, {
-                status: FAILED,
-                systemError: [{
-                    lastError: {
-                        code: error.code,
-                        message: error.message,
-                        timestamp: Date.now().toString(),
-                        details: error.details || {}
-                    }
-                }],
-                completedAt: Date.now().toString()
-            });
-
-            // Update job status in RDS
-            await jobProgressService.updateJobStatusRDS(jobId, FAILED);
-
-            console.log('[handleProcessingError] Job progress updated with terminal error due to retry limit');
-
-            await jobSchedulingService.cleanupScheduledChecks(jobId);
-
-            console.log('[handleProcessingError] Scheduled checks cleaned up for terminal error');
+            await jobCompletionService.handleJobCompletion(jobId, FAILED);
 
         } catch (handlingError) {
             console.error('[handleProcessingError] Error handling job error:', handlingError);
-            throw handlingError;
+            // throw handlingError;
         }
     };
 

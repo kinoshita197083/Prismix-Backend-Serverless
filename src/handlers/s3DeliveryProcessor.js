@@ -112,7 +112,8 @@ async function processRecord(record) {
 
         // Validate S3 access before processing
         try {
-            await validateS3Access(destinationS3Client, bucketName);
+            const response = await validateS3Access(destinationS3Client, bucketName);
+            console.log('[validateS3Access] validation response: ', response);
         } catch (error) {
             if (error.name === 'AccessDenied') {
                 await handleFatalError(jobId, 'S3 bucket access denied - please check bucket policy');
@@ -127,6 +128,8 @@ async function processRecord(record) {
         // Process tasks in batches
         const { processedCount, failedCount, failedTasks } = await processTasks({ jobId, s3Config, destinationS3Client });
 
+        console.log('[processTasks] delivery details: ', { processedCount, failedCount, failedTasks });
+
         // Update final job status
         await updateFinalJobStatus(jobId, processedCount, failedCount, failedTasks);
 
@@ -136,6 +139,9 @@ async function processRecord(record) {
             error: error.message,
             stackTrace: error.stack
         });
+
+        await handleFatalError(jobId, `Record processing failed: ${error.message}`);
+
         throw error;
     }
 }
@@ -191,8 +197,8 @@ async function getDestinationDetails(userId) {
 }
 
 async function validateS3Access(destinationS3Client, bucketName) {
-
-    await destinationS3Client.send(new ListObjectsV2Command({
+    console.log('[validateS3Access] validating access to bucket: ', bucketName);
+    return await destinationS3Client.send(new ListObjectsV2Command({
         Bucket: bucketName,
         MaxKeys: 1
     }));
@@ -320,7 +326,7 @@ async function handleFatalError(jobId, errorMessage) {
     logger.error('Fatal error in job processing', { jobId, error: errorMessage });
 
     await jobProgressService.updateJobProgress(jobId, {
-        status: FAILED,
+        // status: FAILED,
         deliveryError: [{
             message: errorMessage,
             timestamp: new Date().toISOString()

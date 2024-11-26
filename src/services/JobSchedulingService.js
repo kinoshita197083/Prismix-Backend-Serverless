@@ -137,14 +137,8 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
         try {
             // If review is completed by user, no need to schedule next check
             // Prevent scheduling if job is complete or failed
-            if ([COMPLETED, FAILED, 'STALE'].includes(currentStatus)) {
+            if ([COMPLETED, FAILED, 'STALE'].includes(currentStatus) || reviewCompleted) {
                 console.log('[JobSchedulingService.scheduleNextCheck] Job is in final state, no scheduling needed');
-                // await cleanupScheduledChecks(jobId);
-                return;
-            }
-
-            // If review is completed, clean up and exit
-            if (reviewCompleted) {
                 await cleanupScheduledChecks(jobId);
                 return;
             }

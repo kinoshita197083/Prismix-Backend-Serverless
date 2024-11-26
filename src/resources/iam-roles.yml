@@ -637,3 +637,14 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Resource:
                   - !Ref PrismixUserCredentials
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"

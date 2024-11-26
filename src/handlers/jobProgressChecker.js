@@ -19,6 +19,7 @@ const EventBridgeService = require('../services/eventBridgeService');
 const CloudWatchService = require("../services/cloudwatchService");
 const { createJobSchedulingService } = require('../services/JobSchedulingService');
 const { JobProcessingError } = require("../utils/errors");
+const supabaseService = require("../services/supabaseService");
 
 // Initialize AWS clients
 const dynamoDBClient = new DynamoDBClient();
@@ -63,7 +64,8 @@ const jobCompletionService = createJobCompletionService(
     notificationService,
     eventBridgeService,
     cloudWatchService,
-    jobSchedulingService
+    jobSchedulingService,
+    supabaseService
 );
 const reviewCompletionService = createReviewCompletionService(
     jobProgressService,
@@ -75,7 +77,8 @@ const reviewCompletionService = createReviewCompletionService(
 const errorHandlingService = createErrorHandlingService(
     jobProgressService,
     cloudWatchService,
-    jobSchedulingService
+    jobSchedulingService,
+    jobCompletionService
 );
 
 // Main handler

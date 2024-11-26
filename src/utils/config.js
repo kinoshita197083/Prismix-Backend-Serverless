@@ -19,7 +19,8 @@ const IMAGE_HASH_EXPIRATION_TIME = (Math.floor(Date.now() / 1000) + (3 * 24 * 60
 // Validate and map resizeMode to Sharp's supported fit options
 const validFitOptions = {
     'cover': 'cover',
-    'contain': 'contain',
+    // 'contain': 'contain',
+    'contain': 'inside',
     'fill': 'fill',
     'inside': 'inside',
     'outside': 'outside'

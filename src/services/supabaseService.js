@@ -18,10 +18,45 @@ const supabaseService = {
     },
 
     async getUserData(userId) {
-        const { data, error } = await supabase.from('User').select('name, preferredName, email, s3Connection').eq('id', userId).single();
+        const { data, error } = await supabase.from('User').select('*').eq('id', userId).single();
         if (error) {
             logger.error('[SupabaseService] Error fetching user data', { error, userId });
             throw new AppError('[SupabaseService] Failed to fetch user data', 500);
+        }
+        return data;
+    },
+
+    async refundUserCreditBalance(userId, amount, reason) {
+        const { data: userData, error: userError } = await supabase
+            .from('User')
+            .update({
+                credits: `credits + ${amount}`
+            })
+            .eq('id', userId)
+            .single();
+        if (userError) {
+            logger.error('[SupabaseService] Error refunding user credit balance', { error: userError, userId, amount });
+            throw new AppError('[SupabaseService] Failed to refund user credit balance', 500);
+        }
+        const { data: transactionData, error: transactionError } = await supabase.from('CreditTransaction').insert({
+            userId: userData.id,
+            credits: amount,
+            type: 'refund',
+            description: 'Refund for failed & skipped jobs'
+        });
+        if (transactionError) {
+            logger.error('[SupabaseService] Error recording refund transaction', { error: transactionError, userId, amount });
+            throw new AppError('[SupabaseService] Failed to record refund transaction', 500);
+        }
+        console.log('[SupabaseService] Refunded user credit balance', { userId, amount, reason });
+        return userData;
+    },
+
+    async getAllCreditsTransactionsOfJob(jobId) {
+        const { data, error } = await supabase.from('CreditTransaction').select('*').eq('jobId', jobId);
+        if (error) {
+            logger.error('[SupabaseService] Error fetching all credits transactions of job', { error, jobId });
+            throw new AppError('[SupabaseService] Failed to fetch all credits transactions of job', 500);
         }
         return data;
     }

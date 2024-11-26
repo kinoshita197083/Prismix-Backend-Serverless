@@ -332,15 +332,7 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
 
 async function processImageBatch(sourceS3Client, destS3Client, images, config) {
     // Get credentials from Secrets Manager for cross-account access
-    const secretsManager = new SecretsManagerClient();
-    const secretResponse = await secretsManager.send(
-        new GetSecretValueCommand({
-            SecretId: `${process.env.SERVICE_NAME}/${process.env.STAGE}/prismix-user-credentials`,
-            VersionStage: "AWSCURRENT"
-        })
-    );
-
-    const credentials = JSON.parse(secretResponse.SecretString);
+    const credentials = await secretsService.getCredentials();
 
     // Create cross-account client
     const crossAccountS3Client = new S3Client({

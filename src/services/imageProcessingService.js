@@ -23,25 +23,32 @@ exports.processImageProperties = async ({ bucket, s3ObjectKey, settings }) => {
 
         // Get image metadata to check orientation
         const metadata = await pipeline.metadata();
-        const isPortrait = metadata.height > metadata.width;
+        // const isPortrait = metadata.height > metadata.width;
 
         // If image is portrait, swap maxWidth and maxHeight to maintain orientation
         const resizeOptions = {
             fit,
-            withoutEnlargement: true
+            withoutEnlargement: true,
+            position: 'entropy'
         };
 
-        if (isPortrait) {
-            // For portrait images, ensure the height is larger than width
-            pipeline = pipeline.resize(
-                Math.min(maxWidth || metadata.width, maxHeight || metadata.height),
-                Math.max(maxWidth || metadata.width, maxHeight || metadata.height),
-                resizeOptions
-            );
-        } else {
-            // For landscape images, use dimensions as provided
-            pipeline = pipeline.resize(maxWidth, maxHeight, resizeOptions);
-        }
+        // if (isPortrait) {
+        //     // For portrait images, ensure the height is larger than width
+        //     pipeline = pipeline.resize(
+        //         Math.min(maxWidth || metadata.width, maxHeight || metadata.height),
+        //         Math.max(maxWidth || metadata.width, maxHeight || metadata.height),
+        //         resizeOptions
+        //     );
+        // } else {
+        //     // For landscape images, use dimensions as provided
+        //     pipeline = pipeline.resize(maxWidth, maxHeight, resizeOptions);
+        // }
+
+        pipeline = pipeline
+            .rotate() // auto-rotate based on EXIF data
+            .resize(maxWidth, maxHeight, resizeOptions)
+            .withMetadata() // extract metadata after resizing
+            .trim(); // trim whitespace
     }
 
     // Set format and quality

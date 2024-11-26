@@ -3,7 +3,8 @@ const createJobCompletionService = (
     notificationService,
     eventBridgeService,
     cloudWatchService,
-    jobSchedulingService
+    jobSchedulingService,
+    supabaseService
 ) => {
     const handleJobCompletion = async (jobId, newStatus, retryCount = 0) => {
         const MAX_RETRIES = 3;
@@ -21,11 +22,6 @@ const createJobCompletionService = (
                 throw new Error(`Job ${jobId} not found`);
             }
 
-            if (['COMPLETED', 'FAILED'].includes(currentJob.status)) {
-                console.log('[handleJobCompletion] entered terminal state check');
-                // return true;
-            }
-
             try {
                 // Step 1: Clean up scheduled checks first
                 console.log('[handleJobCompletion] Job already in terminal state:', currentJob.status);
@@ -33,12 +29,40 @@ const createJobCompletionService = (
 
                 // Step 2: Update status and notify in parallel
                 await jobProgressService.updateJobStatusAndNotify(jobId, newStatus);
+                console.log('[handleJobCompletion] Job status updated and notified');
 
                 // Step 3: Record completion metrics
                 await cloudWatchService.recordMetrics('JobCompletion', {
                     status: newStatus,
                     duration: Date.now() - new Date(currentJob.createdAt).getTime()
                 });
+                console.log('[handleJobCompletion] Job completion metrics recorded');
+                // Step 4: Check if refund is needed
+                switch (newStatus) {
+                    case 'COMPLETED':
+                        // Check if there's failed tasks
+                        const failedTasks = +currentJob.statistics?.failed || 0;
+
+                        if (failedTasks) {
+                            await supabaseService.refundUserCreditBalance(currentJob.userId, failedTasks, 'Job completed with failed tasks');
+                        }
+                        break;
+                    case 'FAILED':
+                        // Refund user credits if job failed
+                        const creditsTransactions = await supabaseService.getAllCreditsTransactionsOfJob(jobId);
+                        const totalCreditsSpent = creditsTransactions.reduce((acc, transaction) => {
+                            console.log('[handleJobCompletion] Credits transaction:', transaction);
+                            // preAuth transactions are the ones that are refunded
+                            if (transaction.type === 'preAuth') {
+                                return acc + transaction.credits;
+                            }
+                            return acc;
+                        }, 0);
+                        await supabaseService.refundUserCreditBalance(currentJob.userId, totalCreditsSpent, 'Job failed');
+                        break;
+                    default:
+                        break;
+                }
 
                 console.log('[handleJobCompletion] Job completion processed successfully');
                 return true;
