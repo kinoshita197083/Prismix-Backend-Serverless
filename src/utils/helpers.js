@@ -11,6 +11,91 @@ async function streamToBuffer(stream) {
     });
 }
 
+/**
+ * Calculates the variance of the Laplacian of an image to measure blurriness.
+ * @param {Buffer} imageBuffer - The buffer containing the image data.
+ * @returns {number} - The variance of the Laplacian, higher means sharper image.
+ */
+const calculateVarianceOfLaplacian = (imageBuffer) => {
+    const cv = require('opencv4nodejs');
+
+    // Read the image from the buffer
+    const mat = cv.imdecode(imageBuffer); // Decode image buffer into a Mat object
+    const grayMat = mat.bgrToGray();     // Convert to grayscale
+
+    // Apply Laplacian operator
+    const laplacian = grayMat.laplacian(cv.CV_64F);
+
+    // Calculate variance of the Laplacian
+    const mean = laplacian.mean().w; // .w holds the scalar mean
+    const variance = laplacian.sub(mean).pow(2).mean().w;
+
+    return variance; // Higher values indicate sharper images
+};
+
+/**
+ * Detect blurriness by calculating the variance of edges using sharp.
+ * @param {Buffer} imageBuffer - The image buffer to process.
+ * @returns {Promise<number>} - The calculated edge variance, indicating blurriness.
+ */
+async function detectBlurriness(imageBuffer) {
+    const sharp = require('sharp');
+    try {
+        // Process the image using sharp
+        const { data, info } = await sharp(imageBuffer)
+            .greyscale() // Convert to grayscale
+            .convolve({
+                width: 3,
+                height: 3,
+                kernel: [
+                    -1, -1, -1,
+                    -1, 8, -1,
+                    -1, -1, -1, // Laplacian-like kernel for edge detection
+                ],
+            })
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+
+        // Calculate the mean of pixel intensities
+        const mean =
+            data.reduce((sum, value) => sum + value, 0) / (info.width * info.height);
+
+        // Calculate the variance of pixel intensities
+        const variance =
+            data.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) /
+            (info.width * info.height);
+
+        return variance; // Higher variance = sharper image
+    } catch (error) {
+        console.error('Error detecting blurriness:', error);
+        throw error;
+    }
+}
+
+async function calculateSNR(imageBuffer) {
+    const sharp = require('sharp');
+    return sharp(imageBuffer)
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+        .then(({ data }) => {
+            const mean = data.reduce((sum, val) => sum + val, 0) / data.length;
+            const noise = data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length;
+            return mean / Math.sqrt(noise); // SNR formula
+        });
+};
+
+// async function calculateNoise(sharp, imageBuffer) {
+//     const { data, info } = await sharp(imageBuffer).raw().toBuffer({ resolveWithObject: true });
+//     const diffs = [];
+
+//     for (let i = 0; i < data.length - 1; i++) {
+//         diffs.push(Math.abs(data[i] - data[i + 1]));
+//     }
+
+//     const noiseScore = diffs.reduce((sum, value) => sum + value, 0) / diffs.length;
+//     return noiseScore;
+// };
+
 async function calculateImageHash(bucket, key) {
     const sharp = require('sharp');
     const crypto = require('crypto');
@@ -97,5 +182,8 @@ module.exports = {
     createHash,
     chunkArray,
     formatTexts,
-    parseRecordBody
+    parseRecordBody,
+    detectBlurriness,
+    calculateSNR
+    // calculateNoise
 };

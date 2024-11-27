@@ -68,12 +68,16 @@ exports.handler = async (event, context) => {
                     key: processedImageKey,
                     settings: {
                         checkResolution: projectSettings.removeLowResolution,
-                        minResolution: projectSettings.minimumResolution?.split(' ')[0]
+                        minResolution: projectSettings.minimumResolution?.split(' ')[0],
+                        checkNoise: projectSettings.removeNoisyImages,
+                        noiseThreshold: projectSettings.noiseThreshold,
+                        checkBlurriness: projectSettings.removeBlurryImages,
+                        blurThreshold: projectSettings.blurThreshold
                     }
                 });
 
                 if (!qualityResult.isValid) {
-                    await updateTaskStatusWithQualityIssues({
+                    await dynamoService.updateTaskStatusWithQualityIssues({
                         jobId,
                         imageId,
                         s3ObjectKey: processedImageKey,
