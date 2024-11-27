@@ -261,6 +261,11 @@ async function handleJobCompletion(jobId) {
             chunkKeys
         });
 
+        // Set job delivery status to COMPLETED
+        await jobProgressService.updateJobProgress(jobId, {
+            deliveryStatus: 'COMPLETED'
+        });
+
         // If there's only one chunk, we can just use it as the final zip
         if (chunkKeys.length === 1) {
             const finalZipKey = chunkKeys[0];
@@ -286,10 +291,6 @@ async function handleJobCompletion(jobId) {
         );
 
         await zipArchiveProgressService.updateFinalZipLocation(jobId, finalZipKey);
-
-        await jobProgressService.updateJobProgress(jobId, {
-            deliveryStatus: 'COMPLETED'
-        });
 
         logger.info('Successfully completed final merge', {
             jobId,

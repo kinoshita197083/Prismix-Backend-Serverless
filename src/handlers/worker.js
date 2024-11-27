@@ -62,7 +62,7 @@ exports.handler = async (event, context) => {
             console.log('999 Image properties processed. Validating image quality...');
 
             // Step 3: Validate image quality if enabled
-            if (projectSettings.removeLowResolution) {
+            if (projectSettings.removeLowResolution || projectSettings.removeNoisyImages || projectSettings.removeBlurryImages) {
                 const qualityResult = await validateImageQuality({
                     bucket,
                     key: processedImageKey,
@@ -89,7 +89,7 @@ exports.handler = async (event, context) => {
 
             console.log('999 Image quality validated. Performing content detection...');
 
-            // Step 4: Perform content detection if any detection settings are enabled
+            // Step 4: Perform content detection if any detection settings are enabled or removeAllText is enabled
             let labels = [];
             if (projectSettings?.contentTags?.length > 0) {
                 labels = await labelDetection({
@@ -102,7 +102,7 @@ exports.handler = async (event, context) => {
             console.log('Content detection performed successfully. Performing text detection...');
 
             let detectedTexts = [];
-            if (projectSettings?.textTags?.length > 0) {
+            if (projectSettings?.textTags?.length > 0 || projectSettings?.removeAllText) {
                 detectedTexts = await detectTextsFromImage({
                     bucket,
                     s3ObjectKey: processedImageKey,
@@ -117,6 +117,12 @@ exports.handler = async (event, context) => {
             let finalEvaluation = evaluationMapper[evaluation];
             let status = COMPLETED;
             let reason = finalEvaluation === EXCLUDED ? evaluationReason : undefined;
+
+            // If removeAllText is enabled and there are text tags, exclude the image
+            if (projectSettings?.removeAllText && formattedTexts.length > 0) {
+                finalEvaluation = EXCLUDED;
+                status = COMPLETED;
+            }
 
             // If manual review is required and the evaluation would be EXCLUDED,
             // change status to WAITING_FOR_REVIEW instead

@@ -35,23 +35,30 @@ exports.validateImageQuality = async ({ bucket, key, settings }) => {
             if (metadata.height < minHeight) {
                 issues.push(`Resolution below ${minResolution} standard`);
             }
+            console.log('[validateImageQuality] Resolution check completed.', { minHeight, metadata });
         }
 
         // Blurriness check
         if (checkBlurriness) {
+            console.log('[validateImageQuality] Checking blurriness...');
             const blurScore = await detectBlurriness(imageBuffer);
             if (blurScore < blurThreshold) {
-                issues.push(`Image is likely blurry (score: ${blurScore}, threshold: ${DEFAULT_IMAGE_QUALITY_SETTINGS.blurThreshold})`);
+                issues.push(`Image is likely blurry (score: ${blurScore}, threshold: ${blurThreshold})`);
             }
+            console.log('[validateImageQuality] Blurriness check completed.', { blurScore, blurThreshold });
         }
 
         // Noise check
         if (checkNoise) {
+            console.log('[validateImageQuality] Checking noise...');
             const snr = await calculateSNR(imageBuffer);
             if (snr < noiseThreshold) {
                 issues.push(`Image noise level is too high (SNR: ${snr.toFixed(2)}, threshold: ${noiseThreshold})`);
             }
+            console.log('[validateImageQuality] Noise check completed.', { snr, noiseThreshold });
         }
+
+        console.log('[validateImageQuality] All checks completed.', { issues });
 
         return {
             isValid: issues.length === 0,
