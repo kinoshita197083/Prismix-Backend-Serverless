@@ -81,7 +81,7 @@ exports.handler = async (event, context) => {
                         jobId,
                         imageId,
                         s3ObjectKey: processedImageKey,
-                        qualityIssues: qualityResult.issues
+                        qualityIssues: qualityResult.issues.join(', ')
                     });
                     return;
                 }
@@ -122,6 +122,7 @@ exports.handler = async (event, context) => {
             if (projectSettings?.removeAllText && formattedTexts.length > 0) {
                 finalEvaluation = EXCLUDED;
                 status = COMPLETED;
+                reason = 'Text detected';
             }
 
             // If manual review is required and the evaluation would be EXCLUDED,

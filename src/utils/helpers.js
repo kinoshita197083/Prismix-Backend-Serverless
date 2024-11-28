@@ -48,24 +48,22 @@ async function detectBlurriness(imageBuffer) {
                 width: 3,
                 height: 3,
                 kernel: [
-                    -1, -1, -1,
-                    -1, 8, -1,
-                    -1, -1, -1, // Laplacian-like kernel for edge detection
+                    0, -1, 0,
+                    -1, 4, -1,
+                    0, -1, 0  // Using a simpler Laplacian kernel for better sensitivity
                 ],
             })
             .raw()
             .toBuffer({ resolveWithObject: true });
 
-        // Calculate the mean of pixel intensities
-        const mean =
-            data.reduce((sum, value) => sum + value, 0) / (info.width * info.height);
+        // Calculate normalized variance with enhanced scaling
+        const mean = data.reduce((sum, value) => sum + value, 0) / data.length;
+        const variance = data.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / data.length;
 
-        // Calculate the variance of pixel intensities
-        const variance =
-            data.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) /
-            (info.width * info.height);
+        // Apply stronger normalization and scaling
+        const normalizedVariance = (variance / (info.width * info.height)) * 10000000;
 
-        return variance; // Higher variance = sharper image
+        return normalizedVariance;
     } catch (error) {
         console.error('Error detecting blurriness:', error);
         throw error;
@@ -74,27 +72,49 @@ async function detectBlurriness(imageBuffer) {
 
 async function calculateSNR(imageBuffer) {
     const sharp = require('sharp');
-    return sharp(imageBuffer)
-        .raw()
-        .toBuffer({ resolveWithObject: true })
-        .then(({ data }) => {
-            const mean = data.reduce((sum, val) => sum + val, 0) / data.length;
-            const noise = data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length;
-            return mean / Math.sqrt(noise); // SNR formula
-        });
-};
+    try {
+        const { data, info } = await sharp(imageBuffer)
+            .greyscale()
+            .raw()
+            .toBuffer({ resolveWithObject: true });
 
-// async function calculateNoise(sharp, imageBuffer) {
-//     const { data, info } = await sharp(imageBuffer).raw().toBuffer({ resolveWithObject: true });
-//     const diffs = [];
+        // Use smaller window size for more localized noise detection
+        const windowSize = 2;
+        const signal = new Array(data.length).fill(0);
+        const noise = new Array(data.length).fill(0);
 
-//     for (let i = 0; i < data.length - 1; i++) {
-//         diffs.push(Math.abs(data[i] - data[i + 1]));
-//     }
+        for (let y = windowSize; y < info.height - windowSize; y++) {
+            for (let x = windowSize; x < info.width - windowSize; x++) {
+                const idx = y * info.width + x;
+                const window = [];
 
-//     const noiseScore = diffs.reduce((sum, value) => sum + value, 0) / diffs.length;
-//     return noiseScore;
-// };
+                for (let wy = -windowSize; wy <= windowSize; wy++) {
+                    for (let wx = -windowSize; wx <= windowSize; wx++) {
+                        const widx = (y + wy) * info.width + (x + wx);
+                        window.push(data[widx]);
+                    }
+                }
+
+                const localMean = window.reduce((a, b) => a + b, 0) / window.length;
+                signal[idx] = localMean;
+                // Enhanced noise calculation with weighted difference
+                noise[idx] = window.reduce((sum, val) => {
+                    const diff = Math.abs(val - localMean);
+                    return sum + (diff * diff);
+                }, 0) / window.length;
+            }
+        }
+
+        const avgSignal = signal.reduce((a, b) => a + b, 0) / signal.length;
+        const avgNoise = Math.sqrt(noise.reduce((a, b) => a + b, 0) / noise.length);
+
+        // Apply scaling factor to make the SNR more intuitive
+        return (avgSignal / avgNoise) * 2;
+    } catch (error) {
+        console.error('Error calculating SNR:', error);
+        throw error;
+    }
+}
 
 async function calculateImageHash(bucket, key) {
     const sharp = require('sharp');
