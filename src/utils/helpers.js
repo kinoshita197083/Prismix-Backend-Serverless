@@ -34,42 +34,73 @@ const calculateVarianceOfLaplacian = (imageBuffer) => {
 };
 
 /**
- * Detect blurriness by calculating the variance of edges using sharp.
- * @param {Buffer} imageBuffer - The image buffer to process.
- * @returns {Promise<number>} - The calculated edge variance, indicating blurriness.
+ * Detects image blurriness using Variance of Laplacian method
+ * This method is widely used in computer vision for blur detection
+ * Higher values indicate sharper images
+ * 
+ * @param {Buffer} imageBuffer - The image buffer to process
+ * @returns {Promise<number>} - The sharpness score
  */
 async function detectBlurriness(imageBuffer) {
     const sharp = require('sharp');
     try {
-        // Process the image using sharp
+        // Convert to grayscale and get image data
         const { data, info } = await sharp(imageBuffer)
-            .greyscale() // Convert to grayscale
-            .convolve({
-                width: 3,
-                height: 3,
-                kernel: [
-                    0, -1, 0,
-                    -1, 4, -1,
-                    0, -1, 0  // Using a simpler Laplacian kernel for better sensitivity
-                ],
-            })
+            .greyscale()
             .raw()
             .toBuffer({ resolveWithObject: true });
 
-        // Calculate normalized variance with enhanced scaling
-        const mean = data.reduce((sum, value) => sum + value, 0) / data.length;
-        const variance = data.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / data.length;
+        const width = info.width;
+        const height = info.height;
 
-        // Apply stronger normalization and scaling
-        const normalizedVariance = (variance / (info.width * info.height)) * 10000000;
+        // Laplacian kernel for edge detection
+        const laplacian = [
+            [0, 1, 0],
+            [1, -4, 1],
+            [0, 1, 0]
+        ];
 
-        return normalizedVariance;
+        let sumSquaredVariance = 0;
+        const border = 1;  // Border size due to kernel
+
+        // Apply Laplacian operator and calculate variance
+        for (let y = border; y < height - border; y++) {
+            for (let x = border; x < width - border; x++) {
+                let sum = 0;
+
+                // Apply convolution
+                for (let ky = -1; ky <= 1; ky++) {
+                    for (let kx = -1; kx <= 1; kx++) {
+                        const idx = ((y + ky) * width + (x + kx));
+                        sum += data[idx] * laplacian[ky + 1][kx + 1];
+                    }
+                }
+
+                sumSquaredVariance += sum * sum;
+            }
+        }
+
+        // Calculate normalized variance
+        const pixelCount = (width - 2 * border) * (height - 2 * border);
+        const variance = Math.sqrt(sumSquaredVariance / pixelCount);
+
+        // Scale the result to a more intuitive range (0-1000)
+        return variance * 10;
+
     } catch (error) {
         console.error('Error detecting blurriness:', error);
         throw error;
     }
 }
 
+/**
+ * Calculates Signal-to-Noise Ratio using Block-based method
+ * This implementation uses local variance analysis to separate signal from noise
+ * Higher values indicate cleaner images
+ * 
+ * @param {Buffer} imageBuffer - The image buffer to process
+ * @returns {Promise<number>} - The SNR value
+ */
 async function calculateSNR(imageBuffer) {
     const sharp = require('sharp');
     try {
@@ -78,38 +109,54 @@ async function calculateSNR(imageBuffer) {
             .raw()
             .toBuffer({ resolveWithObject: true });
 
-        // Use smaller window size for more localized noise detection
-        const windowSize = 2;
-        const signal = new Array(data.length).fill(0);
-        const noise = new Array(data.length).fill(0);
+        const width = info.width;
+        const height = info.height;
 
-        for (let y = windowSize; y < info.height - windowSize; y++) {
-            for (let x = windowSize; x < info.width - windowSize; x++) {
-                const idx = y * info.width + x;
-                const window = [];
+        // Block size for local analysis
+        const blockSize = 8;
+        const blocks = [];
 
-                for (let wy = -windowSize; wy <= windowSize; wy++) {
-                    for (let wx = -windowSize; wx <= windowSize; wx++) {
-                        const widx = (y + wy) * info.width + (x + wx);
-                        window.push(data[widx]);
+        // Divide image into blocks and calculate local statistics
+        for (let y = 0; y < height - blockSize; y += blockSize) {
+            for (let x = 0; x < width - blockSize; x += blockSize) {
+                const block = [];
+
+                // Extract block data
+                for (let by = 0; by < blockSize; by++) {
+                    for (let bx = 0; bx < blockSize; bx++) {
+                        const idx = (y + by) * width + (x + bx);
+                        block.push(data[idx]);
                     }
                 }
 
-                const localMean = window.reduce((a, b) => a + b, 0) / window.length;
-                signal[idx] = localMean;
-                // Enhanced noise calculation with weighted difference
-                noise[idx] = window.reduce((sum, val) => {
-                    const diff = Math.abs(val - localMean);
+                // Calculate block statistics
+                const blockMean = block.reduce((sum, val) => sum + val, 0) / block.length;
+                const blockVariance = block.reduce((sum, val) => {
+                    const diff = val - blockMean;
                     return sum + (diff * diff);
-                }, 0) / window.length;
+                }, 0) / block.length;
+
+                blocks.push({ mean: blockMean, variance: blockVariance });
             }
         }
 
-        const avgSignal = signal.reduce((a, b) => a + b, 0) / signal.length;
-        const avgNoise = Math.sqrt(noise.reduce((a, b) => a + b, 0) / noise.length);
+        // Sort blocks by variance to separate signal from noise
+        blocks.sort((a, b) => b.variance - a.variance);
 
-        // Apply scaling factor to make the SNR more intuitive
-        return (avgSignal / avgNoise) * 2;
+        // Use top 20% of blocks as signal and bottom 20% as noise
+        const signalBlocks = blocks.slice(0, Math.floor(blocks.length * 0.2));
+        const noiseBlocks = blocks.slice(Math.floor(blocks.length * 0.8));
+
+        // Calculate final SNR
+        const signalPower = signalBlocks.reduce((sum, block) => sum + block.variance, 0) / signalBlocks.length;
+        const noisePower = noiseBlocks.reduce((sum, block) => sum + block.variance, 0) / noiseBlocks.length;
+
+        // Prevent division by zero and apply logarithmic scaling
+        const snr = noisePower === 0 ? 100 : 10 * Math.log10(signalPower / noisePower);
+
+        // Normalize to a more intuitive range
+        return Math.max(0, Math.min(20, snr));
+
     } catch (error) {
         console.error('Error calculating SNR:', error);
         throw error;
