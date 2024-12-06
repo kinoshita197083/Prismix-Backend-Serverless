@@ -27,6 +27,7 @@ worker:
     IMAGE_HASH_TABLE: ${self:provider.environment.IMAGE_HASH_TABLE}
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
+    BLUR_DETECTION_FUNCTION_NAME: ${self:service}-${sls:stage}-blurDetection
   role: WorkerFunctionRole
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:testSharp:1
@@ -204,3 +205,14 @@ s3DeliveryProcessor:
   role: S3DeliveryProcessorRole
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+blurDetection:
+  name: ${self:service}-${sls:stage}-blurDetection
+  image:
+    uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/prismix-blur-detection:${sls:stage}
+    command: ["index.handler"]
+  memorySize: 2048
+  timeout: 30
+  architecture: x86_64
+  environment:
+    NODE_ENV: ${sls:stage}

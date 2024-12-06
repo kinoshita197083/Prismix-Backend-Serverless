@@ -172,6 +172,11 @@ Resources:
                   - rekognition:DetectFaces
                   - rekognition:DetectProtectiveEquipment
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:service}-${sls:stage}-blurDetection
 
   # SQS & DynamoDB access Role - used by deadLetterQueueProcessor functions
   DeadLetterQueueProcessorRole:

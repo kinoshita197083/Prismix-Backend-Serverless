@@ -16,6 +16,8 @@
     "prisma:generate:lambda:layer": "npx dotenv -e .env.dev -- prisma generate schema=./prisma/schema.prisma --output=layers/aws-sdk-layer/nodejs",
     "build:schema:dev": "npx dotenv -e .env.dev prisma validate",
     "prisma:studio:dev": "npx dotenv -e .env.dev prisma studio",
+    "build:blur-detection:dev": "./scripts/build-blur-detection.sh dev",
+    "build:blur-detection:prod": "./scripts/build-blur-detection.sh prod",
     "test:enqueueImage": "serverless invoke local --function enqueueImage --path src/test-events/s3-event.json",
     "test:worker": "npx dotenv -e .env.dev -- serverless invoke local --function worker --path src/test-events/sqs-event.json",
     "test:notification-processor": "npx dotenv -e .env.dev -- serverless invoke local --function notificationProcessor --path src/test-events/notification-event.json",
