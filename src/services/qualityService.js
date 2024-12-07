@@ -103,7 +103,7 @@ exports.validateImageQuality = async ({ bucket, key, settings }) => {
         if (checkBlurriness) {
             logger.debug('[validateImageQuality] Starting blurriness check');
             const blurScore = await detectBlurriness(imageBuffer);
-            if (blurScore > blurThreshold) {
+            if (blurScore < blurThreshold) {
                 issues.push(`Image is likely blurry (score: ${blurScore.toFixed(2)}, threshold: ${blurThreshold})`);
             }
             logger.debug('[validateImageQuality] Blurriness check completed', {

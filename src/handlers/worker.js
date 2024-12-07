@@ -2,7 +2,7 @@ const logger = require('../utils/logger');
 const { COMPLETED, WAITING_FOR_REVIEW, EXCLUDED } = require('../utils/config');
 const { processImageProperties } = require('../services/imageProcessingService');
 const { validateImageQuality } = require('../services/qualityService');
-const { formatLabels, createHash, formatTexts } = require('../utils/helpers');
+const { formatLabels, createHash, formatTexts, removeAllTextHelper } = require('../utils/helpers');
 const { duplicateImageDetection, labelDetection, detectTextsFromImage } = require('../utils/worker/imageProcessing');
 const dynamoService = require('../services/dynamoService');
 const { evaluationMapper, evaluate } = require('../utils/worker/evaluation');
@@ -120,9 +120,12 @@ exports.handler = async (event, context) => {
 
             // If removeAllText is enabled and there are text tags, exclude the image
             if (projectSettings?.removeAllText && formattedTexts.length > 0) {
-                finalEvaluation = EXCLUDED;
-                status = COMPLETED;
-                reason = 'Text detected';
+                const filteredTexts = removeAllTextHelper(formattedTexts, { confidenceThreshold: 0.9 });
+                if (filteredTexts.length > 0) {
+                    finalEvaluation = EXCLUDED;
+                    status = COMPLETED;
+                    reason = 'Text detected';
+                }
             }
 
             // If manual review is required and the evaluation would be EXCLUDED,

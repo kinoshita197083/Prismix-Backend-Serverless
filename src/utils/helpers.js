@@ -219,6 +219,23 @@ const formatTexts = (detectedTexts) => {
     return [];
 }
 
+const removeAllTextHelper = (formattedTexts, config = { confidenceThreshold: 0.9 }) => {
+    const { confidenceThreshold } = config;
+    if (confidenceThreshold) {
+        return formattedTexts.filter(text => {
+            // Some text detections return a confidence value between 0 and 100
+            if (text.confidence > 1) {
+                const confidence = text.confidence / 100;
+                return confidence >= confidenceThreshold;
+            }
+            // Some text detections return a confidence value between 0 and 1
+            return text.confidence >= confidenceThreshold;
+        });
+    }
+    // If no confidence threshold is provided, return all texts
+    return formattedTexts;
+}
+
 const createHash = (value) => {
     const crypto = require('crypto');
     return crypto.createHash('md5').update(value).digest('hex');
@@ -251,6 +268,6 @@ module.exports = {
     formatTexts,
     parseRecordBody,
     detectBlurriness,
-    calculateSNR
-    // calculateNoise
+    calculateSNR,
+    removeAllTextHelper
 };
