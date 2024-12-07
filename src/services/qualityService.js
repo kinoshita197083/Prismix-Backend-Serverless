@@ -37,9 +37,9 @@ async function detectBlurriness(imageBuffer) {
         logger.debug('[detectBlurriness] Lambda response:', { result });
 
         if (result.statusCode === 200) {
-            const { blurScore } = JSON.parse(result.body);
-            logger.info('[detectBlurriness] Blur detection completed', { blurScore });
-            return blurScore;
+            const { combinedScore } = JSON.parse(result.body);
+            logger.info('[detectBlurriness] Blur detection completed', { combinedScore });
+            return combinedScore;
         } else {
             const error = JSON.parse(result.body);
             throw new Error(`Blur detection failed: ${error.details || error.error}`);
