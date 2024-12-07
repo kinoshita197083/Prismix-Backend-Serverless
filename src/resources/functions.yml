@@ -212,7 +212,7 @@ blurDetection:
     uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/prismix-blur-detection:${sls:stage}
     command: ["index.handler"]
   memorySize: 2048
-  timeout: 30
+  timeout: 60
   architecture: x86_64
   environment:
     NODE_ENV: ${sls:stage}
