@@ -97,45 +97,69 @@ def calculate_blur_metrics(img: np.ndarray) -> Dict[str, Any]:
         
     Returns:
         Dict with combined blur score and blur status:
-        - blur_score: Combined score (0-500 range, lower means more blurry)
+        - blur_score: Combined score (0-500 range, higher means sharper)
         - is_blurry: Boolean based on threshold (100)
     """
     # Convert to grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
+    # Get image size for normalization
+    height, width = gray.shape
+    pixel_count = height * width
+    size_factor = max(1.0, np.sqrt(pixel_count) / 1000)  # Minimum size factor of 1.0
+    
     # 1. Laplacian variance (primary metric)
     laplacian = cv2.Laplacian(gray, cv2.CV_64F)
-    laplacian_score = laplacian.var()
+    laplacian_score = laplacian.var() * size_factor
     
     # 2. Sobel derivatives
     sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
     sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-    sobel_score = (sobel_x.var() + sobel_y.var()) / 2
+    sobel_score = (sobel_x.var() + sobel_y.var()) / 2 * size_factor
     
     # 3. FFT-based score
     rows, cols = gray.shape
     crow, ccol = rows//2, cols//2
     fft = np.fft.fft2(gray)
     fft_shift = np.fft.fftshift(fft)
-    fft_score = np.abs(fft_shift[crow-30:crow+30, ccol-30:ccol+30]).var()
+    window_size = max(min(30, min(rows, cols) // 4), 5)
+    fft_score = np.abs(fft_shift[
+        crow-window_size:crow+window_size, 
+        ccol-window_size:ccol+window_size
+    ]).var()
     
-    # Normalize scores to 0-500 range
-    normalized_score = float(
-        (0.60 * min(laplacian_score / 100, 500) +
-         0.25 * min(sobel_score / 100, 500) +
-         0.15 * min(fft_score / 10000, 500)
-        )
+    # Normalize scores with adjusted scaling
+    norm_laplacian = min(laplacian_score * 2, 500)      # Reduced multiplier
+    norm_sobel = min(sobel_score / 50, 500)            # Less aggressive division
+    norm_fft = min(np.log10(fft_score + 1) * 10, 500)  # Reduced multiplier
+    
+    # Calculate final score
+    final_score = float(
+        0.70 * norm_laplacian +  # Primary weight on Laplacian
+        0.20 * norm_sobel +      # Secondary weight on Sobel
+        0.10 * norm_fft          # Small weight on FFT
     )
     
-    # Ensure the final score is capped at 500
-    final_score = min(normalized_score, 500)
+    # Lower the threshold for blur detection
+    final_score = max(0, min(final_score, 500))
     
     metrics = {
         'combinedScore': final_score,
-        'isBlurry': bool(final_score < 100)
+        'isBlurry': bool(final_score < 100),  # Lowered threshold
+        'debug': {
+            'rawLaplacian': laplacian.var(),
+            'laplacianScore': laplacian_score,
+            'normalizedLaplacian': norm_laplacian,
+            'rawSobel': (sobel_x.var() + sobel_y.var()) / 2,
+            'sobelScore': sobel_score,
+            'normalizedSobel': norm_sobel,
+            'fftScore': fft_score,
+            'normalizedFft': norm_fft,
+            'imageSize': gray.shape,
+            'sizeFactor': size_factor
+        }
     }
     
-    logger.debug(f"Calculated blur metrics: {metrics}")
     return metrics
 
 def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -205,7 +229,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
 # test_event = {
 #     "body": {
-#         "imageBuffer": "/9j/4AAQSkZJRgABAQEASABIAAD/..." # base64 image
+#         "imageBuffer": "" # base64 image
 #     }
 # }
 
