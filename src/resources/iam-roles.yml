@@ -588,9 +588,9 @@ Resources:
           - Effect: Allow
             Principal:
               AWS: 
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
       Policies:
         - PolicyName: s3-access-policy
