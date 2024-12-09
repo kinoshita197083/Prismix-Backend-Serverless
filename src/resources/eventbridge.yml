@@ -6,7 +6,7 @@ Resources:
         Fn::GetAtt: [JobProgressCheckerLambdaFunction, Arn]
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*"
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${self:service}-${self:provider.stage}-JobProgressCheck-*"
 
   JobTimeoutCheckerInvokePermission:
     Type: AWS::Lambda::Permission
@@ -15,6 +15,6 @@ Resources:
         Fn::GetAtt: [JobProgressCheckerLambdaFunction, Arn]
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobTimeout-*"
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${self:service}-${self:provider.stage}-JobTimeout-*"
 
 
