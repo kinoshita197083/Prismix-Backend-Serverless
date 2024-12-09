@@ -145,7 +145,7 @@ const getEmailStyles = () => `
 `;
 
 // Completed Job Email
-const generateCompletedEmailHtml = (name, jobId) => `
+const generateCompletedEmailHtml = (name, jobId, projectId) => `
     <html>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -161,7 +161,7 @@ const generateCompletedEmailHtml = (name, jobId) => `
                         <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
                     </div>
                     <p>Your job has been completed successfully. You can now access and review the results through our platform.</p>
-                    <a href="#" class="button">View Results</a>
+                    <a href="${process.env.FRONTEND_URL}/project/${projectId}/job/${jobId}" class="button">View Results</a>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
                 ${getEmailFooter()}
@@ -293,7 +293,6 @@ const generateFailedEmailHtml = (name, jobId, error) => `
                         ${error.details ? `<p style="margin-top: 8px; margin-bottom: 0;"><strong>Additional Information:</strong> ${error.details}</p>` : ''}
                     </div>
                     <p>Our technical team has been notified and will investigate the issue. You may need to resubmit your job once the issue is resolved.</p>
-                    <a href="#" class="button">Contact Support</a>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
                 ${getEmailFooter()}

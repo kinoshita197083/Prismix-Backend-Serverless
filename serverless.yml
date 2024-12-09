@@ -30,6 +30,7 @@ provider:
     SUPABASE_API_KEY: ${env:SUPABASE_API_KEY}
     DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:service}-${self:provider.stage}-deliveryProcessor
     JOB_PROGRESS_QUEUE_URL: ${env:JOB_PROGRESS_QUEUE_URL}
+    FRONTEND_URL: ${env:FRONTEND_URL}
   iam:
     role: BaseCloudWatchRole
   logRetentionInDays: ${self:custom.logRetention.${self:provider.stage}}
@@ -69,7 +70,7 @@ custom:
     delivery: 8fae89e6-d326-4ac5-a72c-ef9cd9bed7e3
   prodCloudfrontTrustedKeyGroup:
     image: fcfa2d1e-b24c-44ce-a975-bda5530a7439
-    delivery: 8fae89e6-d326-4ac5-a72c-ef9cd9bed7e3
+    delivery: ba12c38d-1170-4ff3-a4e8-9c8fb3cf3a41
   # serverless-layers:
   #   dependenciesPath: ./package.json
   #   layersDeploymentBucket: prismix-lambda-layers
