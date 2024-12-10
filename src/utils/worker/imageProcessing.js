@@ -14,7 +14,7 @@ async function labelDetection({ bucket, s3ObjectKey }) {
             },
         },
         MaxLabels: 10,
-        MinConfidence: 70,
+        MinConfidence: 80,
     });
 
     const rekognitionResult = await rekognitionClient.send(detectLabelsCommand);

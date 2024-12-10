@@ -54,6 +54,7 @@ custom:
   memorySize:
     prod: 256
     dev: 128
+  # default retention is 30 days for prod, 7 days for dev
   logRetention:
     prod: 30
     dev: 7

@@ -61,7 +61,7 @@ jobs:
           echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
           echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
           echo "FRONTEND_URL_DEV=${{ secrets.FRONTEND_URL_DEV }}" >> $GITHUB_ENV
-        elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+        elif [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
           echo "COGNITO_DOMAIN_SUFFIX=${{ secrets.COGNITO_DOMAIN_SUFFIX }}" >> $GITHUB_ENV

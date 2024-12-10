@@ -22,6 +22,7 @@ worker:
         arn:
           Fn::GetAtt: [EligibleImageQueue, Arn]
         batchSize: 10
+        functionResponseType: ReportBatchItemFailures
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     IMAGE_HASH_TABLE: ${self:provider.environment.IMAGE_HASH_TABLE}
@@ -59,8 +60,9 @@ jobProgressChecker:
     - sqs:
         arn:
           Fn::GetAtt: [JobProgressQueue, Arn]
-        batchSize: 1
+        batchSize: 1  # Process one message at a time
         functionResponseType: ReportBatchItemFailures
+        maximumBatchingWindow: 0  # Disable batching
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     JOB_PROGRESS_CHECKER_LAMBDA_ARN: arn:aws:lambda:${aws:region}:${aws:accountId}:function:${self:functions.jobProgressChecker.name}
@@ -82,6 +84,8 @@ deliveryProcessor:
     - sqs:
         arn:
           Fn::GetAtt: [DeliveryQueue, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
   environment:
     DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:provider.environment.DELIVERY_LAMBDA_PROCESSOR_NAME}
     IMAGE_BUCKET: ${self:custom.bucketName}
@@ -104,6 +108,7 @@ notificationProcessor:
     - sqs:
         arn:
           Fn::GetAtt: [NotificationQueue, Arn]
+        functionResponseType: ReportBatchItemFailures
   environment:
     FRONTEND_URL: ${env:FRONTEND_URL}
     NOTIFICATION_QUEUE_URL:
@@ -123,6 +128,7 @@ imageUploadProcessor:
         arn:
           Fn::GetAtt: [ImageUploadQueue, Arn]
         batchSize: 10
+        functionResponseType: ReportBatchItemFailures
   environment:
     IMAGE_BUCKET: ${self:custom.bucketName}
     GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
@@ -141,6 +147,7 @@ imageUploadFromS3Processor:
         arn:
           Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
         batchSize: 10
+        functionResponseType: ReportBatchItemFailures
   environment:
     IMAGE_BUCKET: ${self:custom.bucketName}
   role: ImageUploadFromS3ProcessorRole
@@ -154,6 +161,7 @@ jobProgressDLQProcessor:
         arn:
           Fn::GetAtt: [JobProgressDLQ, Arn]
         batchSize: 1
+        functionResponseType: ReportBatchItemFailures
   environment:
     JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
     JOB_COMPLETION_TOPIC_ARN: 
@@ -174,7 +182,8 @@ zipArchiveProcessor:
     - sqs:
         arn:
           Fn::GetAtt: [ZipDeliveryQueue, Arn]
-        batchSize: 1  # Process one completion message at a time
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     SOURCE_BUCKET: ${self:custom.bucketName}

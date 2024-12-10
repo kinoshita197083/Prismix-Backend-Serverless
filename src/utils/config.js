@@ -36,6 +36,17 @@ const RESOLUTION_THRESHOLDS = {
 
 const DEFAULT_EXPIRATION_TIME = Date.now().toString() + 1000 * 60 * 60 * 24 * 180 // 180 days from now
 
+const PricingTable = {
+    expressProcessing: 2,
+    removeAllText: 2,
+    removeLowResolution: 1,
+    removeNoisyImages: 1,
+    removeBlurryImages: 1,
+    detectDuplicates: 1,
+    contentTags: 3,
+    textTags: 3,
+}
+
 module.exports = {
     ELIGIBLE,
     FAILED,
@@ -50,5 +61,6 @@ module.exports = {
     IMAGE_HASH_EXPIRATION_TIME,
     RESOLUTION_THRESHOLDS,
     validFitOptions,
-    DEFAULT_EXPIRATION_TIME
+    DEFAULT_EXPIRATION_TIME,
+    PricingTable
 };
