@@ -34,6 +34,14 @@ const createReviewCompletionService = (
         console.log(`[handleReviewCompletion] Processing review completion for job: ${jobId}`);
 
         try {
+            // Get current job progress to check auto-review status
+            const jobProgress = await jobProgressService.getCurrentJobProgress(jobId);
+
+            // Early exit if already completed
+            if (jobProgress.status === 'COMPLETED' || jobProgress.reviewCompletionProcessed) {
+                console.log('[handleReviewCompletion] Review already processed:', jobId);
+                return;
+            }
             const pendingReviews = await verifyAllTasksReviewed(jobId);
 
             console.log('[handleReviewCompletion] Pending reviews:', pendingReviews);
@@ -45,6 +53,11 @@ const createReviewCompletionService = (
                 );
             }
             // Adjust job statistics to reflect auto-reviewed tasks is done by Next.js API
+
+            // Add completion flag before processing
+            await jobProgressService.updateJobProgress(jobId, {
+                reviewCompletionProcessed: true
+            });
 
             // Let jobCompletionService handle the completion logic
             await jobCompletionService.handleJobCompletion(jobId, COMPLETED);

@@ -258,6 +258,43 @@ function parseRecordBody(record) {
     }
 }
 
+function calculateJobCost({ imageCount, projectSettings, job }) {
+    if (!projectSettings || !job) throw new Error("Project settings or job not found");
+
+    const baseCredits = imageCount;
+    let totalCredits = baseCredits;
+
+    // Add credits for express processing
+    if (job.expressProcessing) {
+        totalCredits += baseCredits * PricingTable.expressProcessing;
+    }
+
+    // Add credits for enabled features from project settings
+    if (projectSettings.removeAllText) {
+        totalCredits += baseCredits * PricingTable.removeAllText;
+    }
+    if (projectSettings.removeLowResolution) {
+        totalCredits += baseCredits * PricingTable.removeLowResolution;
+    }
+    if (projectSettings.removeNoisyImages) {
+        totalCredits += baseCredits * PricingTable.removeNoisyImages;
+    }
+    if (projectSettings.removeBlurryImages) {
+        totalCredits += baseCredits * PricingTable.removeBlurryImages;
+    }
+    if (projectSettings.detectDuplicates) {
+        totalCredits += baseCredits * PricingTable.detectDuplicates;
+    }
+    if (projectSettings.contentTags) {
+        totalCredits += baseCredits * PricingTable.contentTags;
+    }
+    if (projectSettings.textTags) {
+        totalCredits += baseCredits * PricingTable.textTags;
+    }
+
+    return totalCredits;
+}
+
 module.exports = {
     sleep,
     streamToBuffer,

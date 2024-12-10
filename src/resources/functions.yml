@@ -60,8 +60,9 @@ jobProgressChecker:
     - sqs:
         arn:
           Fn::GetAtt: [JobProgressQueue, Arn]
-        batchSize: 1
+        batchSize: 1  # Process one message at a time
         functionResponseType: ReportBatchItemFailures
+        maximumBatchingWindow: 0  # Disable batching
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     JOB_PROGRESS_CHECKER_LAMBDA_ARN: arn:aws:lambda:${aws:region}:${aws:accountId}:function:${self:functions.jobProgressChecker.name}

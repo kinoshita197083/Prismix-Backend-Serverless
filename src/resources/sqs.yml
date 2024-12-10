@@ -185,10 +185,12 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-job-progress-queue
-      VisibilityTimeout: 1800  # Updated for jobProgressChecker (900s timeout)
+      VisibilityTimeout: 1800  # Reduced to 5 minutes
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt JobProgressDLQ.Arn
-        maxReceiveCount: 3
+        maxReceiveCount: 1     # Reduced to prevent unnecessary retries
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Enable long polling
 
   JobProgressDLQ:
     Type: AWS::SQS::Queue
