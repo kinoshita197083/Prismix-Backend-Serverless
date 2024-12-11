@@ -65,7 +65,8 @@ const jobCompletionService = createJobCompletionService(
     eventBridgeService,
     cloudWatchService,
     jobSchedulingService,
-    supabaseService
+    supabaseService,
+    jobStatisticsService
 );
 const reviewCompletionService = createReviewCompletionService(
     jobProgressService,
@@ -265,6 +266,11 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
         // Update job progress with latest statistics to allow frontend to display correct stats
         const currentVersion = jobProgress.version || 0;
         const newVersion = currentVersion + 1;
+
+        // TODO: refactor this to use updateJobProgress
+        // const completedAt = Date.now().toString();
+        // const updatedAt = Date.now().toString();
+        // const statistics = stats;
 
         const updateParams = {
             TableName: process.env.JOB_PROGRESS_TABLE,

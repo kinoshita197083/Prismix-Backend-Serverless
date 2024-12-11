@@ -205,6 +205,7 @@ class JobProgressService {
             UpdateExpression: `SET ${updateExpressions.join(', ')}`,
             ExpressionAttributeNames: expressionAttributeNames,
             ExpressionAttributeValues: expressionAttributeValues,
+            ConditionExpression: updates.currentVersion ? 'attribute_not_exists(version) OR version = :currentVersion' : undefined,
             ReturnValues: 'ALL_NEW'
         };
 

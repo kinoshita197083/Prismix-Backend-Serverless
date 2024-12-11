@@ -1,13 +1,17 @@
+const { UpdateCommand } = require("@aws-sdk/lib-dynamodb");
+
 const createJobCompletionService = (
     jobProgressService,
     notificationService,
     eventBridgeService,
     cloudWatchService,
     jobSchedulingService,
-    supabaseService
+    supabaseService,
+    jobStatisticsService
 ) => {
     const handleJobCompletion = async (jobId, newStatus, retryCount = 0) => {
         const MAX_RETRIES = 3;
+        let statusBeforeUpdate;
 
         console.log('[handleJobCompletion] Processing completion:', {
             jobId,
@@ -21,6 +25,7 @@ const createJobCompletionService = (
             if (!currentJob) {
                 throw new Error(`Job ${jobId} not found`);
             }
+            statusBeforeUpdate = currentJob.status;
 
             try {
                 // Step 1: Clean up scheduled checks first
@@ -37,7 +42,39 @@ const createJobCompletionService = (
                     duration: Date.now() - new Date(currentJob.createdAt).getTime()
                 });
                 console.log('[handleJobCompletion] Job completion metrics recorded');
-                // Step 4: Check if refund is needed
+
+                // Step 4: recaculate job statistics after user has reviewed the tasks
+                if (statusBeforeUpdate === 'WAITING_FOR_REVIEW') {
+                    const stats = await jobStatisticsService.getJobStatisticsWithPagination(jobId, currentJob.jobProgress);
+
+                    const currentVersion = currentJob.version || 0;
+                    const newVersion = currentVersion + 1;
+
+                    const updateParams = {
+                        TableName: process.env.JOB_PROGRESS_TABLE,
+                        Key: { JobId: jobId },
+                        UpdateExpression: 'SET #status = :status, completedAt = :completedAt, statistics = :stats, updatedAt = :updatedAt, version = :newVersion',
+                        ConditionExpression: 'attribute_not_exists(version) OR version = :currentVersion',
+                        ExpressionAttributeNames: {
+                            '#status': 'status'
+                        },
+                        ExpressionAttributeValues: {
+                            ':status': newStatus,
+                            ':completedAt': Date.now().toString(),
+                            ':stats': {
+                                ...stats,
+                            },
+                            ':updatedAt': Date.now().toString(),
+                            ':currentVersion': currentVersion,
+                            ':newVersion': newVersion
+                        }
+                    };
+
+                    const result = await jobProgressService.dynamoDB.send(new UpdateCommand(updateParams));
+                    console.log('[handleJobCompletion] Job statistics finalized: ', result);
+                }
+
+                // Step 5: Check if refund is needed
                 switch (newStatus) {
                     case 'COMPLETED':
                         // Check if there's failed tasks
