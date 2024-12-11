@@ -146,7 +146,7 @@ const createJobSchedulingService = (eventBridgeService, sqs, config, jobProgress
             // For WAITING_FOR_REVIEW status, only update RDS and exit
             if (currentStatus === WAITING_FOR_REVIEW) {
                 console.log('[JobSchedulingService.scheduleNextCheck] Job is waiting for review, scheduling timeout check');
-                await jobProgressService.updateJobStatusAndNotify(jobId, WAITING_FOR_REVIEW);
+                await jobProgressService.updateJobStatusAndNotify(jobId, currentStatus);
                 await scheduleTimeoutCheck(jobId, currentStatus);
                 return;
             }

@@ -132,6 +132,18 @@ const handleJobMessage = async (jobId, eventType, messageAttributes) => {
             return;
         }
 
+        // Skip if in review state and not a review-related event
+        const isReviewRelatedEvent = ['REVIEW_COMPLETED', 'TIMEOUT_CHECK'].includes(eventType);
+        const isWaitingForReview = jobProgress?.status === 'WAITING_FOR_REVIEW';
+
+        if (isWaitingForReview && !isReviewRelatedEvent) {
+            console.log('[handleJobMessage] Skipping non-review event for job in WAITING_FOR_REVIEW:', {
+                jobId,
+                eventType
+            });
+            return;
+        }
+
         // Handle different event types
         switch (eventType) {
             case 'REVIEW_COMPLETED':
