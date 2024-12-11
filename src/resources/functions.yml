@@ -64,6 +64,7 @@ jobProgressChecker:
         functionResponseType: ReportBatchItemFailures
         maximumBatchingWindow: 0  # Disable batching
   environment:
+    AWS_ACCOUNT_ID: ${aws:accountId}
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     JOB_PROGRESS_CHECKER_LAMBDA_ARN: arn:aws:lambda:${aws:region}:${aws:accountId}:function:${self:functions.jobProgressChecker.name}
     JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}

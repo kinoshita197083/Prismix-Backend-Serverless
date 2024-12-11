@@ -92,7 +92,32 @@ class EventBridgeService {
     }
 
     async createEventBridgeRule(ruleName, scheduleExpression, jobId, action, status) {
-        console.log(`[EventBridgeService] Creating rule: ${ruleName} with schedule: ${scheduleExpression} & config: `, this.config);
+        console.log(`[EventBridgeService] Creating rule with full config:`, {
+            ruleName,
+            scheduleExpression,
+            lambdaArn: this.config.lambdaArn,
+            targetId: `${action}Target-${jobId}`,
+            inputPayload: JSON.stringify({
+                Records: [{
+                    messageId: `${action}-${Date.now()}`,
+                    body: JSON.stringify({
+                        jobId,
+                        action,
+                        status,
+                        timestamp: Date.now().toString()
+                    }),
+                    messageAttributes: {
+                        eventType: {
+                            stringValue: action,
+                            stringListValues: [],
+                            binaryListValues: [],
+                            dataType: "String"
+                        }
+                    }
+                }]
+            })
+        });
+
         try {
             await this.eventBridgeClient.send(new PutRuleCommand({
                 Name: ruleName,
