@@ -230,11 +230,11 @@ async function evaluate(labels = [], formattedDetectedTexts = [], projectSetting
 function generateEvaluationReason(textMatch, labelMatch, contentTags, textTags) {
     const reasons = [];
 
-    if (contentTags?.length > 0 && !labelMatch) {
+    if (contentTags?.length > 0 && labelMatch) {
         reasons.push('Content matches excluded by configured content tags');
     }
 
-    if (textTags?.length > 0 && !textMatch) {
+    if (textTags?.length > 0 && textMatch) {
         reasons.push('Text matches excluded by configured text tags');
     }
 

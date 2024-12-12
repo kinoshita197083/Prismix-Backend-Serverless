@@ -48,11 +48,8 @@ jobs:
         if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_DEV }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_DEV }}" >> $GITHUB_ENV
-          echo "COGNITO_DOMAIN_SUFFIX=${{ secrets.COGNITO_DOMAIN_SUFFIX }}" >> $GITHUB_ENV
           echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_DEV }}" >> $GITHUB_ENV
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_DEV }}" >> $GITHUB_ENV
-          echo "COGNITO_CALLBACK_URL=${{ secrets.COGNITO_CALLBACK_URL_DEV }}" >> $GITHUB_ENV
-          echo "COGNITO_LOGOUT_URL=${{ secrets.COGNITO_LOGOUT_URL_DEV }}" >> $GITHUB_ENV
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_DEV }}" >> $GITHUB_ENV
           echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_DEV }}" >> $GITHUB_ENV
           echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_DEV}}" >> $GITHUB_ENV
@@ -60,15 +57,11 @@ jobs:
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_DEV }}" >> $GITHUB_ENV
           echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
           echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
-          echo "FRONTEND_URL_DEV=${{ secrets.FRONTEND_URL_DEV }}" >> $GITHUB_ENV
         elif [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
-          echo "COGNITO_DOMAIN_SUFFIX=${{ secrets.COGNITO_DOMAIN_SUFFIX }}" >> $GITHUB_ENV
           echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}" >> $GITHUB_ENV
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" >> $GITHUB_ENV
-          echo "COGNITO_CALLBACK_URL=${{ secrets.COGNITO_CALLBACK_URL_PROD }}" >> $GITHUB_ENV
-          echo "COGNITO_LOGOUT_URL=${{ secrets.COGNITO_LOGOUT_URL_PROD }}" >> $GITHUB_ENV
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_PROD }}" >> $GITHUB_ENV
           echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_PROD}}" >> $GITHUB_ENV
@@ -76,7 +69,6 @@ jobs:
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_PROD }}" >> $GITHUB_ENV
           echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
           echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
-          echo "FRONTEND_URL_PROD=${{ secrets.FRONTEND_URL_PROD }}" >> $GITHUB_ENV
         else
           echo "Unsupported branch for deployment"
           exit 1
