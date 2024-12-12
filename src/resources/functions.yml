@@ -33,6 +33,7 @@ worker:
   layers:
     - arn:aws:lambda:us-east-1:980352750282:layer:testSharp:1
     - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:pluralize-layer:1
 
 # Dead Letter Queue Processor
 deadLetterQueueProcessor:

@@ -1,4 +1,5 @@
 const { EXCLUDED, ELIGIBLE } = require("../config");
+const pluralize = require('pluralize');
 
 const evaluationMapper = {
     false: ELIGIBLE,
@@ -11,16 +12,47 @@ const debug = (message, ...args) => {
 
 // Helper functions for text normalization
 const normalizeWord = (word) => {
-    const normalized = word.toLowerCase()
-        .replace(/[^\w\s]/g, '')
-        .replace(/(?:s|es|ing|ed)$/, '');
-    debug('Normalized word:', { original: word, normalized });
+    // Handle empty or non-string inputs
+    if (!word || typeof word !== 'string') return '';
+
+    const singularForm = pluralize.singular(word.toLowerCase());
+
+    // Enhanced special character handling
+    const normalized = singularForm
+        .replace(/[^\w\s-]/g, '') // Keep hyphens but remove other special chars
+        .replace(/\s+/g, ' ')     // Normalize multiple spaces
+        .trim()                   // Remove leading/trailing spaces
+        .replace(/(?:ing|ed)$/, '');
+
+    debug('Normalized word:', {
+        original: word,
+        singular: singularForm,
+        normalized
+    });
     return normalized;
 };
 
 const createNormalizedSet = (contentTags) => {
+    if (!Array.isArray(contentTags)) {
+        debug('[createNormalizedSet] Invalid contentTags format:', contentTags);
+        return { direct: new Set(), fuzzy: new Set() };
+    }
+
+    const validTags = contentTags.filter(tag =>
+        tag && typeof tag === 'object' &&
+        typeof tag.value === 'string' &&
+        tag.value.trim().length > 0
+    );
+
+    if (validTags.length !== contentTags.length) {
+        debug('[createNormalizedSet] Some tags were invalid:', {
+            original: contentTags,
+            valid: validTags
+        });
+    }
+
     debug('[createNormalizedSet] Creating normalized tag sets from:', contentTags);
-    const normalizedTags = new Set(contentTags.map(tag => tag.value.toLowerCase()));
+    const normalizedTags = new Set(validTags.map(tag => tag.value.toLowerCase()));
     const fuzzyTags = new Set([...normalizedTags].map(normalizeWord));
 
     debug('[createNormalizedSet] Created tag sets:', {
@@ -35,12 +67,25 @@ const createNormalizedSet = (contentTags) => {
 };
 
 // Matching functions
+const handleCompoundWords = (text) => {
+    // Handle both hyphenated and space-separated compound words
+    const variations = [
+        text,
+        text.replace(/\s+/g, '-'),  // space to hyphen
+        text.replace(/-/g, ' ')      // hyphen to space
+    ];
+    return variations;
+};
+
 const hasDirectMatch = (text, tagSet) => {
     const normalizedText = text.toLowerCase();
-    const hasMatch = tagSet.has(normalizedText);
+    const variations = handleCompoundWords(normalizedText);
+
+    const hasMatch = variations.some(variant => tagSet.has(variant));
     debug('Direct match check:', {
         text,
         normalizedText,
+        variations,
         hasMatch
     });
     return hasMatch;
