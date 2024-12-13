@@ -79,6 +79,7 @@ jobs:
       run: npm install -g serverless@latest
 
     # Deploy to Serverless with logging to Github Actions
+    # TODO: Add a step to check if the deployment is successful
     - name: Serverless Deploy
       run: |
         serverless deploy --stage ${GITHUB_REF##*/} --verbose
