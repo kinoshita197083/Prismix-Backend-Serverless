@@ -26,7 +26,10 @@ const dynamoDbDocumentClient = DynamoDBDocumentClient.from(dynamoDb, {
 
 exports.handler = async (event) => {
     logger.info('Image uploader started', { event });
-    await Promise.all(event.Records.map(processRecord));
+    // await Promise.all(event.Records.map(processRecord));
+    for (const record of event.Records) {
+        await processRecord(record);
+    }
 };
 
 async function processRecord(record) {
@@ -129,27 +132,6 @@ function analyzeResults(results) {
         return acc;
     }, { successCount: [], failedUploads: [], skippedUploads: [] });
 }
-
-// async function updateJobProgress(jobId, failedUploads, skippedUploads, totalImages) {
-//     const uploadDetails = {
-//         failedUploads,
-//         skippedUploads
-//     }
-//     const params = {
-//         TableName: process.env.JOB_PROGRESS_TABLE,
-//         Key: { JobId: jobId },
-//         UpdateExpression: 'SET uploadDetails = :ud',
-//         ExpressionAttributeValues: {
-//             ':ud': uploadDetails
-//         }
-//     };
-
-//     try {
-//         await dynamoDbDocumentClient.send(new UpdateCommand(params));
-//     } catch (error) {
-//         logger.error('Failed to update job progress', { error, jobId });
-//     }
-// }
 
 async function updateProcessedDriveInfo(jobId, driveIds, folderIds) {
     const params = {

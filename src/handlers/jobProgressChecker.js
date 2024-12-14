@@ -263,6 +263,14 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
         const newStatus = jobCompletionService.determineJobStatus(stats, jobProgress);
         console.log('Determined job status:', newStatus);
 
+        // Break if the job is corrupted 
+        const isCorrupted = determineIfJobIsCorrupted(stats, jobProgress);
+        if (isCorrupted) {
+            console.log('Job is corrupted, breaking');
+            await jobCompletionService.handleJobCompletion(jobId, 'FAILED');
+            return;
+        }
+
         // Update job progress with latest statistics to allow frontend to display correct stats
         const currentVersion = jobProgress.version || 0;
         const newVersion = currentVersion + 1;
@@ -321,6 +329,30 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
         throw error;
     }
 };
+
+const determineIfJobIsCorrupted = (stats, jobProgress) => {
+    const createdAt = jobProgress.createdAt;
+    const updatedAt = jobProgress.updatedAt;
+    const currentTime = Date.now();
+    const timeDifferenceBetweenCreatedAndUpdated = currentTime - createdAt;
+    const timeDifferenceBetweenUpdatedAndNow = currentTime - updatedAt;
+    const timeDifferenceInGeneral = Math.max(timeDifferenceBetweenCreatedAndUpdated, timeDifferenceBetweenUpdatedAndNow);
+    const hasBeenTenMinutes = timeDifferenceInGeneral > 1000 * 60 * 10; // 10 minutes
+
+    const statsAreEmpty = stats.totalProcessed === 0;
+    const totalImages = jobProgress.totalImages;
+    const totalProcessed = stats.totalProcessed;
+
+    // The job is likely corrupted if less than 20% of the images have been processed
+    const processingMightBeStuck = totalProcessed / totalImages < 0.2;
+
+    if (hasBeenTenMinutes || statsAreEmpty || processingMightBeStuck) {
+        console.log('Job is corrupted, returning true');
+        return true;
+    }
+    console.log('Job is not corrupted, returning false');
+    return false;
+}
 
 // Helper function for scheduling immediate continuation
 const scheduleImmediateContinuation = async (jobId, lastEvaluatedKey) => {
