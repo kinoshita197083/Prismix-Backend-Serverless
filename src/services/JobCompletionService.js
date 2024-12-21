@@ -1,4 +1,5 @@
 const { UpdateCommand } = require("@aws-sdk/lib-dynamodb");
+const { calculateJobCost } = require("../utils/helpers");
 
 const createJobCompletionService = (
     jobProgressService,

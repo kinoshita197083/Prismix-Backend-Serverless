@@ -306,5 +306,6 @@ module.exports = {
     parseRecordBody,
     detectBlurriness,
     calculateSNR,
-    removeAllTextHelper
+    removeAllTextHelper,
+    calculateJobCost
 };
