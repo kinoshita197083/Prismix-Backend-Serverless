@@ -27,15 +27,25 @@ const supabaseService = {
     },
 
     async refundUserCreditBalance(userId, amount, reason) {
-        // Validate inputs
-        if (!userId || typeof amount !== 'number' || amount <= 0) {
-            throw new AppError('[SupabaseService] Invalid input parameters', 400);
+        // Get current credits first
+        const { data: currentUser, error: fetchError } = await supabase
+            .from('User')
+            .select('credits')
+            .eq('id', userId)
+            .single();
+
+        if (fetchError) {
+            logger.error('[SupabaseService] Error fetching user credits', { error: fetchError, userId });
+            throw new AppError('[SupabaseService] Failed to fetch user credits', 500);
         }
 
-        // Increment user credits
+        // Calculate new credit amount
+        const newCredits = (currentUser.credits || 0) + amount;
+
+        // Update user credits
         const { data: userData, error: userError } = await supabase
-            .from('User')
-            .update({ credits: supabase.raw('credits + ?', [amount]) })
+            .from('users')
+            .update({ credits: newCredits })
             .eq('id', userId)
             .select()
             .single();

@@ -333,7 +333,7 @@ const handleRegularProgressCheck = async (jobId, jobProgress) => {
 const determineIfJobIsCorrupted = (stats, jobProgress) => {
     if (!stats || !jobProgress) {
         console.error("[determineIfJobIsCorrupted]: Missing or invalid inputs", { stats, jobProgress });
-        return true; // Treat as corrupted if inputs are invalid
+        return true;
     }
 
     const { createdAt, updatedAt, totalImages } = jobProgress;
@@ -350,36 +350,82 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
     const timeSinceLastUpdate = currentTime - updatedAt;
     const timeSinceCreation = currentTime - createdAt;
 
-    const hasBeenTenMinutes = timeSinceLastUpdate > 1000 * 60 * 10; // 10 minutes
-    const hasBeenFiveMinutes = timeSinceLastUpdate > 1000 * 60 * 5; // 10 minutes
+    // Time thresholds
+    const MINUTE = 1000 * 60;
+    const tenMinutes = MINUTE * 10;
+    const fiveMinutes = MINUTE * 5;
+
+    // Progress thresholds
+    const PROGRESS_CHECKPOINTS = [
+        { threshold: 0.1, timeLimit: MINUTE * 8 },    // 10% within 8 minutes
+        { threshold: 0.3, timeLimit: MINUTE * 15 },   // 30% within 15 minutes
+        { threshold: 0.5, timeLimit: MINUTE * 25 },   // 50% within 25 minutes
+        { threshold: 0.7, timeLimit: MINUTE * 35 },   // 70% within 35 minutes
+        { threshold: 0.9, timeLimit: MINUTE * 45 },   // 90% within 45 minutes
+    ];
+
+    // Basic checks
+    const hasBeenTenMinutes = timeSinceLastUpdate > tenMinutes;
+    const hasBeenFiveMinutes = timeSinceLastUpdate > fiveMinutes;
     const statsAreEmpty = totalProcessed === 0;
+    const upstreamProcessingMightBeStuck = totalImages <= 0 && hasBeenFiveMinutes;
 
-    // Check processing progress and include a time-based factor
-    const processingMightBeStuck = totalImages > 0 &&
-        totalProcessed / totalImages < 0.1 && // Less than 10% progress
-        timeSinceCreation > 1000 * 60 * 8; // Job has been running for more than 8 minutes
+    // Calculate progress
+    const progress = totalImages > 0 ? totalProcessed / totalImages : 0;
 
-    const upSteamProcessingMightBeStuck = totalImages <= 0 && hasBeenFiveMinutes;
+    // Advanced progress monitoring
+    const processingMightBeStuck = PROGRESS_CHECKPOINTS.some(checkpoint => {
+        const isBelowThreshold = progress < checkpoint.threshold;
+        const hasExceededTimeLimit = timeSinceCreation > checkpoint.timeLimit;
+        const isRelevantCheckpoint = checkpoint.threshold > progress;
 
-    console.log(`[determineIfJobIsCorrupted]:`, {
-        createdAt,
-        updatedAt,
+        return isBelowThreshold && hasExceededTimeLimit && isRelevantCheckpoint;
+    });
+
+    // Check for unusual processing patterns
+    const processingTooFast = progress > 0.95 && timeSinceCreation < MINUTE;
+    const noRecentProgress = totalProcessed > 0 && timeSinceLastUpdate > fiveMinutes;
+
+    // Detailed logging for debugging
+    console.log("[determineIfJobIsCorrupted]:", {
         currentTime,
         timeSinceLastUpdate,
         timeSinceCreation,
-        hasBeenTenMinutes,
-        statsAreEmpty,
+        progress: `${(progress * 100).toFixed(1)}%`,
         totalImages,
         totalProcessed,
-        processingMightBeStuck
+        hasBeenTenMinutes,
+        statsAreEmpty,
+        processingMightBeStuck,
+        processingTooFast,
+        noRecentProgress,
+        upstreamProcessingMightBeStuck
     });
 
-    if (hasBeenTenMinutes || statsAreEmpty || processingMightBeStuck || upSteamProcessingMightBeStuck) {
-        console.log("Job is corrupted, returning true");
+    // Comprehensive corruption check
+    const isCorrupted =
+        hasBeenTenMinutes ||
+        statsAreEmpty ||
+        processingMightBeStuck ||
+        upstreamProcessingMightBeStuck ||
+        processingTooFast ||
+        noRecentProgress;
+
+    if (isCorrupted) {
+        console.log("[determineIfJobIsCorrupted]: Job is corrupted", {
+            reasons: {
+                hasBeenTenMinutes,
+                statsAreEmpty,
+                processingMightBeStuck,
+                upstreamProcessingMightBeStuck,
+                processingTooFast,
+                noRecentProgress
+            }
+        });
         return true;
     }
 
-    console.log("Job is not corrupted, returning false");
+    console.log("[determineIfJobIsCorrupted]: Job is not corrupted");
     return false;
 };
 

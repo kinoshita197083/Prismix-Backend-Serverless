@@ -249,54 +249,81 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
             region
         });
 
-        const baseCommand = {
-            Bucket: bucket,
-            MaxKeys: BATCH_SIZE,
-            ContinuationToken: continuationToken
+        // Parse the continuation state
+        let currentState = {
+            folderIndex: 0,
+            folderToken: null
         };
 
-        // If specific folders are provided, process them one at a time
-        if (folderPaths && folderPaths.length > 0) {
+        if (continuationToken) {
+            try {
+                currentState = JSON.parse(continuationToken);
+            } catch (e) {
+                // If parsing fails, assume it's a direct S3 token for the current folder
+                currentState.folderToken = continuationToken;
+            }
+        }
+
+        // Handle folder-specific listing
+        if (folderPaths?.length > 0) {
             const allImages = [];
 
-            for (const folderPath of folderPaths) {
-                console.log('----> folderPath', folderPath);
-
+            // Process from the current folder
+            while (currentState.folderIndex < folderPaths.length) {
+                const folderPath = folderPaths[currentState.folderIndex];
                 const command = new ListObjectsV2Command({
-                    ...baseCommand,
-                    Prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`
+                    Bucket: bucket,
+                    MaxKeys: BATCH_SIZE,
+                    Prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`,
+                    ContinuationToken: currentState.folderToken
                 });
 
                 const response = await crossAccountS3Client.send(command);
                 const folderImages = response.Contents?.filter(obj =>
-                    obj.Key.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                    obj.Key.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i)
                 ) || [];
 
                 allImages.push(...folderImages);
 
+                // Determine next state
+                if (response.IsTruncated) {
+                    // More items in current folder
+                    currentState.folderToken = response.NextContinuationToken;
+                    break;
+                } else {
+                    // Move to next folder
+                    currentState.folderIndex++;
+                    currentState.folderToken = null;
+                }
+
+                // Check if we have enough images for this batch
                 if (allImages.length >= BATCH_SIZE) {
-                    console.log('----> allImages.length >= BATCH_SIZE', {
-                        allImagesLength: allImages.length,
-                        batchSize: BATCH_SIZE
-                    });
-                    return {
-                        images: allImages.slice(0, BATCH_SIZE),
-                        nextToken: response.NextContinuationToken
-                    };
+                    break;
                 }
             }
 
+            // Prepare the next continuation token
+            let nextToken = null;
+            if (currentState.folderIndex < folderPaths.length || currentState.folderToken) {
+                nextToken = JSON.stringify(currentState);
+            }
+
             return {
-                images: allImages,
-                nextToken: null
+                images: allImages.slice(0, BATCH_SIZE),
+                nextToken
             };
         }
 
-        // If no specific folders, list all objects
-        const command = new ListObjectsV2Command(baseCommand);
+        // Handle bucket-wide listing (when no specific folders)
+        const command = new ListObjectsV2Command({
+            Bucket: bucket,
+            MaxKeys: BATCH_SIZE,
+            ContinuationToken: continuationToken
+        });
+
         const response = await crossAccountS3Client.send(command);
         const images = response.Contents?.filter(obj =>
-            obj.Key.match(/\.(jpg|jpeg|png|webp)$/i)
+            obj.Key.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i)
         ) || [];
 
         return {
