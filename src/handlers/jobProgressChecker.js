@@ -348,17 +348,25 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
 
     const currentTime = Date.now();
     const timeSinceLastUpdate = currentTime - updatedAt;
+    const timeSinceCreation = currentTime - createdAt;
+
     const hasBeenTenMinutes = timeSinceLastUpdate > 1000 * 60 * 10; // 10 minutes
+    const hasBeenFiveMinutes = timeSinceLastUpdate > 1000 * 60 * 5; // 10 minutes
     const statsAreEmpty = totalProcessed === 0;
 
-    // Avoid division by zero and check processing progress
-    const processingMightBeStuck = totalImages > 0 && totalProcessed / totalImages < 0.2;
+    // Check processing progress and include a time-based factor
+    const processingMightBeStuck = totalImages > 0 &&
+        totalProcessed / totalImages < 0.1 && // Less than 10% progress
+        timeSinceCreation > 1000 * 60 * 8; // Job has been running for more than 8 minutes
+
+    const upSteamProcessingMightBeStuck = totalImages <= 0 && hasBeenFiveMinutes;
 
     console.log(`[determineIfJobIsCorrupted]:`, {
         createdAt,
         updatedAt,
         currentTime,
         timeSinceLastUpdate,
+        timeSinceCreation,
         hasBeenTenMinutes,
         statsAreEmpty,
         totalImages,
@@ -366,7 +374,7 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
         processingMightBeStuck
     });
 
-    if (hasBeenTenMinutes || statsAreEmpty || processingMightBeStuck) {
+    if (hasBeenTenMinutes || statsAreEmpty || processingMightBeStuck || upSteamProcessingMightBeStuck) {
         console.log("Job is corrupted, returning true");
         return true;
     }
@@ -374,7 +382,6 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
     console.log("Job is not corrupted, returning false");
     return false;
 };
-
 
 // Helper function for scheduling immediate continuation
 const scheduleImmediateContinuation = async (jobId, lastEvaluatedKey) => {
