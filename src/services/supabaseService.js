@@ -27,12 +27,13 @@ const supabaseService = {
     },
 
     async refundUserCreditBalance(userId, amount, reason) {
-        // Increment user credits
+        // Increment user credits using raw SQL increment operator
         const { data: userData, error: userError } = await supabase
-            .from('User')
-            .update({ credits: supabase.rpc('increment', { amount, column: 'credits' }) })
+            .from('users')
+            .update({ credits: sql`credits + ${amount}` })  // This is the key change
             .eq('id', userId)
-            .select();
+            .select()
+            .single();
 
         if (userError) {
             logger.error('[SupabaseService] Error refunding user credit balance', { error: userError, userId, amount });
