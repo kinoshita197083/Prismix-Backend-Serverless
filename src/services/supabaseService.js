@@ -29,30 +29,31 @@ const supabaseService = {
     async refundUserCreditBalance(userId, amount, reason) {
         // Increment user credits
         const { data: userData, error: userError } = await supabase
-            .rpc('increment_credits', {
-                user_id: userId,
-                amount: amount,
-            });
+            .from('User')
+            .update({ credits: supabase.rpc('increment', { amount, column: 'credits' }) })
+            .eq('id', userId)
+            .select();
+
         if (userError) {
             logger.error('[SupabaseService] Error refunding user credit balance', { error: userError, userId, amount });
             throw new AppError('[SupabaseService] Failed to refund user credit balance', 500);
         }
 
         // Record refund transaction
-        const { data: transactionData, error: transactionError } = await supabase
+        const { error: transactionError } = await supabase
             .from('CreditTransaction')
             .insert({
-                userId: userId,
+                userId,
                 credits: amount,
                 type: 'refund',
-                description: reason || 'Refund for failed & skipped jobs',
+                description: reason || 'Refund for failed & skipped jobs'
             });
+
         if (transactionError) {
             logger.error('[SupabaseService] Error recording refund transaction', { error: transactionError, userId, amount });
             throw new AppError('[SupabaseService] Failed to record refund transaction', 500);
         }
 
-        console.log('[SupabaseService] Refunded user credit balance', { userId, amount, reason });
         return userData;
     },
 
