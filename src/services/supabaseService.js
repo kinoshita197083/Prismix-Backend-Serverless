@@ -27,10 +27,15 @@ const supabaseService = {
     },
 
     async refundUserCreditBalance(userId, amount, reason) {
-        // Increment user credits using raw SQL increment operator
+        // Validate inputs
+        if (!userId || typeof amount !== 'number' || amount <= 0) {
+            throw new AppError('[SupabaseService] Invalid input parameters', 400);
+        }
+
+        // Increment user credits
         const { data: userData, error: userError } = await supabase
-            .from('users')
-            .update({ credits: sql`credits + ${amount}` })  // This is the key change
+            .from('User')
+            .update({ credits: supabase.raw('credits + ?', [amount]) })
             .eq('id', userId)
             .select()
             .single();
@@ -57,7 +62,6 @@ const supabaseService = {
 
         return userData;
     },
-
 
     async getAllCreditsTransactionsOfJob(jobId) {
         const { data, error } = await supabase.from('CreditTransaction').select('*').eq('jobId', jobId);
