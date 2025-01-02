@@ -61,6 +61,7 @@ const supabaseService = {
         const { error: transactionError } = await supabase
             .from('CreditTransaction')
             .insert({
+                id: `${userId}-${jobId}-${new Date().getTime()}`,
                 userId,
                 credits: amount,
                 type: 'refund',
