@@ -249,81 +249,55 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
             region
         });
 
-        // Parse the continuation state
-        let currentState = {
-            folderIndex: 0,
-            folderToken: null
-        };
-
-        if (continuationToken) {
-            try {
-                currentState = JSON.parse(continuationToken);
-            } catch (e) {
-                // If parsing fails, assume it's a direct S3 token for the current folder
-                currentState.folderToken = continuationToken;
-            }
-        }
-
-        // Handle folder-specific listing
-        if (folderPaths?.length > 0) {
-            const allImages = [];
-
-            // Process from the current folder
-            while (currentState.folderIndex < folderPaths.length) {
-                const folderPath = folderPaths[currentState.folderIndex];
-                const command = new ListObjectsV2Command({
-                    Bucket: bucket,
-                    MaxKeys: BATCH_SIZE,
-                    Prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`,
-                    ContinuationToken: currentState.folderToken
-                });
-
-                const response = await crossAccountS3Client.send(command);
-                const folderImages = response.Contents?.filter(obj =>
-                    obj.Key.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i)
-                ) || [];
-
-                allImages.push(...folderImages);
-
-                // Determine next state
-                if (response.IsTruncated) {
-                    // More items in current folder
-                    currentState.folderToken = response.NextContinuationToken;
-                    break;
-                } else {
-                    // Move to next folder
-                    currentState.folderIndex++;
-                    currentState.folderToken = null;
-                }
-
-                // Check if we have enough images for this batch
-                if (allImages.length >= BATCH_SIZE) {
-                    break;
-                }
-            }
-
-            // Prepare the next continuation token
-            let nextToken = null;
-            if (currentState.folderIndex < folderPaths.length || currentState.folderToken) {
-                nextToken = JSON.stringify(currentState);
-            }
-
-            return {
-                images: allImages.slice(0, BATCH_SIZE),
-                nextToken
-            };
-        }
-
-        // Handle bucket-wide listing (when no specific folders)
-        const command = new ListObjectsV2Command({
+        const baseCommand = {
             Bucket: bucket,
             MaxKeys: BATCH_SIZE,
             ContinuationToken: continuationToken
-        });
+        };
 
+        // If specific folders are provided, process them one at a time
+        if (folderPaths && folderPaths.length > 0) {
+            const allImages = [];
+            let nextContinuationToken = continuationToken;
+
+            for (const folderPath of folderPaths) {
+                let folderContinuationToken = nextContinuationToken;
+
+                do {
+                    const command = new ListObjectsV2Command({
+                        ...baseCommand,
+                        Prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`,
+                        ContinuationToken: folderContinuationToken
+                    });
+
+                    const response = await crossAccountS3Client.send(command);
+                    const folderImages = response.Contents?.filter(obj =>
+                        obj.Key.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                    ) || [];
+
+                    allImages.push(...folderImages);
+                    folderContinuationToken = response.NextContinuationToken;
+
+                } while (folderContinuationToken);
+            }
+
+            // Return batch-sized chunk of images
+            const startIndex = 0;
+            const endIndex = Math.min(BATCH_SIZE, allImages.length);
+            const nextBatch = allImages.slice(startIndex, endIndex);
+            const remainingImages = allImages.length > BATCH_SIZE;
+
+            return {
+                images: nextBatch,
+                nextToken: remainingImages ? 'continue' : null
+            };
+        }
+
+        // If no specific folders, list all objects
+        const command = new ListObjectsV2Command(baseCommand);
         const response = await crossAccountS3Client.send(command);
         const images = response.Contents?.filter(obj =>
-            obj.Key.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i)
+            obj.Key.match(/\.(jpg|jpeg|png|webp)$/i)
         ) || [];
 
         return {

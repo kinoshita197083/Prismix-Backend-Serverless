@@ -202,7 +202,7 @@ const generateReviewEmailHtml = (name, jobId) => `
                         <p style="margin: 8px 0 0;"><strong>Job ID:</strong> <span class="job-id">${jobId}</span></p>
                     </div>
                     <p>Your job is ready for your review. We'd appreciate if you could take a moment to check the processed items.</p>
-                    <p>For your convenience, you have 48 hours to review the results. After this period, we'll proceed with processing using our standard settings to ensure timely completion.</p>
+                    <p>For your convenience, you have 8 hours to review the results. After this period, we'll proceed with processing using our standard settings to ensure timely completion.</p>
                     <p>Best regards,<br>The Prismix Team</p>
                 </div>
                 ${getEmailFooter()}

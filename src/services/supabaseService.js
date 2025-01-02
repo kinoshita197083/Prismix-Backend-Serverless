@@ -44,7 +44,7 @@ const supabaseService = {
 
         // Update user credits
         const { data: userData, error: userError } = await supabase
-            .from('users')
+            .from('User')
             .update({ credits: newCredits })
             .eq('id', userId)
             .select()

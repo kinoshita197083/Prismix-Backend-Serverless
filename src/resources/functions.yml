@@ -148,7 +148,7 @@ imageUploadFromS3Processor:
     - sqs:
         arn:
           Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
-        batchSize: 10
+        batchSize: 1
         functionResponseType: ReportBatchItemFailures
   environment:
     IMAGE_BUCKET: ${self:custom.bucketName}
