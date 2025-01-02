@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const sns = new SNSClient();
 
 // Batch size for concurrent SNS publishing
-const CONCURRENT_BATCH_SIZE = 25;
+const CONCURRENT_BATCH_SIZE = 50;
 
 exports.handler = async (event) => {
     const { Records } = event;

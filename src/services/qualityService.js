@@ -7,16 +7,28 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const lambdaClient = new LambdaClient();
 
+const CONCURRENT_QUALITY_CHECKS = 20;
+const BASE_DELAY = 100;            // Reduced from 1000ms to 100ms
+const MAX_RETRIES = 3;
+const MAX_BACKOFF = 2000;         // Cap maximum backoff at 2 seconds
+
+// Maintain a sliding window of requests
+const requestWindow = {
+    timestamps: [],
+    windowSize: 1000, // 1 second window
+    maxRequests: 50   // Maximum requests per second
+};
+
 /**
  * Detects image blurriness using the blur detection Lambda
  * @param {Buffer} imageBuffer - Raw image buffer
  * @returns {Promise<number>} Blur score (lower means more blurry)
  */
-async function detectBlurriness(imageBuffer) {
+async function detectBlurriness(imageBuffer, retryCount = 0) {
     try {
-        logger.info('[detectBlurriness] Starting blur detection');
+        // Check and update rate limiting window
+        await checkRateLimit();
 
-        // Create payload with base64 encoded image
         const payload = {
             body: {
                 imageBuffer: imageBuffer.toString('base64')
@@ -29,31 +41,56 @@ async function detectBlurriness(imageBuffer) {
             Payload: JSON.stringify(payload)
         });
 
-        logger.debug('[detectBlurriness] Invoking blur detection Lambda');
         const response = await lambdaClient.send(command);
-
-        // Parse Lambda response
         const result = JSON.parse(Buffer.from(response.Payload).toString());
-        logger.debug('[detectBlurriness] Lambda response:', { result });
 
         if (result.statusCode === 200) {
             const { combinedScore } = JSON.parse(result.body);
-            logger.info('[detectBlurriness] Blur detection completed', { combinedScore });
             return combinedScore;
         } else {
             const error = JSON.parse(result.body);
             throw new Error(`Blur detection failed: ${error.details || error.error}`);
         }
     } catch (error) {
-        logger.error('[detectBlurriness] Error in blur detection:', {
-            error: {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            }
-        });
+        if (error.message.includes('Rate Exceeded') && retryCount < MAX_RETRIES) {
+            // Calculate dynamic backoff with jitter
+            const backoff = Math.min(
+                BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 100,
+                MAX_BACKOFF
+            );
+
+            logger.warn('[detectBlurriness] Rate limit hit, retrying...', {
+                retryCount: retryCount + 1,
+                backoff
+            });
+
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            return detectBlurriness(imageBuffer, retryCount + 1);
+        }
         throw error;
     }
+}
+
+// Rate limiting helper function
+async function checkRateLimit() {
+    const now = Date.now();
+
+    // Remove old timestamps
+    requestWindow.timestamps = requestWindow.timestamps.filter(
+        timestamp => now - timestamp < requestWindow.windowSize
+    );
+
+    // Check if we're at the limit
+    if (requestWindow.timestamps.length >= requestWindow.maxRequests) {
+        const oldestTimestamp = requestWindow.timestamps[0];
+        const waitTime = requestWindow.windowSize - (now - oldestTimestamp);
+        if (waitTime > 0) {
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+    }
+
+    // Add current timestamp
+    requestWindow.timestamps.push(now);
 }
 
 /**
@@ -65,90 +102,60 @@ async function detectBlurriness(imageBuffer) {
  * @returns {Promise<Object>} Validation results
  */
 exports.validateImageQuality = async ({ bucket, key, settings }) => {
-    const {
-        checkResolution,
-        minResolution,
-        checkNoise,
-        noiseThreshold,
-        checkBlurriness,
-        blurThreshold
-    } = settings;
-
-    const issues = [];
-
     try {
-        logger.info('[validateImageQuality] Starting image quality validation', {
-            bucket,
-            key,
-            settings
-        });
-
         const imageBuffer = await s3Service.getFileBuffer(bucket, key);
         const metadata = await sharp(imageBuffer).metadata();
+        const qualityChecks = [];
 
-        // Resolution check
-        if (checkResolution) {
-            logger.debug('[validateImageQuality] Checking resolution');
-            const minHeight = RESOLUTION_THRESHOLDS[minResolution];
-            if (metadata.height < minHeight) {
-                issues.push(`Resolution below ${minResolution} standard`);
-            }
-            logger.debug('[validateImageQuality] Resolution check completed', {
-                minHeight,
-                actualHeight: metadata.height
-            });
-        }
+        // Group quality checks to minimize concurrent Lambda invocations
+        const checks = {
+            resolution: settings.checkResolution && (async () => {
+                const minHeight = RESOLUTION_THRESHOLDS[settings.minResolution];
+                return metadata.height < minHeight ?
+                    `Resolution below ${settings.minResolution} standard` : null;
+            }),
 
-        // Blurriness check
-        if (checkBlurriness) {
-            logger.debug('[validateImageQuality] Starting blurriness check');
-            const blurScore = await detectBlurriness(imageBuffer);
-            if (blurScore < blurThreshold) {
-                issues.push(`Image is likely blurry (score: ${blurScore.toFixed(2)}, threshold: ${blurThreshold})`);
-            }
-            logger.debug('[validateImageQuality] Blurriness check completed', {
-                blurScore,
-                blurThreshold
-            });
-        }
+            blurriness: settings.checkBlurriness && (async () => {
+                const blurScore = await detectBlurriness(imageBuffer);
+                return blurScore < settings.blurThreshold ?
+                    `Image is likely blurry (score: ${blurScore.toFixed(2)}, threshold: ${settings.blurThreshold})` : null;
+            }),
 
-        // Noise check
-        if (checkNoise) {
-            logger.debug('[validateImageQuality] Starting noise check');
-            const snr = await calculateSNR(imageBuffer);
-            if (snr < noiseThreshold) {
-                issues.push(`Image noise level is too high (SNR: ${snr.toFixed(2)}, threshold: ${noiseThreshold})`);
-            }
-            logger.debug('[validateImageQuality] Noise check completed', {
-                snr,
-                noiseThreshold
-            });
-        }
+            noise: settings.checkNoise && (async () => {
+                const snr = await calculateSNR(imageBuffer);
+                return snr < settings.noiseThreshold ?
+                    `Image noise level is too high (SNR: ${snr.toFixed(2)}, threshold: ${settings.noiseThreshold})` : null;
+            })
+        };
 
-        logger.info('[validateImageQuality] All checks completed', {
-            issueCount: issues.length,
-            issues
-        });
+        // Execute checks in parallel but with controlled concurrency
+        const results = await Promise.all(
+            Object.values(checks)
+                .filter(Boolean)
+                .map(check => check())
+        );
+
+        const issues = results.filter(Boolean);
 
         return {
             isValid: issues.length === 0,
             issues
         };
+
     } catch (error) {
         logger.error('[validateImageQuality] Error validating image quality', {
-            error: {
-                message: error.message,
-                stack: error.stack,
-                name: error.name,
-                code: error.code
-            },
+            error: error.message,
             bucket,
             key
         });
-
-        return {
-            isValid: false,
-            issues: [`Failed to validate image quality: ${error.message}`]
-        };
+        throw error;
     }
 };
+
+// Helper function to chunk array
+function chunk(array, size) {
+    return Array.from(
+        { length: Math.ceil(array.length / size) },
+        (_, index) => array.slice(index * size, (index + 1) * size)
+    );
+}

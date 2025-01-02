@@ -106,7 +106,7 @@ async function duplicateImageDetection({ bucket, s3ObjectKey, jobId, imageId, ex
 
     // Calculate image hash
     const imageHash = await calculateImageHash(bucket, s3ObjectKey);
-    console.log('Calculated image hash:', imageHash);
+    // console.log('Calculated image hash:', imageHash);
     console.log('expiresAt', expiresAt);
 
     // Check and store the hash
