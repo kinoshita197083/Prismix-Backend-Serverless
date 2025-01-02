@@ -125,6 +125,7 @@ notificationProcessor:
 imageUploadProcessor:
   handler: src/handlers/imageUploader.handler
   memorySize: 2048
+  timeout: 900 # 15 minutes
   events:
     - sqs:
         arn:
@@ -144,6 +145,7 @@ imageUploadProcessor:
 imageUploadFromS3Processor:
   handler: src/handlers/imageUploadFromS3Processor.handler
   memorySize: 2048
+  timeout: 900 # 15 minutes
   events:
     - sqs:
         arn:
