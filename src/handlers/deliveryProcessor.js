@@ -20,7 +20,7 @@ const supabase = createClient(
 )
 
 // Add constants for batch processing
-const BATCH_SIZE = 50; // Adjust based on performance testing
+const BATCH_SIZE = 200; // Adjust based on performance testing
 const TIMEOUT_BUFFER_MS = 30000; // 30 seconds buffer before Lambda timeout
 const LAMBDA_TIMEOUT_MS = 900000; // 15 minutes in milliseconds
 
@@ -30,11 +30,11 @@ const LAMBDA_TIMEOUT_MS = 900000; // 15 minutes in milliseconds
 
 // Add configuration constants
 const UPLOAD_CONFIG = {
-    maxConcurrency: 10,     // Maximum concurrent uploads
+    maxConcurrency: 50,     // Maximum concurrent uploads
     retryAttempts: 3,       // Number of retry attempts per file
     retryDelay: 1000,       // Delay between retries in ms
     chunkDelay: 2000,       // Delay between chunks in ms
-    chunkSize: 10           // Number of files per chunk
+    chunkSize: 200           // Number of files per chunk
 };
 
 // Add pagination constants

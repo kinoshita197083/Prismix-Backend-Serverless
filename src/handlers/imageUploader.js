@@ -8,6 +8,7 @@ const dynamoService = require('../services/dynamoService');
 const { FAILED, COMPLETED } = require('../utils/config');
 const { fetchExpiresAt } = require('../utils/api/api');
 const { parseRecordBody } = require('../utils/helpers');
+const { Upload } = require('@aws-sdk/lib-storage');
 
 const s3Client = new S3Client();
 
@@ -23,6 +24,12 @@ const dynamoDbDocumentClient = DynamoDBDocumentClient.from(dynamoDb, {
         removeUndefinedValues: true
     }
 });
+
+// Configuration constants
+const BATCH_SIZE = 150;          // Increased from original
+const CONCURRENT_UPLOADS = 40;    // Added parallel processing
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
 exports.handler = async (event) => {
     logger.info('Image uploader started', { event });
@@ -91,48 +98,115 @@ async function processRecord(record) {
 }
 
 async function processImageBatches(images, drive, s3Client, userId, projectId, projectSettingId, jobId, bucketName) {
-    const batchSize = 10; // Adjust this value based on your requirements
     const results = [];
+    const chunks = chunk(images, BATCH_SIZE);
 
-    for (let i = 0; i < images.length; i += batchSize) {
-        const batch = images.slice(i, i + batchSize);
+    for (const batch of chunks) {
         try {
-            const batchResults = await processImageBatch(batch, drive, s3Client, userId, projectId, projectSettingId, jobId, bucketName);
-            results.push(...batchResults);
+            // Process images in concurrent groups
+            const concurrentGroups = chunk(batch, CONCURRENT_UPLOADS);
+
+            for (const group of concurrentGroups) {
+                const batchPromises = group.map(image =>
+                    processImageWithRetry(
+                        image,
+                        drive,
+                        s3Client,
+                        userId,
+                        projectId,
+                        projectSettingId,
+                        jobId,
+                        bucketName
+                    )
+                );
+
+                const batchResults = await Promise.all(batchPromises);
+                results.push(...batchResults);
+            }
         } catch (error) {
-            logger.error('Error processing image batch', { error, batchStart: i, batchSize });
+            logger.error('Error processing image batch', { error, batchSize: batch.length });
         }
     }
 
     return results;
 }
 
+async function processImageWithRetry(image, drive, s3Client, userId, projectId, projectSettingId, jobId, bucketName) {
+    let attempt = 1;
+
+    while (attempt <= MAX_RETRIES) {
+        try {
+            const fileStream = await drive.files.get(
+                { fileId: image.id, alt: 'media' },
+                { responseType: 'stream' }
+            );
+
+            const key = `uploads/${userId}/${projectId}/${projectSettingId}/${jobId}/${image.name}`;
+
+            // Use multipart upload for better performance
+            const upload = new Upload({
+                client: s3Client,
+                params: {
+                    Bucket: bucketName,
+                    Key: key,
+                    Body: fileStream.data,
+                    ContentType: image.mimeType
+                },
+                queueSize: 4,               // Number of concurrent multipart uploads
+                partSize: 5 * 1024 * 1024   // 5MB parts for better throughput
+            });
+
+            await upload.done();
+
+            return {
+                success: true,
+                fileName: image.name,
+                attemptCount: attempt
+            };
+
+        } catch (error) {
+            if (attempt === MAX_RETRIES) {
+                return {
+                    success: false,
+                    fileName: image.name,
+                    error: error.message,
+                    attemptCount: attempt
+                };
+            }
+
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+            attempt++;
+        }
+    }
+}
+
+// Helper function to chunk array
+function chunk(array, size) {
+    return Array.from(
+        { length: Math.ceil(array.length / size) },
+        (_, index) => array.slice(index * size, (index + 1) * size)
+    );
+}
+
+// Optimize the results analysis
 function analyzeResults(results) {
     return results.reduce((acc, result) => {
-        console.log('----> Analyzing result', { result });
-        if (result.success) {
-            acc.successCount.push({
-                fileName: result.fileName,
-                attempt: result.attemptCount,
-            });
-        } else if (result.skipped) {
-            acc.skippedUploads.push({
-                fileName: result.fileName,
-                error: result.error,
-                reason: result.reason,
-                attempt: result.attemptCount,
-            });
-        } else {
-            acc.failedUploads.push({
-                fileName: result.fileName,
+        const category = result.success ? 'successCount' :
+            (result.skipped ? 'skippedUploads' : 'failedUploads');
+
+        acc[category].push({
+            fileName: result.fileName,
+            ...(result.success ? { attempt: result.attemptCount } : {
                 reason: result.error,
-                attempt: result.attemptCount,
-            });
-        }
+                attempt: result.attemptCount
+            })
+        });
+
         return acc;
     }, { successCount: [], failedUploads: [], skippedUploads: [] });
 }
 
+// Optimize the drive info update
 async function updateProcessedDriveInfo(jobId, driveIds, folderIds) {
     const params = {
         TableName: process.env.JOB_PROGRESS_TABLE,
@@ -148,5 +222,6 @@ async function updateProcessedDriveInfo(jobId, driveIds, folderIds) {
         await dynamoDbDocumentClient.send(new UpdateCommand(params));
     } catch (error) {
         logger.error('Failed to update processed drive info', { error, jobId });
+        // Continue processing even if update fails
     }
 }
