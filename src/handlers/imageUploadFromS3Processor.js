@@ -11,10 +11,10 @@ const { JobProcessingError } = require('../utils/errors');
 const secretsService = require('../services/secretsService');
 
 // Constants for batch processing and retries
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 200;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
-const CONCURRENT_UPLOADS = 10;
+const CONCURRENT_UPLOADS = 50;
 
 const ddbClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(ddbClient);
