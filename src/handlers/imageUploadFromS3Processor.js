@@ -11,9 +11,10 @@ const { JobProcessingError } = require('../utils/errors');
 const secretsService = require('../services/secretsService');
 
 // Constants for batch processing and retries
-const BATCH_SIZE = 25;
+const BATCH_SIZE = 50;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
+const CONCURRENT_UPLOADS = 10;
 
 const ddbClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(ddbClient);
@@ -237,7 +238,6 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
     });
 
     try {
-        // Get credentials using the shared service
         const credentials = await secretsService.getCredentials();
 
         // Create cross-account client
@@ -246,38 +246,41 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
                 accessKeyId: credentials.accessKeyId,
                 secretAccessKey: credentials.secretAccessKey
             },
-            region
+            region,
+            maxAttempts: 3,
+            requestTimeout: 30000
         });
 
         console.log('----> folderPaths', folderPaths);
 
-        // If specific folders are provided, process them one at a time
         if (folderPaths?.length > 0) {
-            const allImages = [];
-
-            for (const folderPath of folderPaths) {
-                let folderContinuationToken;  // Start without a token for each folder
+            const folderPromises = folderPaths.map(async (folderPath) => {
+                const folderImages = [];
+                let folderContinuationToken;
 
                 do {
                     const command = new ListObjectsV2Command({
                         Bucket: bucket,
                         MaxKeys: BATCH_SIZE,
                         Prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`,
-                        ContinuationToken: folderContinuationToken // Only use the folder-specific token
+                        ContinuationToken: folderContinuationToken
                     });
 
                     const response = await crossAccountS3Client.send(command);
-                    const folderImages = response.Contents?.filter(obj =>
+                    const images = response.Contents?.filter(obj =>
                         obj.Key.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                     ) || [];
 
-                    allImages.push(...folderImages);
+                    folderImages.push(...images);
                     folderContinuationToken = response.NextContinuationToken;
-
                 } while (folderContinuationToken);
-            }
 
-            // Use the passed continuationToken to handle pagination of the collected images
+                return folderImages;
+            });
+
+            const allFolderResults = await Promise.all(folderPromises);
+            const allImages = allFolderResults.flat();
+
             const startIndex = continuationToken ? parseInt(continuationToken) : 0;
             const endIndex = Math.min(startIndex + BATCH_SIZE, allImages.length);
             const nextBatch = allImages.slice(startIndex, endIndex);
@@ -288,7 +291,6 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
             };
         }
 
-        // For non-folder specific case
         const command = new ListObjectsV2Command({
             Bucket: bucket,
             MaxKeys: BATCH_SIZE,
@@ -364,112 +366,77 @@ async function processImageBatch(sourceS3Client, destS3Client, images, config) {
         skippedUploads: []
     };
 
-    console.log('----> processImageBatch', {
-        images,
-        config
-    });
+    const chunks = chunk(images, CONCURRENT_UPLOADS);
 
-    await Promise.all(images.map(async (image) => {
-        logger.info('Processing individual image', {
-            imageKey: image.Key,
-            attempt: 1,
-            timestamp: new Date().toISOString()
-        });
+    for (const imageChunk of chunks) {
+        await Promise.all(imageChunk.map(async (image) => {
+            let attempt = 1;
+            let success = false;
 
-        let attempt = 1;
-        let success = false;
+            while (attempt <= MAX_RETRIES && !success) {
+                try {
+                    const sourceKey = image.Key;
+                    const destinationKey = `uploads/${config.userId}/${config.projectId}/` +
+                        `${config.projectSettingId}/${config.jobId}/${sourceKey}`;
 
-        while (attempt <= MAX_RETRIES && !success) {
-            try {
-                logger.info('Attempting image upload', {
-                    imageKey: image.Key,
-                    attempt,
-                    timestamp: new Date().toISOString()
-                });
+                    const getCommand = new GetObjectCommand({
+                        Bucket: config.sourceBucket,
+                        Key: sourceKey
+                    });
 
-                const sourceKey = image.Key;
-                const destinationKey = `uploads/${config.userId}/${config.projectId}/` +
-                    `${config.projectSettingId}/${config.jobId}/${sourceKey}`;
+                    const sourceObject = await crossAccountS3Client.send(getCommand);
 
-                // Get image from source bucket
-                const getCommand = new GetObjectCommand({
-                    Bucket: config.sourceBucket,
-                    Key: sourceKey
-                });
+                    const upload = new Upload({
+                        client: destS3Client,
+                        params: {
+                            Bucket: config.destinationBucket,
+                            Key: destinationKey,
+                            Body: sourceObject.Body,
+                            ContentType: sourceObject.ContentType
+                        },
+                        queueSize: 4,
+                        partSize: 5 * 1024 * 1024
+                    });
 
-                const sourceObject = await crossAccountS3Client.send(getCommand);
+                    await upload.done();
+                    results.successCount++;
+                    success = true;
 
-                // Upload to destination bucket
-                const upload = new Upload({
-                    client: destS3Client,
-                    params: {
-                        Bucket: config.destinationBucket,
-                        Key: destinationKey,
-                        Body: sourceObject.Body,
-                        ContentType: sourceObject.ContentType
+                } catch (error) {
+                    if (attempt === MAX_RETRIES) {
+                        const failedUpload = {
+                            fileName: image.Key,
+                            reason: error.message,
+                            attempt
+                        };
+
+                        if (error.name === 'NoSuchBucket' || error.name === 'AccessDenied') {
+                            results.skippedUploads.push(failedUpload);
+                        } else {
+                            results.failedUploads.push(failedUpload);
+                        }
+
+                        await updateFailedTasksStatus([failedUpload], config.jobId, config.expiresAt);
                     }
-                });
 
-                await upload.done();
-                results.successCount++;
-                success = true;
-
-                console.log('----> success', {
-                    successCount: results.successCount
-                });
-
-                logger.info('Successfully uploaded image', {
-                    imageKey: image.Key,
-                    attempt,
-                    destinationKey
-                });
-
-            } catch (error) {
-                if (attempt === MAX_RETRIES) {
-                    const failedUpload = {
-                        fileName: image.Key,
-                        reason: error.message,
-                        attempt
-                    };
-
-                    if (error.name === 'NoSuchBucket' || error.name === 'AccessDenied') {
-                        results.skippedUploads.push(failedUpload);
-                    } else {
-                        results.failedUploads.push(failedUpload);
+                    attempt++;
+                    if (attempt <= MAX_RETRIES) {
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
                     }
                 }
-
-                attempt++;
-                if (attempt <= MAX_RETRIES) {
-                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
-                }
-
-                logger.error('Error processing image', {
-                    error: {
-                        name: error.name,
-                        message: error.message,
-                        stack: error.stack
-                    },
-                    context: {
-                        imageKey: image.Key,
-                        attempt,
-                        maxRetries: MAX_RETRIES
-                    }
-                });
-
-                //TODO: update to task table for each item as failed
-                await updateFailedTasksStatus([
-                    {
-                        fileName: image.Key,
-                        reason: error.message,
-                        attempt
-                    }
-                ], config.jobId, config.expiresAt);
             }
-        }
-    }));
+        }));
+    }
 
     return results;
+}
+
+function chunk(array, size) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
 }
 
 async function updateFailedTasksStatus(failedImages, jobId, expiresAt) {
