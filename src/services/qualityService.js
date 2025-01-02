@@ -7,17 +7,17 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const lambdaClient = new LambdaClient();
 
-// Increased concurrency to match blur detection Lambda capacity
-const CONCURRENT_QUALITY_CHECKS = 100;  // Increased from 50 to 100
-const BASE_DELAY = 25;                  // Reduced from 50ms to 25ms
+// Adjusted constants to match new Lambda concurrency
+const CONCURRENT_QUALITY_CHECKS = 75;   // Reduced from 100
+const BASE_DELAY = 25;
 const MAX_RETRIES = 3;
-const MAX_BACKOFF = 500;                // Reduced from 1000ms to 500ms
+const MAX_BACKOFF = 500;
 
-// Adjusted rate limiting window for higher capacity
+// Adjusted rate limiting window
 const requestWindow = {
     timestamps: [],
     windowSize: 1000,    // 1 second window
-    maxRequests: 200     // Increased from 100 to 200 requests per second to match reservedConcurrency
+    maxRequests: 100     // Reduced from 200 to match new reservedConcurrency
 };
 
 /**

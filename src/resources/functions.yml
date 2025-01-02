@@ -61,9 +61,10 @@ jobProgressChecker:
     - sqs:
         arn:
           Fn::GetAtt: [JobProgressQueue, Arn]
-        batchSize: 1  # Process one message at a time
+        batchSize: 10
         functionResponseType: ReportBatchItemFailures
-        maximumBatchingWindow: 0  # Disable batching
+        maximumBatchingWindow: 1
+  reservedConcurrency: 100
   environment:
     AWS_ACCOUNT_ID: ${aws:accountId}
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
@@ -229,5 +230,5 @@ blurDetection:
   architecture: x86_64
   environment:
     NODE_ENV: ${sls:stage}
-  reservedConcurrency: 200  # Add reserved concurrency to ensure capacity
+  reservedConcurrency: 100  # Add reserved concurrency to ensure capacity
   # provisionedConcurrency: 10  # Add warm instances for faster response
