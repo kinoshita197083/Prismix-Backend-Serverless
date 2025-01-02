@@ -224,8 +224,10 @@ blurDetection:
   image:
     uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/prismix-blur-detection:${sls:stage}
     command: ["index.handler"]
-  memorySize: 2048
+  memorySize: 3008  # Increased from 2048 to 3008 for better CPU allocation
   timeout: 60
   architecture: x86_64
   environment:
     NODE_ENV: ${sls:stage}
+  reservedConcurrency: 200  # Add reserved concurrency to ensure capacity
+  # provisionedConcurrency: 10  # Add warm instances for faster response
