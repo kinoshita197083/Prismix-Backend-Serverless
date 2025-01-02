@@ -64,7 +64,7 @@ jobProgressChecker:
         batchSize: 10
         functionResponseType: ReportBatchItemFailures
         maximumBatchingWindow: 1
-  reservedConcurrency: 100
+  reservedConcurrency: 10
   environment:
     AWS_ACCOUNT_ID: ${aws:accountId}
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
@@ -225,10 +225,8 @@ blurDetection:
   image:
     uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/prismix-blur-detection:${sls:stage}
     command: ["index.handler"]
-  memorySize: 3008  # Increased from 2048 to 3008 for better CPU allocation
+  memorySize: 3008
   timeout: 60
   architecture: x86_64
   environment:
     NODE_ENV: ${sls:stage}
-  reservedConcurrency: 100  # Add reserved concurrency to ensure capacity
-  # provisionedConcurrency: 10  # Add warm instances for faster response

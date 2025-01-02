@@ -75,6 +75,9 @@ custom:
   # serverless-layers:
   #   dependenciesPath: ./package.json
   #   layersDeploymentBucket: prismix-lambda-layers
+  ecr:
+    uploadProcessor: ${self:service}-upload-processor-${sls:stage}
+    archiveProcessor: ${self:service}-archive-processor-${sls:stage}
 
 # Lambda Layers
 # layers:
@@ -115,6 +118,7 @@ resources:
   - ${file(src/resources/dynamodb.yml)}
   - ${file(src/resources/iam-roles.yml)}
   - ${file(src/resources/secretsmanager.yml)}
+  - ${file(src/resources/ecs.yml)}
   - Resources:
       LayersDeploymentBucket:
         Type: AWS::S3::Bucket

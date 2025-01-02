@@ -162,7 +162,11 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-queue
-      VisibilityTimeout: 600  # Updated for imageUploadFromS3Processor (300s timeout)
+      VisibilityTimeout: 7200  # Updated for ECS (2 hours)
+      # RedrivePolicy:
+      #   deadLetterTargetArn:
+      #     Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
+      #   maxReceiveCount: 3
 
   ImageUploadFromS3QueuePolicy:
     Type: AWS::SQS::QueuePolicy
@@ -216,7 +220,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-zip-delivery-queue
-      VisibilityTimeout: 1800  # Updated for zipArchiveProcessor (900s timeout)
+      VisibilityTimeout: 7200  # Updated for ECS (2 hours)
       RedrivePolicy:
         deadLetterTargetArn:
           Fn::GetAtt: [ZipDeliveryDLQ, Arn]

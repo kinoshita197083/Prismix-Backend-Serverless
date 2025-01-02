@@ -1,0 +1,301 @@
+Resources:
+  ProcessingCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ${self:service}-${sls:stage}-processing-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+
+  UploadProcessorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: ${self:service}-${sls:stage}-upload-processor
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: 2048    # 2 vCPU
+      Memory: 4096 # 4GB
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt UploadProcessorTaskRole.Arn
+      ContainerDefinitions:
+        - Name: upload-processor
+          Image: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/${self:service}-upload-processor:${sls:stage}
+          Essential: true
+          Environment:
+            - Name: NODE_ENV
+              Value: ${sls:stage}
+            - Name: QUEUE_URL
+              Value: !Ref ImageUploadFromS3Queue
+            - Name: AWS_REGION
+              Value: ${aws:region}
+            - Name: TASKS_TABLE
+              Value: ${self:provider.environment.TASKS_TABLE}
+            - Name: JOB_PROGRESS_TABLE
+              Value: ${self:provider.environment.JOB_PROGRESS_TABLE}
+            - Name: SOURCE_BUCKET
+              Value: ${self:custom.bucketName}
+            - Name: DESTINATION_BUCKET
+              Value: ${self:custom.bucketName}
+            - Name: BATCH_SIZE
+              Value: "150"
+            - Name: CONCURRENT_UPLOADS
+              Value: "40"
+            - Name: MAX_RETRIES
+              Value: "3"
+            - Name: RETRY_DELAY
+              Value: "1000"
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - node healthcheck.js
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/${self:service}-${sls:stage}
+              awslogs-region: ${aws:region}
+              awslogs-stream-prefix: upload-processor
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          ResourceRequirements:
+            - Type: GPU
+              Value: "0"
+          Ulimits:
+            - Name: nofile
+              HardLimit: 65536
+              SoftLimit: 65536
+          MountPoints: []
+          VolumesFrom: []
+          LinuxParameters:
+            InitProcessEnabled: true
+          SystemControls:
+            - Namespace: net.core.somaxconn
+              Value: "1024"
+            - Namespace: net.ipv4.ip_local_port_range
+              Value: "1024 65535"
+          Memory: 4096
+          MemoryReservation: 2048
+          Cpu: 2048
+
+      Volumes: []
+      Tags:
+        - Key: Environment
+          Value: ${sls:stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Name
+          Value: upload-processor
+
+  # ECS Services to handle SQS messages
+  UploadProcessorService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: ${self:service}-${sls:stage}-upload-processor
+      Cluster: !Ref ProcessingCluster
+      TaskDefinition: !Ref UploadProcessorTaskDefinition
+      DesiredCount: 0  # Scale based on SQS messages
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ProcessingSecurityGroup
+          Subnets: !Ref SubnetIds
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      # Auto-scaling based on SQS
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: app
+            ClientAliases:
+              - Port: 80
+      # Connect to SQS
+      EnableExecuteCommand: true
+
+  # Auto-scaling for Upload Processor
+  UploadProcessorAutoScaling:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10  # Maximum number of tasks
+      MinCapacity: 0   # Scale to zero when no messages
+      ResourceId: !Sub 
+        - service/${ProcessingClusterName}/${ServiceName}
+        - ProcessingClusterName: !GetAtt ProcessingCluster.ClusterName
+          ServiceName: !GetAtt UploadProcessorService.Name
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  UploadProcessorScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ${self:service}-${sls:stage}-upload-sqs-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref UploadProcessorAutoScaling
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 10  # Messages per task
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 30
+        CustomizedMetricSpecification:
+          MetricName: ApproximateNumberOfMessagesVisible
+          Namespace: AWS/SQS
+          Dimensions:
+            - Name: QueueName
+              Value: !GetAtt ImageUploadFromS3Queue.QueueName
+          Statistic: Average
+          Unit: Count
+
+  # Similar configuration for Archive Processor
+  ArchiveProcessorService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: ${self:service}-${sls:stage}-archive-processor
+      Cluster: !Ref ProcessingCluster
+      TaskDefinition: !Ref ArchiveProcessorTaskDefinition
+      DesiredCount: 0
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ProcessingSecurityGroup
+          Subnets: !Ref SubnetIds
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      ServiceConnectConfiguration:
+        Enabled: true
+        Services:
+          - PortName: app
+            ClientAliases:
+              - Port: 80
+      EnableExecuteCommand: true
+
+  # Auto-scaling for Archive Processor
+  ArchiveProcessorAutoScaling:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 0
+      ResourceId: !Sub 
+        - service/${ProcessingClusterName}/${ServiceName}
+        - ProcessingClusterName: !GetAtt ProcessingCluster.ClusterName
+          ServiceName: !GetAtt ArchiveProcessorService.Name
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  ArchiveProcessorScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ${self:service}-${sls:stage}-archive-sqs-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ArchiveProcessorAutoScaling
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 5  # Lower number for archive tasks as they're more resource-intensive
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 30
+        CustomizedMetricSpecification:
+          MetricName: ApproximateNumberOfMessagesVisible
+          Namespace: AWS/SQS
+          Dimensions:
+            - Name: QueueName
+              Value: !GetAtt ZipDeliveryQueue.QueueName
+          Statistic: Average
+          Unit: Count
+
+  ArchiveProcessorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: ${self:service}-${sls:stage}-archive-processor
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: 4096    # 4 vCPU for better ZIP processing
+      Memory: 8192 # 8GB for handling large archives
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ArchiveProcessorTaskRole.Arn
+      ContainerDefinitions:
+        - Name: archive-processor
+          Image: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/${self:service}-archive-processor:${sls:stage}
+          Essential: true
+          Environment:
+            - Name: NODE_ENV
+              Value: ${sls:stage}
+            - Name: ARCHIVE_QUEUE_URL
+              Value: !Ref ZipDeliveryQueue
+            - Name: AWS_REGION
+              Value: ${aws:region}
+            - Name: TASKS_TABLE
+              Value: ${self:provider.environment.TASKS_TABLE}
+            - Name: JOB_PROGRESS_TABLE
+              Value: ${self:provider.environment.JOB_PROGRESS_TABLE}
+            - Name: SOURCE_BUCKET
+              Value: ${self:custom.bucketName}
+            - Name: CHUNK_SIZE
+              Value: "1000"  # Number of files per ZIP chunk
+            - Name: CONCURRENT_S3_OPERATIONS
+              Value: "16"
+            - Name: CONCURRENT_CHUNK_PROCESSING
+              Value: "8"
+            - Name: ARCHIVER_HIGH_WATER_MARK
+              Value: "8388608"  # 8MB buffer
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - node healthcheck.js
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/${self:service}-${sls:stage}
+              awslogs-region: ${aws:region}
+              awslogs-stream-prefix: archive-processor
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Ulimits:
+            - Name: nofile
+              HardLimit: 262144  # Increased for handling many files
+              SoftLimit: 262144
+            - Name: nproc
+              HardLimit: 65535
+              SoftLimit: 65535
+          MountPoints: []
+          VolumesFrom: []
+          LinuxParameters:
+            InitProcessEnabled: true
+            MaxSwap: 8192       # Allow swap for large operations
+            SharedMemorySize: 2048  # 2GB shared memory
+          SystemControls:
+            - Namespace: net.core.somaxconn
+              Value: "65535"
+            - Namespace: net.ipv4.ip_local_port_range
+              Value: "1024 65535"
+            - Namespace: fs.file-max
+              Value: "262144"
+          Memory: 8192
+          MemoryReservation: 4096
+          Cpu: 4096
+
+      Volumes: []
+      Tags:
+        - Key: Environment
+          Value: ${sls:stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Name
+          Value: archive-processor
