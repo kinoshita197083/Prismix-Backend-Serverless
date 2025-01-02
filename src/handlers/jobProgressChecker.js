@@ -367,7 +367,7 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
     // Basic checks
     const hasBeenTenMinutes = timeSinceLastUpdate > tenMinutes;
     const hasBeenFiveMinutes = timeSinceLastUpdate > fiveMinutes;
-    const statsAreEmpty = totalProcessed === 0;
+    // const statsAreEmpty = totalProcessed === 0;
     const upstreamProcessingMightBeStuck = totalImages <= 0 && hasBeenFiveMinutes;
 
     // Calculate progress
@@ -395,7 +395,7 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
         totalImages,
         totalProcessed,
         hasBeenTenMinutes,
-        statsAreEmpty,
+        // statsAreEmpty,
         processingMightBeStuck,
         processingTooFast,
         noRecentProgress,
@@ -405,7 +405,7 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
     // Comprehensive corruption check
     const isCorrupted =
         hasBeenTenMinutes ||
-        statsAreEmpty ||
+        // statsAreEmpty ||
         processingMightBeStuck ||
         upstreamProcessingMightBeStuck ||
         processingTooFast ||
@@ -415,7 +415,7 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
         console.log("[determineIfJobIsCorrupted]: Job is corrupted", {
             reasons: {
                 hasBeenTenMinutes,
-                statsAreEmpty,
+                // statsAreEmpty,
                 processingMightBeStuck,
                 upstreamProcessingMightBeStuck,
                 processingTooFast,

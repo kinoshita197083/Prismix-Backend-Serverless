@@ -255,13 +255,16 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
             ContinuationToken: continuationToken
         };
 
+        console.log('----> folderPaths', folderPaths);
+
         // If specific folders are provided, process them one at a time
-        if (folderPaths && folderPaths.length > 0) {
+        if (folderPaths?.length > 0) {
             const allImages = [];
             let nextContinuationToken = continuationToken;
 
             for (const folderPath of folderPaths) {
                 let folderContinuationToken = nextContinuationToken;
+                console.log('----> current folderPath', folderPath);
 
                 do {
                     const command = new ListObjectsV2Command({
@@ -277,7 +280,7 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
 
                     allImages.push(...folderImages);
                     folderContinuationToken = response.NextContinuationToken;
-
+                    console.log('----> folderContinuationToken', folderContinuationToken);
                 } while (folderContinuationToken);
             }
 
@@ -286,7 +289,7 @@ async function listImagesFromBucket(s3Client, bucket, continuationToken, folderP
             const endIndex = Math.min(BATCH_SIZE, allImages.length);
             const nextBatch = allImages.slice(startIndex, endIndex);
             const remainingImages = allImages.length > BATCH_SIZE;
-
+            console.log('----> remainingImages', remainingImages);
             return {
                 images: nextBatch,
                 nextToken: remainingImages ? 'continue' : null

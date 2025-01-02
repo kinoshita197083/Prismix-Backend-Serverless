@@ -26,7 +26,7 @@ const supabaseService = {
         return data;
     },
 
-    async refundUserCreditBalance(userId, amount, reason) {
+    async refundUserCreditBalance(userId, amount, reason, jobId) {
         // Get current credits first
         const { data: currentUser, error: fetchError } = await supabase
             .from('User')
@@ -42,6 +42,8 @@ const supabaseService = {
         // Calculate new credit amount
         const newCredits = (currentUser.credits || 0) + amount;
 
+        console.log('----> credits to refund: ', newCredits);
+
         // Update user credits
         const { data: userData, error: userError } = await supabase
             .from('User')
@@ -51,7 +53,7 @@ const supabaseService = {
             .single();
 
         if (userError) {
-            logger.error('[SupabaseService] Error refunding user credit balance', { error: userError, userId, amount });
+            logger.error('[SupabaseService] Error refunding user credit balance', { error: userError, userId, amount, jobId });
             throw new AppError('[SupabaseService] Failed to refund user credit balance', 500);
         }
 
@@ -62,14 +64,16 @@ const supabaseService = {
                 userId,
                 credits: amount,
                 type: 'refund',
-                description: reason || 'Refund for failed & skipped jobs'
+                description: reason || 'Refund for failed & skipped jobs',
+                jobId
             });
 
         if (transactionError) {
-            logger.error('[SupabaseService] Error recording refund transaction', { error: transactionError, userId, amount });
+            logger.error('[SupabaseService] Error recording refund transaction', { error: transactionError, userId, amount, jobId });
             throw new AppError('[SupabaseService] Failed to record refund transaction', 500);
         }
 
+        logger.info('[SupabaseService] Refunded user credit balance', { userId, amount, jobId });
         return userData;
     },
 
