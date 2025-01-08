@@ -339,16 +339,24 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
     const { createdAt, updatedAt, totalImages } = jobProgress;
     const { totalProcessed } = stats;
 
-    if (!createdAt || !updatedAt || !totalImages || totalProcessed == null) {
-        console.error("[determineIfJobIsCorrupted]: Missing required job progress or stats properties", {
+    // Validate that required properties are present and are numbers
+    if (
+        createdAt == null ||
+        updatedAt == null ||
+        totalImages == null ||
+        totalProcessed == null
+    ) {
+        console.error("[determineIfJobIsCorrupted]: Missing or invalid job progress or stats properties", {
             createdAt, updatedAt, totalImages, totalProcessed
         });
         return true;
     }
 
     const currentTime = Date.now();
-    const timeSinceLastUpdate = currentTime - updatedAt;
-    const timeSinceCreation = currentTime - createdAt;
+
+    // Ensure time differences are non-negative
+    const timeSinceLastUpdate = Math.max(0, currentTime - updatedAt);
+    const timeSinceCreation = Math.max(0, currentTime - createdAt);
 
     // Time thresholds
     const MINUTE = 1000 * 60;
@@ -367,7 +375,6 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
     // Basic checks
     const hasBeenTenMinutes = timeSinceLastUpdate > tenMinutes;
     const hasBeenFiveMinutes = timeSinceLastUpdate > fiveMinutes;
-    // const statsAreEmpty = totalProcessed === 0;
     const upstreamProcessingMightBeStuck = totalImages <= 0 && hasBeenFiveMinutes;
 
     // Calculate progress
@@ -375,16 +382,8 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
 
     // Advanced progress monitoring
     const processingMightBeStuck = PROGRESS_CHECKPOINTS.some(checkpoint => {
-        const isBelowThreshold = progress < checkpoint.threshold;
-        const hasExceededTimeLimit = timeSinceCreation > checkpoint.timeLimit;
-        const isRelevantCheckpoint = checkpoint.threshold > progress;
-
-        return isBelowThreshold && hasExceededTimeLimit && isRelevantCheckpoint;
+        return progress < checkpoint.threshold && timeSinceCreation > checkpoint.timeLimit;
     });
-
-    // Check for unusual processing patterns
-    const processingTooFast = progress > 0.95 && timeSinceCreation < MINUTE;
-    const noRecentProgress = totalProcessed > 0 && timeSinceLastUpdate > fiveMinutes;
 
     // Detailed logging for debugging
     console.log("[determineIfJobIsCorrupted]:", {
@@ -395,31 +394,22 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
         totalImages,
         totalProcessed,
         hasBeenTenMinutes,
-        // statsAreEmpty,
         processingMightBeStuck,
-        processingTooFast,
-        noRecentProgress,
         upstreamProcessingMightBeStuck
     });
 
-    // Comprehensive corruption check
+    // Determine if job is corrupted
     const isCorrupted =
         hasBeenTenMinutes ||
-        // statsAreEmpty ||
         processingMightBeStuck ||
-        upstreamProcessingMightBeStuck ||
-        processingTooFast ||
-        noRecentProgress;
+        upstreamProcessingMightBeStuck;
 
     if (isCorrupted) {
         console.log("[determineIfJobIsCorrupted]: Job is corrupted", {
             reasons: {
                 hasBeenTenMinutes,
-                // statsAreEmpty,
                 processingMightBeStuck,
-                upstreamProcessingMightBeStuck,
-                processingTooFast,
-                noRecentProgress
+                upstreamProcessingMightBeStuck
             }
         });
         return true;
