@@ -19,6 +19,7 @@ jobs:
     - run: npm test
 
   deploy:
+    timeout-minutes: 60
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -135,9 +136,21 @@ jobs:
     - name: Serverless Deploy
       run: |
         serverless deploy --stage ${GITHUB_REF##*/} --verbose
-        if [ $? -ne 0 ]; then
-          echo "Deployment failed. Fetching CloudFormation events:"
-          aws cloudformation describe-stack-events --stack-name prismix-serverless-${GITHUB_REF##*/} --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table
+        DEPLOY_STATUS=$?
+        
+        if [ $DEPLOY_STATUS -ne 0 ]; then
+          echo "Deployment failed. Checking ECS Service status..."
+          aws ecs describe-services \
+            --cluster ${self:service}-${GITHUB_REF##*/}-processing-cluster \
+            --services ${self:service}-${GITHUB_REF##*/}-upload-processor
+          
+          echo "Checking CloudWatch Logs..."
+          aws logs get-log-events \
+            --log-group-name /ecs/${self:service}-${GITHUB_REF##*/} \
+            --log-stream-prefix upload-processor \
+            --limit 100
+          
+          exit $DEPLOY_STATUS
         fi
       env:
         SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}

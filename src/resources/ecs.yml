@@ -85,7 +85,7 @@ Resources:
       ServiceName: ${self:service}-${sls:stage}-upload-processor
       Cluster: !Ref ProcessingCluster
       TaskDefinition: !Ref UploadProcessorTaskDefinition
-      DesiredCount: 0  # Scale based on SQS messages
+      DesiredCount: 1  # Changed from 0 to 1
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -141,7 +141,7 @@ Resources:
       ServiceName: ${self:service}-${sls:stage}-archive-processor
       Cluster: !Ref ProcessingCluster
       TaskDefinition: !Ref ArchiveProcessorTaskDefinition
-      DesiredCount: 0
+      DesiredCount: 1
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -258,6 +258,10 @@ Resources:
       GroupDescription: Security group for ECS processing tasks
       VpcId: !Ref ProcessingVPC
       SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80

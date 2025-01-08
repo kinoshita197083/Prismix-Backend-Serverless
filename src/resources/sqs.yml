@@ -138,7 +138,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-queue
-      VisibilityTimeout: 600  # Updated for imageUploadProcessor (300s timeout)
+      VisibilityTimeout: 900  # Updated for imageUploadProcessor (300s timeout)
 
   ImageUploadQueuePolicy:
     Type: AWS::SQS::QueuePolicy
@@ -244,9 +244,15 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 
-                - sns.amazonaws.com
-                - ecs-tasks.amazonaws.com
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt ZipDeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
             Action:
               - sqs:SendMessage
               - sqs:ReceiveMessage
@@ -254,9 +260,6 @@ Resources:
               - sqs:GetQueueAttributes
               - sqs:ChangeMessageVisibility
             Resource: !GetAtt ZipDeliveryQueue.Arn
-            Condition:
-              ArnEquals:
-                aws:SourceArn: !Ref JobCompletionTopic
 
   ZipDeliveryTopicSubscription:
     Type: AWS::SNS::Subscription

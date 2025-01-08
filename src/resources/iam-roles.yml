@@ -588,9 +588,9 @@ Resources:
           - Effect: Allow
             Principal:
               AWS: 
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
       Policies:
         - PolicyName: s3-access-policy
@@ -698,6 +698,9 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                  - sqs:GetQueueUrl
+                  - sqs:SendMessage
                 Resource: !GetAtt ImageUploadFromS3Queue.Arn
               - Effect: Allow
                 Action:
@@ -738,6 +741,10 @@ Resources:
                 Action:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                  - sqs:GetQueueUrl
+                  - sqs:SendMessage
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt ZipDeliveryQueue.Arn
               - Effect: Allow
