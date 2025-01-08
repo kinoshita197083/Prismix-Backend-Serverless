@@ -9,6 +9,9 @@ Resources:
       DefaultCapacityProviderStrategy:
         - CapacityProvider: FARGATE
           Weight: 1
+      Tags:
+        - Key: Name
+          Value: ${self:service}-${sls:stage}-cluster
 
   UploadProcessorTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -65,25 +68,6 @@ Resources:
           PortMappings:
             - ContainerPort: 80
               Protocol: tcp
-          ResourceRequirements:
-            - Type: GPU
-              Value: "0"
-          Ulimits:
-            - Name: nofile
-              HardLimit: 65536
-              SoftLimit: 65536
-          MountPoints: []
-          VolumesFrom: []
-          LinuxParameters:
-            InitProcessEnabled: true
-          SystemControls:
-            - Namespace: net.core.somaxconn
-              Value: "1024"
-            - Namespace: net.ipv4.ip_local_port_range
-              Value: "1024 65535"
-          Memory: 4096
-          MemoryReservation: 2048
-          Cpu: 2048
 
       Volumes: []
       Tags:
@@ -108,30 +92,25 @@ Resources:
           AssignPublicIp: ENABLED
           SecurityGroups:
             - !Ref ProcessingSecurityGroup
-          Subnets: !Ref SubnetIds
+          Subnets: 
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
-      # Auto-scaling based on SQS
-      ServiceConnectConfiguration:
-        Enabled: true
-        Services:
-          - PortName: app
-            ClientAliases:
-              - Port: 80
-      # Connect to SQS
       EnableExecuteCommand: true
 
   # Auto-scaling for Upload Processor
   UploadProcessorAutoScaling:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: UploadProcessorService
     Properties:
       MaxCapacity: 10  # Maximum number of tasks
       MinCapacity: 0   # Scale to zero when no messages
       ResourceId: !Sub 
-        - service/${ProcessingClusterName}/${ServiceName}
-        - ProcessingClusterName: !GetAtt ProcessingCluster.ClusterName
-          ServiceName: !GetAtt UploadProcessorService.Name
+        - service/${ClusterName}/${ServiceName}
+        - ClusterName: ${self:service}-${sls:stage}-processing-cluster
+          ServiceName: ${self:service}-${sls:stage}-upload-processor
       RoleARN: !GetAtt AutoScalingRole.Arn
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
@@ -169,28 +148,25 @@ Resources:
           AssignPublicIp: ENABLED
           SecurityGroups:
             - !Ref ProcessingSecurityGroup
-          Subnets: !Ref SubnetIds
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
-      ServiceConnectConfiguration:
-        Enabled: true
-        Services:
-          - PortName: app
-            ClientAliases:
-              - Port: 80
       EnableExecuteCommand: true
 
   # Auto-scaling for Archive Processor
   ArchiveProcessorAutoScaling:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: ArchiveProcessorService
     Properties:
       MaxCapacity: 10
       MinCapacity: 0
       ResourceId: !Sub 
-        - service/${ProcessingClusterName}/${ServiceName}
-        - ProcessingClusterName: !GetAtt ProcessingCluster.ClusterName
-          ServiceName: !GetAtt ArchiveProcessorService.Name
+        - service/${ClusterName}/${ServiceName}
+        - ClusterName: ${self:service}-${sls:stage}-processing-cluster
+          ServiceName: ${self:service}-${sls:stage}-archive-processor
       RoleARN: !GetAtt AutoScalingRole.Arn
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
@@ -267,30 +243,6 @@ Resources:
           PortMappings:
             - ContainerPort: 80
               Protocol: tcp
-          Ulimits:
-            - Name: nofile
-              HardLimit: 262144  # Increased for handling many files
-              SoftLimit: 262144
-            - Name: nproc
-              HardLimit: 65535
-              SoftLimit: 65535
-          MountPoints: []
-          VolumesFrom: []
-          LinuxParameters:
-            InitProcessEnabled: true
-            MaxSwap: 8192       # Allow swap for large operations
-            SharedMemorySize: 2048  # 2GB shared memory
-          SystemControls:
-            - Namespace: net.core.somaxconn
-              Value: "65535"
-            - Namespace: net.ipv4.ip_local_port_range
-              Value: "1024 65535"
-            - Namespace: fs.file-max
-              Value: "262144"
-          Memory: 8192
-          MemoryReservation: 4096
-          Cpu: 4096
-
       Volumes: []
       Tags:
         - Key: Environment
@@ -299,3 +251,22 @@ Resources:
           Value: ${self:service}
         - Key: Name
           Value: archive-processor
+
+  ProcessingSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS processing tasks
+      VpcId: !Ref ProcessingVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ${self:service}-${sls:stage}-processing-sg

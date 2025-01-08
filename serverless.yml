@@ -119,6 +119,7 @@ resources:
   - ${file(src/resources/iam-roles.yml)}
   - ${file(src/resources/secretsmanager.yml)}
   - ${file(src/resources/ecs.yml)}
+  - ${file(src/resources/vpc.yml)}
   - Resources:
       LayersDeploymentBucket:
         Type: AWS::S3::Bucket

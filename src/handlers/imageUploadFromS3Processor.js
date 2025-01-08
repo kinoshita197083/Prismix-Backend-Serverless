@@ -24,7 +24,7 @@ const jobProgressService = new JobProgressService(docClient, null, {
     jobProgressTable: process.env.JOB_PROGRESS_TABLE
 });
 
-exports.handler = async (event) => {
+exports.uploadProcessor = async (event) => {
     logger.info('S3 Image upload processor started', {
         event,
         recordsCount: event.Records?.length || 0,

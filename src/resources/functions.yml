@@ -64,7 +64,6 @@ jobProgressChecker:
         batchSize: 10
         functionResponseType: ReportBatchItemFailures
         maximumBatchingWindow: 1
-  reservedConcurrency: 10
   environment:
     AWS_ACCOUNT_ID: ${aws:accountId}
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}

@@ -436,7 +436,7 @@ async function processEligibleTasks(jobId, allImageKeys) {
 /**
  * Main Lambda handler
  */
-exports.handler = async (event) => {
+exports.zipArchiveProcessor = async (event) => {
     const logHandlerStart = () => logger.info('Starting handler execution', {
         recordCount: event?.Records?.length,
         timestamp: new Date().toISOString()

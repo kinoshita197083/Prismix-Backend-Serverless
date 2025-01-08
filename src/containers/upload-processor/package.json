@@ -1,0 +1,17 @@
+{
+  "name": "upload-processor",
+  "version": "1.0.0",
+  "description": "ECS container for processing image uploads",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "health": "node healthcheck.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "sqs-consumer": "^7.0.0"
+  }
+}
