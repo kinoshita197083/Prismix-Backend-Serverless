@@ -178,11 +178,14 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              Service: 
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
             Action:
               - sqs:ReceiveMessage
               - sqs:DeleteMessage
               - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
             Resource: !GetAtt ImageUploadFromS3Queue.Arn
 
   JobProgressQueue:
@@ -241,8 +244,15 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: sns.amazonaws.com
-            Action: sqs:SendMessage
+              Service: 
+                - sns.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
             Resource: !GetAtt ZipDeliveryQueue.Arn
             Condition:
               ArnEquals:

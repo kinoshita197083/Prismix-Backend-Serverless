@@ -6,45 +6,68 @@ const logger = require('./src/utils/logger');
 const app = Consumer.create({
     queueUrl: process.env.QUEUE_URL,
     handleMessage: async (message) => {
-        // Transform the message into Lambda-style event
-        const event = {
-            Records: [{
-                ...message,
-            }]
-        };
+        try {
+            // Transform the message into Lambda-style event
+            const event = {
+                Records: [
+                    {
+                        ...message,
+                    }
+                ]
+            };
 
-        logger.info('Processing message', {
-            messageId: message.MessageId,
-            timestamp: new Date().toISOString()
-        });
+            logger.info('Processing message', {
+                messageId: message.MessageId,
+                body: event.Records[0].body,
+                timestamp: new Date().toISOString()
+            });
 
-        await uploadProcessor(event);
+            await uploadProcessor(event);
+        } catch (error) {
+            logger.error('Error processing message', {
+                messageId: message.MessageId,
+                error: error.message,
+                stack: error.stack,
+                timestamp: new Date().toISOString()
+            });
+            throw error; // Rethrow to trigger message retry
+        }
     },
     batchSize: 10,
     visibilityTimeout: 7200, // 2 hours for ECS
     messageAttributeNames: ['All']
 });
 
+// Error handling
 app.on('error', (err) => {
     logger.error('Consumer error', {
         error: err.message,
-        stack: err.stack
+        stack: err.stack,
+        timestamp: new Date().toISOString()
     });
 });
 
 app.on('processing_error', (err) => {
     logger.error('Processing error', {
         error: err.message,
-        stack: err.stack
+        stack: err.stack,
+        timestamp: new Date().toISOString()
     });
 });
 
+// Lifecycle events
 app.on('started', () => {
-    logger.info('Consumer started');
+    logger.info('Consumer started', {
+        timestamp: new Date().toISOString(),
+        queueUrl: process.env.QUEUE_URL
+    });
 });
 
 app.on('stopped', () => {
-    logger.info('Consumer stopped');
+    logger.info('Consumer stopped', {
+        timestamp: new Date().toISOString()
+    });
 });
 
+// Start the consumer
 app.start(); 
