@@ -138,7 +138,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-queue
-      VisibilityTimeout: 600  # Updated for imageUploadProcessor (300s timeout)
+      VisibilityTimeout: 900  # Updated for imageUploadProcessor (300s timeout)
 
   ImageUploadQueuePolicy:
     Type: AWS::SQS::QueuePolicy
