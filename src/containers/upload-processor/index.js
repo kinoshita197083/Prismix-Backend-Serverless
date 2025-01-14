@@ -1,6 +1,22 @@
 const { Consumer } = require('sqs-consumer');
 const { uploadProcessor } = require('./src/handlers/imageUploadFromS3Processor');
 const logger = require('./src/utils/logger');
+const http = require('http');
+
+// Create HTTP server for health checks
+const server = http.createServer((req, res) => {
+    if (req.url === '/health') {
+        res.writeHead(200);
+        res.end('OK');
+    } else {
+        res.writeHead(404);
+        res.end();
+    }
+});
+
+server.listen(80, () => {
+    logger.info('Health check server started on port 80');
+});
 
 // Create SQS consumer
 const app = Consumer.create({
@@ -84,5 +100,18 @@ app.on('stopped', () => {
     });
 });
 
-// Start the consumer
-app.start(); 
+// Start the consumer with error handling
+try {
+    app.start();
+    logger.info('Consumer started successfully', {
+        queueUrl: process.env.QUEUE_URL,
+        timestamp: new Date().toISOString()
+    });
+} catch (error) {
+    logger.error('Failed to start consumer', {
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+    });
+    process.exit(1);
+} 
