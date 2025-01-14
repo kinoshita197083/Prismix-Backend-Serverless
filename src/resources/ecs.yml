@@ -51,6 +51,14 @@ Resources:
               Value: "3"
             - Name: RETRY_DELAY
               Value: "1000"
+            - Name: SUPABASE_URL
+              Value: ${env:SUPABASE_URL}
+            - Name: SUPABASE_API_KEY
+              Value: ${env:SUPABASE_API_KEY}
+            - Name: SERVICE_NAME
+              Value: ${self:service}
+            - Name: STAGE
+              Value: ${sls:stage}
           HealthCheck:
             Command:
               - CMD-SHELL
