@@ -7,44 +7,59 @@ const app = Consumer.create({
     queueUrl: process.env.QUEUE_URL,
     handleMessage: async (message) => {
         try {
+            logger.info('Starting message processing', {
+                messageId: message.MessageId,
+                queueUrl: process.env.QUEUE_URL,
+                timestamp: new Date().toISOString()
+            });
+
             // Transform the message into Lambda-style event
             const event = {
-                Records: [
-                    {
-                        ...message,
-                    }
-                ]
+                // Records: [{
+                //     ...message,
+                // }]
+                Records: [{
+                    messageId: message.MessageId,
+                    body: message.Body,
+                    attributes: message.Attributes,
+                    messageAttributes: message.MessageAttributes,
+                    md5OfBody: message.MD5OfBody,
+                    eventSource: 'aws:sqs',
+                    eventSourceARN: process.env.QUEUE_URL,
+                    awsRegion: process.env.AWS_REGION
+                }]
             };
 
-            logger.info('Processing message', {
+            await uploadProcessor(event);
+
+            logger.info('Message processing completed', {
                 messageId: message.MessageId,
-                body: event.Records[0].body,
+                body: event?.Records?.[0]?.body,
                 timestamp: new Date().toISOString()
             });
-
-            await uploadProcessor(event);
         } catch (error) {
             logger.error('Error processing message', {
-                messageId: message.MessageId,
                 error: error.message,
                 stack: error.stack,
+                messageId: message.MessageId,
                 timestamp: new Date().toISOString()
             });
-            throw error; // Rethrow to trigger message retry
+            throw error;
         }
     },
-    batchSize: 10,
-    visibilityTimeout: 7200, // 2 hours for ECS
+    batchSize: 1,  // Process one message at a time initially
+    visibilityTimeout: 7200,
     messageAttributeNames: ['All']
 });
 
-// Error handling
-app.on('error', (err) => {
-    logger.error('Consumer error', {
-        error: err.message,
-        stack: err.stack,
+// Add startup logging
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', {
+        error: error.message,
+        stack: error.stack,
         timestamp: new Date().toISOString()
     });
+    process.exit(1);
 });
 
 app.on('processing_error', (err) => {
