@@ -438,10 +438,12 @@ Resources:
             Principal:
               Service:
                 - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
       Policies:
         - PolicyName: image-uploader-from-s3-policy
           PolicyDocument:
@@ -532,11 +534,14 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              Service:
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
       Policies:
         - PolicyName: zip-archive-processor-policy
           PolicyDocument:
@@ -588,9 +593,9 @@ Resources:
           - Effect: Allow
             Principal:
               AWS: 
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
       Policies:
         - PolicyName: s3-access-policy
