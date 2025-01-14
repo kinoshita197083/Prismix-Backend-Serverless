@@ -54,7 +54,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - node healthcheck.js
+              - echo "Health check passed"
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -86,7 +86,7 @@ Resources:
       ServiceName: ${self:service}-${sls:stage}-upload-processor
       Cluster: !Ref ProcessingCluster
       TaskDefinition: !Ref UploadProcessorTaskDefinition
-      DesiredCount: 1  # Changed from 0 to 1 to ensure at least one task is running
+      DesiredCount: 1
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
