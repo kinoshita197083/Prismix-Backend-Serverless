@@ -201,6 +201,7 @@ Resources:
           - MetricIntervalUpperBound: 0
             ScalingAdjustment: 0
 
+  # Archive Processing Cluster
   ArchiveProcessingCluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -218,6 +219,9 @@ Resources:
   # Similar configuration for Archive Processor
   ArchiveProcessorService:
     Type: AWS::ECS::Service
+    DependsOn: 
+      - ArchiveProcessingCluster
+      - ArchiveProcessorTaskDefinition
     Properties:
       ServiceName: ${self:service}-${sls:stage}-archive-processor
       Cluster: !Ref ArchiveProcessingCluster
@@ -234,7 +238,7 @@ Resources:
             - !Ref PublicSubnet2
       DeploymentConfiguration:
         MaximumPercent: 200
-        MinimumHealthyPercent: 100
+        MinimumHealthyPercent: 0
       EnableExecuteCommand: true
 
   # Auto-scaling for Archive Processor
@@ -355,8 +359,14 @@ Resources:
               Value: ${self:provider.environment.TASKS_TABLE}
             - Name: JOB_PROGRESS_TABLE
               Value: ${self:provider.environment.JOB_PROGRESS_TABLE}
+            - Name: ZIP_ARCHIVE_PROGRESS_TABLE
+              Value: ${self:custom.zipArchiveProgressTableName}
+            - Name: ZIP_DELIVERY_QUEUE_URL
+              Value: !Ref ZipDeliveryQueue
             - Name: SOURCE_BUCKET
               Value: ${self:custom.bucketName}
+            - Name: DELIVERY_BUCKET
+              Value: ${self:custom.deliveryBucketName}
             - Name: CHUNK_SIZE
               Value: "1000"  # Number of files per ZIP chunk
             - Name: CONCURRENT_S3_OPERATIONS
@@ -376,7 +386,8 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: /ecs/${self:service}-${sls:stage}
+              awslogs-create-group: 'true'
+              awslogs-group: /ecs/${self:service}-${sls:stage}-archive-processor
               awslogs-region: ${aws:region}
               awslogs-stream-prefix: archive-processor
           PortMappings:

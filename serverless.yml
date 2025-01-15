@@ -59,6 +59,8 @@ custom:
     prod: 30
     dev: 7
   bucketName: ${self:service}-${self:provider.stage}-bucket
+  # imageBucketName: ${self:service}-${self:provider.stage}-image-bucket
+  deliveryBucketName: ${self:service}-${self:provider.stage}-delivery-bucket
   queueName: ${self:service}-${self:provider.stage}-queue
   deploymentBucketName: ${self:service}-${self:provider.stage}-${self:provider.region}-deploys
   dotenv:
@@ -66,6 +68,7 @@ custom:
   deadLetterQueueName: ${self:service}-${self:provider.stage}-dlq
   serverless-offline:
     region: ${self:provider.region}
+  zipArchiveProgressTableName: ${self:service}-${self:provider.stage}-zip-archive-progress
   devCloudfrontTrustedKeyGroup:
     image: fcfa2d1e-b24c-44ce-a975-bda5530a7439
     delivery: 8fae89e6-d326-4ac5-a72c-ef9cd9bed7e3

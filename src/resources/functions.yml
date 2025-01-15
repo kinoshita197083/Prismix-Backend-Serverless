@@ -191,8 +191,8 @@ zipArchiveProcessor:
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     SOURCE_BUCKET: ${self:custom.bucketName}
-    DELIVERY_BUCKET: ${self:service}-${self:provider.stage}-delivery-bucket
-    ZIP_ARCHIVE_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-zip-archive-progress
+    DELIVERY_BUCKET: ${self:custom.deliveryBucketName}
+    ZIP_ARCHIVE_PROGRESS_TABLE: ${self:custom.zipArchiveProgressTableName}
     ZIP_DELIVERY_QUEUE_URL: !Ref ZipDeliveryQueue
   role: !GetAtt ZipArchiveProcessorRole.Arn
   layers:

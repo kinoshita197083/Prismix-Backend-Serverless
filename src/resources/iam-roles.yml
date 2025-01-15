@@ -805,6 +805,7 @@ Resources:
                 Resource:
                   - !GetAtt TasksTable.Arn
                   - !GetAtt JobProgressTable.Arn
+                  - !GetAtt ZipArchiveProgressTable.Arn
 
   # Auto Scaling Role
   AutoScalingRole:
