@@ -593,8 +593,7 @@ Resources:
           - Effect: Allow
             Principal:
               AWS: 
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
+                - !GetAtt UploadProcessorTaskRole.Arn
                 - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
       Policies:
@@ -725,7 +724,7 @@ Resources:
   UploadProcessorTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ${self:service}-${sls:stage}-upload-processor-role
+      RoleName: ${self:service}-${sls:stage}-s3-upload-processor-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -734,7 +733,7 @@ Resources:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: ${self:service}-${sls:stage}-upload-processor-policy
+        - PolicyName: ${self:service}-${sls:stage}-s3-upload-processor-policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:

@@ -403,6 +403,7 @@ async function processImageBatch(sourceS3Client, destS3Client, images, config) {
                     success = true;
 
                 } catch (error) {
+                    console.log(`[processImageBatch] error`, error);
                     if (attempt === MAX_RETRIES) {
                         const failedUpload = {
                             fileName: image.Key,
