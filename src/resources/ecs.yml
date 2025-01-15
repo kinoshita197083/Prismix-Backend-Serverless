@@ -1,8 +1,8 @@
 Resources:
-  ProcessingCluster:
+  S3ProcessingCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: ${self:service}-${sls:stage}-processing-cluster
+      ClusterName: ${self:service}-${sls:stage}-s3-upload-processing-cluster
       CapacityProviders:
         - FARGATE
         - FARGATE_SPOT
@@ -11,12 +11,12 @@ Resources:
           Weight: 1
       Tags:
         - Key: Name
-          Value: ${self:service}-${sls:stage}-cluster
+          Value: ${self:service}-${sls:stage}-s3-upload-processing-cluster
 
-  UploadProcessorTaskDefinition:
+  S3UploadProcessorTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: ${self:service}-${sls:stage}-upload-processor
+      Family: ${self:service}-${sls:stage}-s3-upload-processor
       RequiresCompatibilities:
         - FARGATE
       NetworkMode: awsvpc
@@ -25,8 +25,8 @@ Resources:
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt UploadProcessorTaskRole.Arn
       ContainerDefinitions:
-        - Name: upload-processor
-          Image: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/${self:service}-upload-processor:${sls:stage}
+        - Name: s3-upload-processor
+          Image: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/${self:service}-s3-upload-processor:${sls:stage}
           Essential: true
           Environment:
             - Name: NODE_ENV
@@ -71,7 +71,7 @@ Resources:
             LogDriver: awslogs
             Options:
               awslogs-create-group: 'true'
-              awslogs-group: /ecs/${self:service}-${sls:stage}-upload-processor
+              awslogs-group: /ecs/${self:service}-${sls:stage}-s3-upload-processor
               awslogs-region: ${aws:region}
               awslogs-stream-prefix: ecs
           PortMappings:
@@ -85,16 +85,16 @@ Resources:
         - Key: Service
           Value: ${self:service}
         - Key: Name
-          Value: upload-processor
+          Value: s3-upload-processor
 
   # ECS Services to handle SQS messages
-  UploadProcessorService:
+  S3UploadProcessorService:
     Type: AWS::ECS::Service
     Properties:
-      ServiceName: ${self:service}-${sls:stage}-upload-processor
-      Cluster: !Ref ProcessingCluster
-      TaskDefinition: !Ref UploadProcessorTaskDefinition
-      DesiredCount: 1
+      ServiceName: ${self:service}-${sls:stage}-s3-upload-processor
+      Cluster: !Ref S3ProcessingCluster
+      TaskDefinition: !Ref S3UploadProcessorTaskDefinition
+      DesiredCount: 0
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -109,31 +109,31 @@ Resources:
         MinimumHealthyPercent: 100
       EnableExecuteCommand: true
 
-  # Auto-scaling for Upload Processor
-  UploadProcessorAutoScaling:
+  # Auto-scaling for s3 upload processor
+  S3UploadProcessorAutoScaling:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    DependsOn: UploadProcessorService
+    DependsOn: S3UploadProcessorService
     Properties:
       MaxCapacity: 10  # Maximum number of tasks
       MinCapacity: 0   # Scale to zero when no messages
       ResourceId: !Sub 
         - service/${ClusterName}/${ServiceName}
-        - ClusterName: ${self:service}-${sls:stage}-processing-cluster
-          ServiceName: ${self:service}-${sls:stage}-upload-processor
+        - ClusterName: ${self:service}-${sls:stage}-s3-upload-processing-cluster
+          ServiceName: ${self:service}-${sls:stage}-s3-upload-processor
       RoleARN: !GetAtt AutoScalingRole.Arn
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
 
-  UploadProcessorScalingPolicy:
+  S3UploadProcessorScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: ${self:service}-${sls:stage}-upload-sqs-scaling
+      PolicyName: ${self:service}-${sls:stage}-s3-upload-sqs-scaling
       PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref UploadProcessorAutoScaling
+      ScalingTargetId: !Ref S3UploadProcessorAutoScaling
       TargetTrackingScalingPolicyConfiguration:
-        TargetValue: 10  # Messages per task
-        ScaleInCooldown: 60
-        ScaleOutCooldown: 30
+        TargetValue: 1  # Messages per task
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 0
         CustomizedMetricSpecification:
           MetricName: ApproximateNumberOfMessagesVisible
           Namespace: AWS/SQS
@@ -143,12 +143,26 @@ Resources:
           Statistic: Average
           Unit: Count
 
+  ArchiveProcessingCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ${self:service}-${sls:stage}-archive-processing-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      Tags:
+        - Key: Name
+          Value: ${self:service}-${sls:stage}-archive-processing-cluster
+
   # Similar configuration for Archive Processor
   ArchiveProcessorService:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: ${self:service}-${sls:stage}-archive-processor
-      Cluster: !Ref ProcessingCluster
+      Cluster: !Ref ArchiveProcessingCluster
       TaskDefinition: !Ref ArchiveProcessorTaskDefinition
       DesiredCount: 0
       LaunchType: FARGATE
@@ -174,7 +188,7 @@ Resources:
       MinCapacity: 0
       ResourceId: !Sub 
         - service/${ClusterName}/${ServiceName}
-        - ClusterName: ${self:service}-${sls:stage}-processing-cluster
+        - ClusterName: ${self:service}-${sls:stage}-archive-processing-cluster
           ServiceName: ${self:service}-${sls:stage}-archive-processor
       RoleARN: !GetAtt AutoScalingRole.Arn
       ScalableDimension: ecs:service:DesiredCount

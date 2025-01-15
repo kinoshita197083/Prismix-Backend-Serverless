@@ -3,13 +3,13 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Copy package files
-COPY src/containers/upload-processor/package*.json ./
+COPY src/containers/s3-upload-processor/package*.json ./
 
 # Install dependencies with specific flags for production
 RUN npm install --production --no-optional
 
 # Copy application code
-COPY src/containers/upload-processor/index.js .
+COPY src/containers/s3-upload-processor/index.js .
 COPY src/handlers/imageUploadFromS3Processor.js ./src/handlers/
 COPY src/utils ./src/utils
 COPY src/services ./src/services
