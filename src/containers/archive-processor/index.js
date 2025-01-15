@@ -70,7 +70,7 @@ app.on('started', () => {
             AWS_REGION: process.env.AWS_REGION,
             TASKS_TABLE: process.env.TASKS_TABLE,
             JOB_PROGRESS_TABLE: process.env.JOB_PROGRESS_TABLE,
-            SOURCE_BUCKET: process.env.SOURCE_BUCKET,
+            IMAGE_BUCKET: process.env.IMAGE_BUCKET,
             CONCURRENT_S3_OPERATIONS: process.env.CONCURRENT_S3_OPERATIONS,
             CONCURRENT_CHUNK_PROCESSING: process.env.CONCURRENT_CHUNK_PROCESSING,
             ARCHIVER_HIGH_WATER_MARK: process.env.ARCHIVER_HIGH_WATER_MARK
