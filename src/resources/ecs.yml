@@ -96,6 +96,11 @@ Resources:
       TaskDefinition: !Ref S3UploadProcessorTaskDefinition
       DesiredCount: 0
       LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 0  # Allow faster scaling
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
@@ -104,9 +109,6 @@ Resources:
           Subnets: 
             - !Ref PublicSubnet1
             - !Ref PublicSubnet2
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 100
       EnableExecuteCommand: true
 
   # Auto-scaling for s3 upload processor
@@ -134,14 +136,12 @@ Resources:
         TargetValue: 1  # Messages per task
         ScaleInCooldown: 300
         ScaleOutCooldown: 0
-        CustomizedMetricSpecification:
-          MetricName: ApproximateNumberOfMessagesVisible
-          Namespace: AWS/SQS
-          Dimensions:
-            - Name: QueueName
-              Value: !GetAtt ImageUploadFromS3Queue.QueueName
-          Statistic: Average
-          Unit: Count
+        PredefinedMetricSpecification:
+          PredefinedMetricType: SQSQueueMessagesVisiblePerTask
+          ResourceLabel: !Join 
+            - '/'
+            - - !GetAtt ImageUploadFromS3Queue.QueueName
+              - !Ref 'AWS::AccountId'
 
   ArchiveProcessingCluster:
     Type: AWS::ECS::Cluster
