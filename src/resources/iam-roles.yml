@@ -837,7 +837,9 @@ Resources:
                 Action:
                   - sqs:GetQueueAttributes
                   - sqs:GetQueueUrl
-                Resource: !GetAtt ImageUploadFromS3Queue.Arn
+                Resource: 
+                  - !GetAtt ImageUploadFromS3Queue.Arn
+                  - !GetAtt ZipDeliveryQueue.Arn
               - Effect: Allow
                 Action:
                   - ecs:UpdateService

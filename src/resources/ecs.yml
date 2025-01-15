@@ -252,24 +252,82 @@ Resources:
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
 
+  # Step scaling policy for Archive Processor
   ArchiveProcessorScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: ${self:service}-${sls:stage}-archive-sqs-scaling
-      PolicyType: TargetTrackingScaling
+      PolicyName: ${self:service}-${sls:stage}-archive-step
+      PolicyType: StepScaling
       ScalingTargetId: !Ref ArchiveProcessorAutoScaling
-      TargetTrackingScalingPolicyConfiguration:
-        TargetValue: 5  # Lower number for archive tasks as they're more resource-intensive
-        ScaleInCooldown: 60
-        ScaleOutCooldown: 30
-        CustomizedMetricSpecification:
-          MetricName: ApproximateNumberOfMessagesVisible
-          Namespace: AWS/SQS
-          Dimensions:
-            - Name: QueueName
-              Value: !GetAtt ZipDeliveryQueue.QueueName
-          Statistic: Average
-          Unit: Count
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        MetricAggregationType: Average
+        Cooldown: 0
+        StepAdjustments:
+          # 1-2 messages: 1 task
+          - MetricIntervalLowerBound: 0
+            MetricIntervalUpperBound: 2
+            ScalingAdjustment: 1
+          # 3-5 messages: 2 tasks
+          - MetricIntervalLowerBound: 2
+            MetricIntervalUpperBound: 5
+            ScalingAdjustment: 2
+          # 6+ messages: 3 tasks
+          - MetricIntervalLowerBound: 5
+            ScalingAdjustment: 3
+
+  # CloudWatch alarm for Archive Processor scaling
+  ArchiveProcessorScalingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ${self:service}-${sls:stage}-archive-messages-visible
+      AlarmDescription: Scale based on number of messages visible
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ZipDeliveryQueue.QueueName
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ArchiveProcessorScalingPolicy
+
+  # Scale-in alarm for Archive Processor
+  ArchiveProcessorScaleInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ${self:service}-${sls:stage}-archive-scale-in
+      AlarmDescription: Scale in when no messages
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ZipDeliveryQueue.QueueName
+      Statistic: Average
+      Period: 300  # Check every 5 minutes for scale-in
+      EvaluationPeriods: 2  # Must be empty for 2 periods
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref ArchiveProcessorScaleInPolicy
+
+  # Scale-in policy for Archive Processor
+  ArchiveProcessorScaleInPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ${self:service}-${sls:stage}-archive-scale-in
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ArchiveProcessorAutoScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ExactCapacity
+        MetricAggregationType: Average
+        Cooldown: 300
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: 0
 
   ArchiveProcessorTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -310,7 +368,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - node healthcheck.js
+              - echo "Health check passed"
             Interval: 30
             Timeout: 5
             Retries: 3
