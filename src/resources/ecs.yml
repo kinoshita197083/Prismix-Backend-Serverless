@@ -112,7 +112,6 @@ Resources:
   # Auto-scaling for s3 upload processor
   S3UploadProcessorAutoScaling:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    DependsOn: S3UploadProcessorService
     Properties:
       MaxCapacity: 10  # Maximum number of tasks
       MinCapacity: 0   # Scale to zero when no messages
@@ -208,7 +207,6 @@ Resources:
       ClusterName: ${self:service}-${sls:stage}-archive-processing-cluster
       CapacityProviders:
         - FARGATE
-        - FARGATE_SPOT
       DefaultCapacityProviderStrategy:
         - CapacityProvider: FARGATE
           Weight: 1
@@ -216,10 +214,9 @@ Resources:
         - Key: Name
           Value: ${self:service}-${sls:stage}-archive-processing-cluster
 
-  # Similar configuration for Archive Processor
-  ArchiveProcessorService:
+  ArchiveProcessorECSService:
     Type: AWS::ECS::Service
-    DependsOn: 
+    DependsOn:
       - ArchiveProcessingCluster
       - ArchiveProcessorTaskDefinition
     Properties:
@@ -244,7 +241,6 @@ Resources:
   # Auto-scaling for Archive Processor
   ArchiveProcessorAutoScaling:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    DependsOn: ArchiveProcessorService
     Properties:
       MaxCapacity: 10
       MinCapacity: 0
