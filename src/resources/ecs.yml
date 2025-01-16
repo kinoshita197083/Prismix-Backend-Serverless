@@ -32,7 +32,7 @@ Resources:
             - Name: NODE_ENV
               Value: ${sls:stage}
             - Name: QUEUE_URL
-              Value: !Ref ImageUploadFromS3Queue
+              Value: !Ref ImageUploadFromS3ProcessByECSQueue
             - Name: AWS_REGION
               Value: ${aws:region}
             - Name: TASKS_TABLE
@@ -157,7 +157,7 @@ Resources:
       Namespace: AWS/SQS
       Dimensions:
         - Name: QueueName
-          Value: !GetAtt ImageUploadFromS3Queue.QueueName
+          Value: !GetAtt ImageUploadFromS3ProcessByECSQueue.QueueName
       Statistic: Average
       Period: 60
       EvaluationPeriods: 1
@@ -176,7 +176,7 @@ Resources:
       Namespace: AWS/SQS
       Dimensions:
         - Name: QueueName
-          Value: !GetAtt ImageUploadFromS3Queue.QueueName
+          Value: !GetAtt ImageUploadFromS3ProcessByECSQueue.QueueName
       Statistic: Average
       Period: 300  # Check every 5 minutes for scale-in
       EvaluationPeriods: 2  # Must be empty for 2 periods

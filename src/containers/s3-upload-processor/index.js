@@ -1,5 +1,5 @@
 const { Consumer } = require('sqs-consumer');
-const { uploadProcessor } = require('./src/handlers/imageUploadFromS3Processor');
+const { handler: uploadProcessor } = require('./src/handlers/imageUploadFromS3Processor');
 const logger = require('./src/utils/logger');
 // const http = require('http');
 

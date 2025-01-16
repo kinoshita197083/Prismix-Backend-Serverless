@@ -454,6 +454,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
                 Resource:
                   Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
               - Effect: Allow
@@ -691,7 +692,7 @@ Resources:
                   - sqs:GetQueueAttributes
                   - sqs:ChangeMessageVisibility
                 Resource:
-                  - Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
+                  - Fn::GetAtt: [ImageUploadFromS3ProcessByECSQueue, Arn]
         - PolicyName: s3-access-policy
           PolicyDocument:
             Version: '2012-10-17'
@@ -742,7 +743,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt ImageUploadFromS3Queue.Arn
+                Resource: !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -839,7 +840,7 @@ Resources:
                   - sqs:GetQueueAttributes
                   - sqs:GetQueueUrl
                 Resource: 
-                  - !GetAtt ImageUploadFromS3Queue.Arn
+                  - !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
                   - !GetAtt ZipDeliveryQueue.Arn
               - Effect: Allow
                 Action:
