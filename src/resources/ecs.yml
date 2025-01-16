@@ -348,6 +348,10 @@ Resources:
           Environment:
             - Name: NODE_ENV
               Value: ${sls:stage}
+            - Name: SUPABASE_URL
+              Value: ${env:SUPABASE_URL}
+            - Name: SUPABASE_API_KEY
+              Value: ${env:SUPABASE_API_KEY}
             - Name: ARCHIVE_QUEUE_URL
               Value: !Ref ZipDeliveryQueue
             - Name: AWS_REGION

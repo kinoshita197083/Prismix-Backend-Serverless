@@ -7,17 +7,29 @@ const app = Consumer.create({
     queueUrl: process.env.ARCHIVE_QUEUE_URL,
     handleMessage: async (message) => {
         try {
+            logger.info('Starting message processing', {
+                messageId: message.MessageId,
+                queueUrl: process.env.ARCHIVE_QUEUE_URL,
+                timestamp: new Date().toISOString()
+            }, message);
+
             // Transform the message into Lambda-style event
             const event = {
-                Records: [
-                    {
-                        ...message,
-                    }
-                ]
+                Records: [{
+                    messageId: message.MessageId,
+                    body: message.Body,
+                    attributes: message.Attributes,
+                    messageAttributes: message.MessageAttributes,
+                    md5OfBody: message.MD5OfBody,
+                    eventSource: 'aws:sqs',
+                    eventSourceARN: process.env.ARCHIVE_QUEUE_URL,
+                    awsRegion: process.env.AWS_REGION
+                }]
             };
 
             logger.info('Processing archive message', {
                 messageId: message.MessageId,
+                jobId: event.Records[0].body.jobId,
                 body: event.Records[0].body,
                 timestamp: new Date().toISOString()
             });
@@ -31,11 +43,12 @@ const app = Consumer.create({
         } catch (error) {
             logger.error('Error processing archive message', {
                 messageId: message.MessageId,
+                jobId: message.Records?.[0]?.body?.jobId ?? message.Records[0]?.body?.Message?.jobId,
                 error: error.message,
                 stack: error.stack,
                 timestamp: new Date().toISOString()
             });
-            throw error; // Rethrow to trigger message retry
+            throw error;
         }
     },
     batchSize: 1, // Process one archive job at a time
