@@ -11,7 +11,7 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
-                "description": "Keep last 5 images",
+                "description": "Keep only 5 most recent images",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPrefixList": ["dev", "staging", "prod"],
@@ -37,7 +37,7 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
-                "description": "Keep last 5 images",
+                "description": "Keep only 5 most recent images",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPrefixList": ["dev", "staging", "prod"],
