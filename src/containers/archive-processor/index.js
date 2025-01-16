@@ -1,6 +1,6 @@
 const { Consumer } = require('sqs-consumer');
-const { zipArchiveProcessor } = require('../../handlers/zipArchiveProcessor');
-const logger = require('../../utils/logger');
+const { zipArchiveProcessor } = require('./src/handlers/zipArchiveProcessor');
+const logger = require('./src/utils/logger');
 
 // Create SQS consumer
 const app = Consumer.create({
