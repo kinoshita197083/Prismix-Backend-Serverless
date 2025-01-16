@@ -22,7 +22,7 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: dev-prod # environment name of the repo
+    environment: dev-prod
 
     steps:
     # Checkout the code
@@ -38,9 +38,61 @@ jobs:
         node-version: '20.x'
     - run: npm ci
 
-    # Install the dependencies
-    - name: Install dependencies
-      run: npm install
+    # Configure AWS Credentials first
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    # Create ECR repositories if they don't exist
+    - name: Create ECR repositories
+      env:
+        SERVICE_NAME: prismix-serverless
+      run: |
+        # Function to create repository if it doesn't exist
+        create_repo() {
+          local repo_name=$1
+          if ! aws ecr describe-repositories --repository-names $repo_name 2>/dev/null; then
+            echo "Creating repository $repo_name"
+            aws ecr create-repository \
+              --repository-name $repo_name \
+              --image-scanning-configuration scanOnPush=true \
+              --image-tag-mutability MUTABLE
+          else
+            echo "Repository $repo_name already exists"
+          fi
+        }
+        
+        # Create repositories
+        create_repo "$SERVICE_NAME-upload-processor"
+        create_repo "$SERVICE_NAME-archive-processor"
+
+    # Then login to ECR
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    # Build and push Docker images
+    - name: Build and push ECS images
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        AWS_REGION: us-east-1
+        SERVICE_NAME: prismix-serverless
+      run: |
+        # Set stage based on branch
+        STAGE=${GITHUB_REF##*/}
+        
+        # Build and push upload processor
+        docker build -t $ECR_REGISTRY/$SERVICE_NAME-upload-processor:$STAGE \
+          -f src/containers/upload-processor/Dockerfile .
+        docker push $ECR_REGISTRY/$SERVICE_NAME-upload-processor:$STAGE
+        
+        # Build and push archive processor
+        docker build -t $ECR_REGISTRY/$SERVICE_NAME-archive-processor:$STAGE \
+          -f src/containers/archive-processor/Dockerfile .
+        docker push $ECR_REGISTRY/$SERVICE_NAME-archive-processor:$STAGE
 
     # Set DATABASE_URL based on branch update
     - name: Set DATABASE_URL based on branch
@@ -48,35 +100,38 @@ jobs:
         if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_DEV }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_DEV }}" >> $GITHUB_ENV
-        elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_DEV }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_DEV }}" >> $GITHUB_ENV
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_DEV }}" >> $GITHUB_ENV
+          echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_DEV }}" >> $GITHUB_ENV
+          echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_DEV}}" >> $GITHUB_ENV
+          echo "JOB_PROGRESS_QUEUE_URL=${{ secrets.JOB_PROGRESS_QUEUE_URL_DEV }}" >> $GITHUB_ENV
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_DEV }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+        elif [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
           echo "DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}" >> $GITHUB_ENV
           echo "DIRECT_URL=${{ secrets.DIRECT_URL_PROD }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}" >> $GITHUB_ENV
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}" >> $GITHUB_ENV
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL_PROD }}" >> $GITHUB_ENV
+          echo "SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY_PROD }}" >> $GITHUB_ENV
+          echo "SENDER_EMAIL_ADDRESS=${{secrets.SENDER_EMAIL_ADDRESS_PROD}}" >> $GITHUB_ENV
+          echo "JOB_PROGRESS_QUEUE_URL=${{ secrets.JOB_PROGRESS_QUEUE_URL_PROD }}" >> $GITHUB_ENV
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_PROD }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "CUSTOM_AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
         else
           echo "Unsupported branch for deployment"
           exit 1
         fi
 
-    # Generate Prisma Client
-    - name: Generate Prisma Client
-      run: npx prisma generate
-
-    # Run migrations
-    - name: Run migrations
-      run: npx prisma migrate
-
     # Install Serverless
     - name: Install Serverless Framework
-      run: npm install -g serverless
-      
-    # Deploy to Serverless
-    # - name: Serverless Deploy
-    #   run: serverless deploy --stage ${GITHUB_REF##*/}
-    #   env:
-    #     SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
-    #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: npm install -g serverless@latest
 
     # Deploy to Serverless with logging to Github Actions
+    # TODO: Add a step to check if the deployment is successful
     - name: Serverless Deploy
       run: |
         serverless deploy --stage ${GITHUB_REF##*/} --verbose

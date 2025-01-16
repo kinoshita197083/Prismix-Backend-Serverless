@@ -1,0 +1,231 @@
+# Initial Check Function - file corruptions check, queue image for processing
+enqueueImage:
+  handler: src/handlers/enqueueImage.handler
+  events:
+    - s3:
+        bucket: ${self:custom.bucketName}
+        event: s3:ObjectCreated:*
+        existing: true
+  environment:
+    BUCKET_NAME: ${self:custom.bucketName}
+    SNS_TOPIC_ARN: 
+      Ref: ImageProcessingTopic
+  role: EnqueueImageFunctionRole
+
+# Worker Function - main processing functions
+worker:
+  handler: src/handlers/worker.handler
+  memorySize: 2048
+  timeout: 60 #1 minutes (1 * 60 = 60 seconds)
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [EligibleImageQueue, Arn]
+        batchSize: 10
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    IMAGE_HASH_TABLE: ${self:provider.environment.IMAGE_HASH_TABLE}
+    DEAD_LETTER_QUEUE_URL:
+      Ref: ImageDeadLetterQueue
+    BLUR_DETECTION_FUNCTION_NAME: ${self:service}-${sls:stage}-blurDetection
+  role: WorkerFunctionRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:testSharp:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:pluralize-layer:1
+
+# Dead Letter Queue Processor
+deadLetterQueueProcessor:
+  handler: src/handlers/deadLetterQueueProcessor.handler
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+  environment:
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    DEAD_LETTER_QUEUE_URL:
+      Ref: ImageDeadLetterQueue
+    ORIGINAL_QUEUE_URL:
+      Ref: EligibleImageQueue
+  role: DeadLetterQueueProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+jobProgressChecker:
+  name: ${self:service}-${sls:stage}-jobProgressChecker
+  handler: src/handlers/jobProgressChecker.handler
+  memorySize: 2048
+  timeout: 900
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [JobProgressQueue, Arn]
+        batchSize: 10
+        functionResponseType: ReportBatchItemFailures
+        maximumBatchingWindow: 1
+  environment:
+    AWS_ACCOUNT_ID: ${aws:accountId}
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_CHECKER_LAMBDA_ARN: arn:aws:lambda:${aws:region}:${aws:accountId}:function:${self:functions.jobProgressChecker.name}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+    JOB_COMPLETION_TOPIC_ARN: 
+      Ref: JobCompletionTopic
+    JOB_PROGRESS_DLQ_URL:
+      Ref: JobProgressDLQ
+  role: JobProgressCheckerRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+deliveryProcessor:
+  name: ${self:provider.environment.DELIVERY_LAMBDA_PROCESSOR_NAME}
+  handler: src/handlers/deliveryProcessor.handler
+  memorySize: 2048
+  timeout: 900 #15 minutes (15 * 60 = 900 seconds)
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [DeliveryQueue, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:provider.environment.DELIVERY_LAMBDA_PROCESSOR_NAME}
+    IMAGE_BUCKET: ${self:custom.bucketName}
+    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
+    GOOGLE_CLIENT_SECRET: ${env:GOOGLE_CLIENT_SECRET}
+    DELIVERY_QUEUE_URL:
+      Ref: DeliveryQueue
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+    BUCKET_NAME: ${self:custom.bucketName}
+  role: DeliveryProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:jszip-layer:2
+    - arn:aws:lambda:us-east-1:980352750282:layer:google-api-layer:1
+
+notificationProcessor:
+  handler: src/handlers/notificationProcessor.handler
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [NotificationQueue, Arn]
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    FRONTEND_URL: ${env:FRONTEND_URL}
+    NOTIFICATION_QUEUE_URL:
+      Ref: NotificationQueue
+    SENDER_EMAIL_ADDRESS: ${env:SENDER_EMAIL_ADDRESS}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+  role: NotificationProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+# From External Google Drive
+imageUploadProcessor:
+  handler: src/handlers/imageUploader.handler
+  memorySize: 2048
+  timeout: 900 # 15 minutes
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [ImageUploadQueue, Arn]
+        batchSize: 10
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    IMAGE_BUCKET: ${self:custom.bucketName}
+    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
+    GOOGLE_CLIENT_SECRET: ${env:GOOGLE_CLIENT_SECRET}
+  role: ImageUploaderFunctionRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:google-api-layer:1
+
+# From External S3
+imageUploadFromS3Processor:
+  handler: src/handlers/imageUploadFromS3Processor.handler
+  memorySize: 2048
+  timeout: 900 # 15 minutes
+  # events:  # Commented out to disable SQS trigger
+  #   - sqs:
+  #       arn:
+  #         Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
+  #       batchSize: 1
+  #       functionResponseType: ReportBatchItemFailures
+  environment:
+    IMAGE_BUCKET: ${self:custom.bucketName}
+  role: ImageUploadFromS3ProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+jobProgressDLQProcessor:
+  handler: src/handlers/jobProgressDLQProcessor.handler
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [JobProgressDLQ, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+    JOB_COMPLETION_TOPIC_ARN: 
+      Ref: JobCompletionTopic
+    JOB_PROGRESS_QUEUE_URL:
+      Ref: JobProgressQueue
+    JOB_PROGRESS_DLQ_URL:
+      Ref: JobProgressDLQ
+  role: JobProgressDLQProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+zipArchiveProcessor:
+  handler: src/handlers/zipArchiveProcessor.handler
+  memorySize: 3008  # Increased from 2048
+  timeout: 900      # 15 minutes
+  # events:
+  #   - sqs:
+  #       arn:
+  #         Fn::GetAtt: [ZipDeliveryQueue, Arn]
+  #       batchSize: 1
+  #       functionResponseType: ReportBatchItemFailures
+  environment:
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    SOURCE_BUCKET: ${self:custom.bucketName}
+    DELIVERY_BUCKET: ${self:service}-${self:provider.stage}-delivery-bucket
+    ZIP_ARCHIVE_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-zip-archive-progress
+    ZIP_DELIVERY_QUEUE_URL: !Ref ZipDeliveryQueue
+  role: !GetAtt ZipArchiveProcessorRole.Arn
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:archiver-layer:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+    - arn:aws:lambda:us-east-1:980352750282:layer:p-limit-layer:1
+
+s3DeliveryProcessor:
+  handler: src/handlers/s3DeliveryProcessor.handler
+  timeout: 900
+  memorySize: 3008
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [S3DeliveryQueue, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
+  environment:
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
+    SOURCE_BUCKET: ${self:custom.bucketName}
+    BUCKET_NAME: ${self:custom.bucketName}
+  role: S3DeliveryProcessorRole
+  layers:
+    - arn:aws:lambda:us-east-1:980352750282:layer:supabaseLayer2:1
+
+blurDetection:
+  name: ${self:service}-${sls:stage}-blurDetection
+  image:
+    uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/prismix-blur-detection:${sls:stage}
+    command: ["index.handler"]
+  memorySize: 3008
+  timeout: 60
+  architecture: x86_64
+  environment:
+    NODE_ENV: ${sls:stage}

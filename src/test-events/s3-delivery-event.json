@@ -1,0 +1,23 @@
+{
+    "Records": [
+        {
+            "messageId": "4f68e13d-0d74-4dab-93b6-0cb86d6e8582",
+            "receiptHandle": "AQEBT43BUnIvn6NuTz6lZz8TPhbbUA2DzGHqr1Aek1AsHoQivaMIE/P9jOuULofkVT4RU0TcJKOoKlgPVekSrvj+yUCk+LtNYTwuAJuTLo9hYP+L+CIrEQZpnlmNOO5H1vglhlYEEhMB4zZj6jYfb282sjzfXGYDf/e9/jek+s4dlNKo78WEmyASg4S5pQRT9cHNmIPFotUEG5BAZ6H5TZZLGEX58omX9x2l8PKFgV/z/+hAfJlSbA5kJf37Xl7fgQbL7dh3Ciwr1hEvOeVb4B+5klMbKyppDtXcyWoEG9f7drE31IsirjpAjMHj1QRMO/me",
+            "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"0f782a90-524c-544d-b6a3-752c9d98cf6f\",\n  \"SequenceNumber\" : \"10000000000000228000\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo\",\n  \"Message\" : \"{\\\"jobId\\\":\\\"4e2c4893-ea21-4462-a54a-7da829d2ad40\\\",\\\"jobStatus\\\":\\\"FAILED\\\",\\\"additionalData\\\":{\\\"userId\\\":\\\"f900f7ef-f026-4767-b780-71899bbecca7\\\",\\\"userTriggered\\\":true,\\\"updatedAt\\\":\\\"1732431246469\\\",\\\"outputConnection\\\":\\\"s3\\\"}}\",\n  \"Timestamp\" : \"2024-11-24T06:54:12.283Z\",\n  \"UnsubscribeURL\" : \"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic.fifo:d8873a64-3831-4deb-8641-542eee8a9328\"\n}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1732431252375",
+                "SequenceNumber": "18890246474317551616",
+                "MessageGroupId": "4e2c4893-ea21-4462-a54a-7da829d2ad40-FAILED",
+                "SenderId": "AIDAYRRVD2ENU4DSO2WBX",
+                "MessageDeduplicationId": "4e2c4893-ea21-4462-a54a-7da829d2ad40-FAILED-1732431246",
+                "ApproximateFirstReceiveTimestamp": "1732431252375"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "9a4156b633a63a18f9d1894bf1967a83",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-s3-delivery-queue.fifo",
+            "awsRegion": "us-east-1"
+        }
+    ]
+}

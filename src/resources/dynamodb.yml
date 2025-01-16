@@ -1,0 +1,111 @@
+Resources:
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-Tasks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: JobID
+          AttributeType: S
+        - AttributeName: TaskID
+          AttributeType: S
+        - AttributeName: TaskStatus
+          AttributeType: S
+        - AttributeName: CreatedAt
+          AttributeType: S
+        - AttributeName: evaluation
+          AttributeType: N
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime  # TTL attribute name
+        Enabled: true
+      KeySchema:
+        - AttributeName: JobID
+          KeyType: HASH
+        - AttributeName: TaskID
+          KeyType: RANGE
+      LocalSecondaryIndexes:
+        - IndexName: EvaluationIndex
+          KeySchema:
+            - AttributeName: JobID
+              KeyType: HASH
+            - AttributeName: evaluation
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      GlobalSecondaryIndexes:
+        - IndexName: TaskStatusIndex
+          KeySchema:
+            - AttributeName: TaskStatus
+              KeyType: HASH
+            - AttributeName: CreatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      # StreamSpecification:
+      #   StreamViewType: NEW_IMAGE
+
+  ImageHashesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-ImageHashes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: HashValue
+          AttributeType: S
+        - AttributeName: JobId
+          AttributeType: S
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime  # TTL attribute name
+        Enabled: true
+      KeySchema:
+        - AttributeName: HashValue
+          KeyType: HASH
+        - AttributeName: JobId
+          KeyType: RANGE
+
+  JobProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-JobProgress
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: JobId
+          AttributeType: S
+      TimeToLiveSpecification:
+        AttributeName: expiresAt  # TTL attribute name
+        Enabled: true
+      KeySchema:
+        - AttributeName: JobId
+          KeyType: HASH
+      # StreamSpecification:
+      #   StreamViewType: NEW_IMAGE
+
+  ZipArchiveProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-${self:provider.stage}-zip-archive-progress
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: JobId
+          AttributeType: S
+        - AttributeName: ChunkId
+          AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: JobId
+          KeyType: HASH
+        - AttributeName: ChunkId
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime
+        Enabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: JobIdStatusIndex
+          KeySchema:
+            - AttributeName: JobId
+              KeyType: HASH
+            - AttributeName: Status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL

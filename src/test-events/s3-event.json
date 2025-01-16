@@ -1,0 +1,38 @@
+{
+    "Records": [
+        {
+            "eventVersion": "2.1",
+            "eventSource": "aws:s3",
+            "awsRegion": "us-east-1",
+            "eventTime": "2023-05-01T12:00:00.000Z",
+            "eventName": "ObjectCreated:Put",
+            "userIdentity": {
+                "principalId": "EXAMPLE"
+            },
+            "requestParameters": {
+                "sourceIPAddress": "127.0.0.1"
+            },
+            "responseElements": {
+                "x-amz-request-id": "EXAMPLE123456789",
+                "x-amz-id-2": "EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH"
+            },
+            "s3": {
+                "s3SchemaVersion": "1.0",
+                "configurationId": "testConfigRule",
+                "bucket": {
+                    "name": "prismix-serverless-dev-bucket",
+                    "ownerIdentity": {
+                        "principalId": "EXAMPLE"
+                    },
+                    "arn": "arn:aws:s3:::prismix-serverless-dev-bucket"
+                },
+                "object": {
+                    "key": "uploads/d552debc-42ba-4610-8146-cd9e75040e32/b0869cea-1426-462b-9353-78a13dadf63c/12532c04-64d9-4275-bac7-e232c5ebd759/0ad7167f-8d36-4b6e-b679-0428ca1beb12/1728437051300-0",
+                    "size": 1024,
+                    "eTag": "0123456789abcdef0123456789abcdef",
+                    "sequencer": "0A1B2C3D4E5F678901"
+                }
+            }
+        }
+    ]
+}

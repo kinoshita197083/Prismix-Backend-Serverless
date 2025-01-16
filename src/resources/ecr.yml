@@ -1,0 +1,52 @@
+Resources:
+  UploadProcessorRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: ${self:custom.ecr.uploadProcessor}
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 5 images",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["dev", "staging", "prod"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+  ArchiveProcessorRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: ${self:custom.ecr.archiveProcessor}
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 5 images",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["dev", "staging", "prod"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }

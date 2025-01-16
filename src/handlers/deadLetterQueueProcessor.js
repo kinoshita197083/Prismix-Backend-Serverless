@@ -1,83 +1,88 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const { SQSClient, DeleteMessageCommand, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const logger = require('../utils/logger');
 
+const sqs = new SQSClient();
 const ddbClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(ddbClient);
-const sqsClient = new SQSClient();
+
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF = 1000; // 1 second
 
 exports.handler = async (event) => {
-    console.log('Received event from DLQ:', JSON.stringify(event, null, 2));
+    logger.info('Processing Dead Letter Queue messages', { messageCount: event.Records.length });
 
     for (const record of event.Records) {
+        const originalMessage = JSON.parse(record.body);
+        const { jobId, taskId } = originalMessage;
+
         try {
-            const messageBody = JSON.parse(record.body);
-            console.log('Processing DLQ message:', messageBody);
+            logger.info('Processing failed message', { jobId, taskId });
 
-            // Attempt to resolve the issue
-            await attemptToResolveIssue(messageBody);
+            const retryCount = parseInt(record.attributes.ApproximateReceiveCount, 10);
 
-            // Update DynamoDB to mark the job as retried
-            // await updateJobStatus(messageBody.jobId, 'RETRIED_FROM_DLQ');
+            if (retryCount > MAX_RETRIES) {
+                await handleMaxRetriesExceeded(jobId, taskId, originalMessage);
+            } else {
+                await retryProcessing(jobId, taskId, originalMessage, retryCount);
+            }
 
-            // Optionally, send the message back to the original queue for reprocessing
-            // await sendToOriginalQueue(messageBody);
+            // Delete the message from the DLQ after processing
+            await deleteMessageFromDLQ(record.receiptHandle);
 
-            console.log(`Successfully processed DLQ message for job ${messageBody.jobId}`);
         } catch (error) {
-            console.error('Error processing DLQ message:', error);
-            // Update DynamoDB to mark the job as failed
-            // await updateJobStatus(messageBody.jobId, 'FAILED');
-            // In a DLQ processor, we typically don't throw errors to avoid infinite loops
+            logger.error('Error processing DLQ message', { error, jobId, taskId });
         }
     }
 };
 
-async function attemptToResolveIssue(messageBody) {
-    // Implement your logic to attempt resolving the issue
-    // This could involve retrying the operation, applying fixes, etc.
-    console.log('Attempting to resolve issue for job:', messageBody.jobId);
-    // Simulating some resolution attempt
-    await new Promise(resolve => setTimeout(resolve, 1000));
+async function retryProcessing(jobId, taskId, originalMessage, retryCount) {
+    const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount - 1);
+    logger.info('Retrying message processing', { jobId, taskId, retryCount, backoffTime });
+
+    await new Promise(resolve => setTimeout(resolve, backoffTime));
+
+    const sendMessageCommand = new SendMessageCommand({
+        QueueUrl: process.env.ORIGINAL_QUEUE_URL,
+        MessageBody: JSON.stringify(originalMessage),
+        DelaySeconds: 0
+    });
+
+    await sqs.send(sendMessageCommand);
+    logger.info('Message sent back to original queue for retry', { jobId, taskId, retryCount });
+
+    await updateTaskStatus(jobId, taskId, 'RETRYING', retryCount);
 }
 
-async function updateJobStatus(jobId, status) {
-    const params = {
-        TableName: process.env.DYNAMODB_TABLE,
-        Key: {
-            PK: `JOB#${jobId}`,
-            SK: `METADATA#${jobId}`
-        },
-        UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
-        ExpressionAttributeNames: {
-            '#status': 'status'
-        },
+async function handleMaxRetriesExceeded(jobId, taskId, originalMessage) {
+    logger.warn('Max retries exceeded for message', { jobId, taskId });
+    await updateTaskStatus(jobId, taskId, 'FAILED', MAX_RETRIES);
+    // Implement notification logic here (e.g., SNS, email)
+}
+
+async function updateTaskStatus(jobId, taskId, status, retryCount) {
+    const updateCommand = new UpdateCommand({
+        TableName: process.env.TASKS_TABLE,
+        Key: { JobID: jobId, TaskID: taskId },
+        UpdateExpression: 'SET TaskStatus = :status, RetryCount = :retryCount, UpdatedAt = :updatedAt',
         ExpressionAttributeValues: {
             ':status': status,
-            ':updatedAt': new Date().toISOString()
+            ':retryCount': retryCount,
+            ':updatedAt': Date.now().toString()
         }
-    };
+    });
 
-    try {
-        await docClient.send(new UpdateCommand(params));
-    } catch (error) {
-        console.error('Error updating DynamoDB:', error);
-        throw error;
-    }
+    await docClient.send(updateCommand);
+    logger.info('Task status updated', { jobId, taskId, status, retryCount });
 }
 
-async function sendToOriginalQueue(messageBody) {
-    const params = {
-        QueueUrl: process.env.ORIGINAL_QUEUE_URL, // Make sure to set this in your Lambda environment variables
-        MessageBody: JSON.stringify(messageBody),
-        DelaySeconds: 60 // Add a delay before reprocessing
-    };
+async function deleteMessageFromDLQ(receiptHandle) {
+    const deleteCommand = new DeleteMessageCommand({
+        QueueUrl: process.env.DEAD_LETTER_QUEUE_URL,
+        ReceiptHandle: receiptHandle
+    });
 
-    try {
-        await sqsClient.send(new SendMessageCommand(params));
-        console.log(`Message for job ${messageBody.jobId} sent back to original queue for reprocessing`);
-    } catch (error) {
-        console.error('Error sending message to original queue:', error);
-        throw error;
-    }
+    await sqs.send(deleteCommand);
+    logger.info('Message deleted from DLQ', { receiptHandle });
 }

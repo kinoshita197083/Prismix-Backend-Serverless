@@ -1,0 +1,15 @@
+{
+    "Records": [
+        {
+            "messageId": "935c448e-1cf7-4820-aa35-d75fd8a0dd5e",
+            "receiptHandle": "AQEB5Ms/7AvGkX84rqGtUFCxImdVb7VGEGGP9admbzzuA0Ic3Cf+y6MSxz92t/gx88rFBxO3HRulHdeu87y8aF4rPjXnkyenpyPE0nd6zgrdIjLGDN0ARd4mXnUSXB7gIN9RM7+mxAk45lZy9MPkEoyMAMS2jry+bSwNWnINRGbwTNGrWlEinbCoSPad7SaxUu+vrLIjSYDMFa0KQtxmZ3YPUlp9K+pahyoqn1eHj/Zn7tcYofL7dO7hOAZjWhWeNyDJLzvT3D2HW8yMvIbpsJPv5f6psPGiSn7T2etniRzPsUzhqMTgN58/ggTnmYNQsBMLAzFyArNA/8/m2JRMlZ/lXfR+0RQeQcEs1BA9Ygaj3TPrLUNi32sQac8pzEmlEIEFYTqGaDnu76/bl0gUuyt3JsQEfDeg8Un+G1kGWFX6yOY=",
+            "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"88778916-a5b6-534a-8559-d6bd078ecb2c\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-image-processing-topic\",\n  \"Message\" : \"{\\\"bucket\\\":\\\"prismix-serverless-dev-bucket\\\",\\\"key\\\":\\\"uploads/d552debc-42ba-4610-8146-cd9e75040e32/d724ab8d-a05b-4caf-b891-549cee658660/e8ab3d5b-f7ce-4686-a3fe-d71456ba9503/91224852-71cb-4f7a-805a-8d719bcca73b/1731305457254-0.png\\\",\\\"userId\\\":\\\"d552debc-42ba-4610-8146-cd9e75040e32\\\",\\\"projectId\\\":\\\"d724ab8d-a05b-4caf-b891-549cee658660\\\",\\\"jobId\\\":\\\"91224852-71cb-4f7a-805a-8d719bcca73b\\\",\\\"projectSettingId\\\":\\\"e8ab3d5b-f7ce-4686-a3fe-d71456ba9503\\\"}\",\n  \"Timestamp\" : \"2024-11-11T06:11:04.672Z\",\n  \"SignatureVersion\" : \"1\",\n  \"Signature\" : \"S70uyhNsRApjPYG0nRjbjvHYHCied7TyXKG7o+POH7T8t9CVP0e3vu1+xHgvZgSdoCxipCuVNNU/J86b7lqy3gL6fvqfg5zYQ3aPZ6zoMWKNy1fJDHepjZEs5R2d+kpoK71PPFZnwVIKae8w3kRY8Hqg74eLyEMp3HAFbgLQSTv6onnKxNttNx42mGL6IkYVFvlNmRglabmGhv+8ETV1/Ny1Etu0h1sliktZT7mG2phYuYskTcrzqIwQvbj/vSi2VTxII8cVdCp7LAqxtR119064plucMCtIn5Pker+uwTRXFOP+dtNrRyyu3Y90dY3D8JuioyxqrYzsiWRdkhezfA==\",\n  \"SigningCertURL\" : \"https://sns.us-east-1.amazonaws.com/SimpleNotificationService-9c6465fa7f48f5cacd23014631ec1136.pem\",\n  \"UnsubscribeURL\" : \"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-image-processing-topic:646d0c9a-decf-4fa4-9af3-9b2b10065136\"\n}",
+            "attributes": {},
+            "messageAttributes": {},
+            "md5OfBody": "76d3bf039e17511c98c9fb7cb9981198",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-queue",
+            "awsRegion": "us-east-1"
+        }
+    ]
+}

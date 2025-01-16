@@ -8,6 +8,7 @@ service: prismix-serverless
 plugins:
   - serverless-offline # for local development and testing
   - serverless-dotenv-plugin # for loading .env files
+  # - serverless-layers # for creating layers
 
 provider:
   name: aws
@@ -16,17 +17,23 @@ provider:
   region: ${opt:region, 'us-east-1'}
   memorySize: ${self:custom.memorySize.${self:provider.stage}}
   environment:
-    ENVIRONMENT: ${self:provider.stage}
-    PROJECTS_TABLE: ${self:service}-${self:provider.stage}-Projects
-    JOBS_TABLE: ${self:service}-${self:provider.stage}-Jobs
-    IMAGES_TABLE: ${self:service}-${self:provider.stage}-Images
-    PROCESSED_RESULTS_TABLE: ${self:service}-${self:provider.stage}-ProcessedResults
+    SERVICE_NAME: ${self:service}
+    STAGE: ${self:provider.stage}
+    TASKS_TABLE: ${self:service}-${self:provider.stage}-Tasks
+    JOB_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-JobProgress
+    IMAGE_HASH_TABLE: ${self:service}-${self:provider.stage}-ImageHashes
     SQS_QUEUE_URL: 
       Ref: EligibleImageQueue
     DEAD_LETTER_QUEUE_URL:
       Ref: ImageDeadLetterQueue
+    SUPABASE_URL: ${env:SUPABASE_URL}
+    SUPABASE_API_KEY: ${env:SUPABASE_API_KEY}
+    DELIVERY_LAMBDA_PROCESSOR_NAME: ${self:service}-${self:provider.stage}-deliveryProcessor
+    JOB_PROGRESS_QUEUE_URL: ${env:JOB_PROGRESS_QUEUE_URL}
+    FRONTEND_URL: ${env:FRONTEND_URL}
   iam:
     role: BaseCloudWatchRole
+  logRetentionInDays: ${self:custom.logRetention.${self:provider.stage}}
   logs:
     # restApi:
       # accessLogging: true
@@ -47,498 +54,111 @@ custom:
   memorySize:
     prod: 256
     dev: 128
+  # default retention is 30 days for prod, 7 days for dev
+  logRetention:
+    prod: 30
+    dev: 7
   bucketName: ${self:service}-${self:provider.stage}-bucket
   queueName: ${self:service}-${self:provider.stage}-queue
-  # environment: ${file(.env.${self:provider.stage})}
+  deploymentBucketName: ${self:service}-${self:provider.stage}-${self:provider.region}-deploys
   dotenv:
     path: .env.${self:provider.stage}
   deadLetterQueueName: ${self:service}-${self:provider.stage}-dlq
+  serverless-offline:
+    region: ${self:provider.region}
+  devCloudfrontTrustedKeyGroup:
+    image: fcfa2d1e-b24c-44ce-a975-bda5530a7439
+    delivery: 8fae89e6-d326-4ac5-a72c-ef9cd9bed7e3
+  prodCloudfrontTrustedKeyGroup:
+    image: fcfa2d1e-b24c-44ce-a975-bda5530a7439
+    delivery: ba12c38d-1170-4ff3-a4e8-9c8fb3cf3a41
+  # serverless-layers:
+  #   dependenciesPath: ./package.json
+  #   layersDeploymentBucket: prismix-lambda-layers
+  ecr:
+    uploadProcessor: ${self:service}-upload-processor-${sls:stage}
+    archiveProcessor: ${self:service}-archive-processor-${sls:stage}
+
+# Lambda Layers
+# layers:
+#   sharpLayer:
+#     path: layers/sharp-layer
+#     name: ${self:service}-${sls:stage}-sharp-layer
+#     description: Sharp library for image processing functions
+#     compatibleRuntimes:
+#       - nodejs20.x
+#     package:
+#       patterns:
+#         - '!**'
+#         - 'nodejs/**'
+#   supabaseLayer:
+#     path: layers/supabase-layer
+#     name: ${self:service}-${sls:stage}-supabase-layer
+#     description: Supabase client for database operations
+#     compatibleRuntimes:
+#       - nodejs20.x
+#     package:
+#       patterns:
+#         - '!**'
+#         - 'nodejs/**'
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!layers/**'
 
 functions:
-  main:
-    handler: src/handlers/example.hello
-    events:
-      - http:
-          path: /
-          method: ANY
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId: 
-              Ref: ApiGatewayAuthorizer
-          cors: true
-
-  # Initial Check Function
-  processImage:
-    handler: src/handlers/processImage.handler
-    events:
-      - s3:
-          bucket: ${self:custom.bucketName}
-          event: s3:ObjectCreated:*
-          existing: true
-    environment:
-      BUCKET_NAME: ${self:custom.bucketName}
-      SQS_QUEUE_URL: 
-        Ref: EligibleImageQueue
-    role: ProcessImageFunctionRole
-
-  # Worker Function - main processing functions
-  worker:
-    handler: src/handlers/worker.handler
-    events:
-      - sqs:
-          arn:
-            Fn::GetAtt: [EligibleImageQueue, Arn]
-    environment:
-      PROJECTS_TABLE: ${self:provider.environment.PROJECTS_TABLE}
-      JOBS_TABLE: ${self:provider.environment.JOBS_TABLE}
-      IMAGES_TABLE: ${self:provider.environment.IMAGES_TABLE}
-      PROCESSED_RESULTS_TABLE: ${self:provider.environment.PROCESSED_RESULTS_TABLE}
-    role: WorkerFunctionRole
-
-  # Dead Letter Queue Processor
-  deadLetterQueueProcessor:
-    handler: src/handlers/deadLetterQueueProcessor.handler
-    events:
-      - sqs:
-          arn:
-            Fn::GetAtt: [ImageDeadLetterQueue, Arn]
-    environment:
-      PROJECTS_TABLE: ${self:provider.environment.PROJECTS_TABLE}
-      JOBS_TABLE: ${self:provider.environment.JOBS_TABLE}
-      IMAGES_TABLE: ${self:provider.environment.IMAGES_TABLE}
-      PROCESSED_RESULTS_TABLE: ${self:provider.environment.PROCESSED_RESULTS_TABLE}
-    role: DeadLetterQueueProcessorRole
+  ${file(src/resources/functions.yml)}
 
 resources:
-  Resources:
-    # Basic IAM Role - used by Lambda functions
-    BaseCloudWatchRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - lambda.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+  - ${file(src/resources/eventbridge.yml)}
+  - ${file(src/resources/s3.yml)}
+  - ${file(src/resources/sqs.yml)}
+  - ${file(src/resources/dynamodb.yml)}
+  - ${file(src/resources/iam-roles.yml)}
+  - ${file(src/resources/secretsmanager.yml)}
+  - ${file(src/resources/ecs.yml)}
+  - ${file(src/resources/vpc.yml)}
+  - Resources:
+      LayersDeploymentBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+          BucketName: ${self:custom.deploymentBucketName}
+          VersioningConfiguration:
+            Status: Enabled
 
-    # S3 & SQS access IAM Role - used by Lambda functions
-    ProcessImageFunctionRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - lambda.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-        Policies:
-          - PolicyName: s3-sqs-access-policy
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - s3:GetObject
-                  Resource: 
-                    - Fn::Join:
-                      - ""
-                      - - "arn:aws:s3:::"
-                        - ${self:custom.bucketName}
-                        - "/*"
-                - Effect: Allow
-                  Action:
-                    - sqs:SendMessage
-                  Resource:
-                    Fn::GetAtt: [EligibleImageQueue, Arn]
-
-    # CloudWatch Write access Role - used by API Gateway
-    IamRoleApiGatewayCloudWatchLogs:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - apigateway.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-
-    # SQS & DynamoDB access Role - used by worker functions
-    WorkerFunctionRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - lambda.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-        Policies:
-          - PolicyName: dynamodb-sqs-access-policy
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - dynamodb:GetItem
-                    - dynamodb:PutItem
-                    - dynamodb:UpdateItem
-                    - dynamodb:DeleteItem
-                    - dynamodb:Query
-                  Resource: 
-                    - Fn::GetAtt: [ProjectsTable, Arn]
-                    - Fn::GetAtt: [JobsTable, Arn]
-                    - Fn::GetAtt: [ImagesTable, Arn]
-                    - Fn::GetAtt: [ProcessedResultsTable, Arn]
-                - Effect: Allow
-                  Action:
-                    - dynamodb:Query
-                  Resource:
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ProjectsTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [JobsTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ImagesTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ProcessedResultsTable, Arn]
-                        - "/index/*"
-                - Effect: Allow
-                  Action:
-                    - sqs:ReceiveMessage
-                    - sqs:DeleteMessage
-                    - sqs:GetQueueAttributes
-                  Resource:
-                    Fn::GetAtt: [EligibleImageQueue, Arn]
-
-    # SQS & DynamoDB access Role - used by deadLetterQueueProcessor functions
-    DeadLetterQueueProcessorRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - lambda.amazonaws.com
-              Action: sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-        Policies:
-          - PolicyName: dlq-dynamodb-access-policy
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - dynamodb:GetItem
-                    - dynamodb:PutItem
-                    - dynamodb:UpdateItem
-                    - dynamodb:DeleteItem
-                    - dynamodb:Query
-                  Resource: 
-                    - Fn::GetAtt: [ProjectsTable, Arn]
-                    - Fn::GetAtt: [JobsTable, Arn]
-                    - Fn::GetAtt: [ImagesTable, Arn]
-                    - Fn::GetAtt: [ProcessedResultsTable, Arn]
-                - Effect: Allow
-                  Action:
-                    - dynamodb:Query
-                  Resource:
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ProjectsTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [JobsTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ImagesTable, Arn]
-                        - "/index/*"
-                    - Fn::Join:
-                      - ""
-                      - - Fn::GetAtt: [ProcessedResultsTable, Arn]
-                        - "/index/*"
-                - Effect: Allow
-                  Action:
-                    - sqs:ReceiveMessage
-                    - sqs:DeleteMessage
-                    - sqs:GetQueueAttributes
-                  Resource:
-                    Fn::GetAtt: [ImageDeadLetterQueue, Arn]
-
-    ApiGatewayAccount:
-      Type: AWS::ApiGateway::Account
-      DependsOn: IamRoleApiGatewayCloudWatchLogs
-      Properties:
-        CloudWatchRoleArn: 
-          Fn::GetAtt: [IamRoleApiGatewayCloudWatchLogs, Arn]
-
-    CognitoUserPool:
-      Type: AWS::Cognito::UserPool
-      Properties:
-        UserPoolName: ${self:provider.stage}-UserPool
-        AutoVerifiedAttributes:
-          - email
-        Policies:
-          PasswordPolicy:
-            MinimumLength: 8
-            RequireLowercase: true
-            RequireNumbers: true
-            RequireSymbols: true
-            RequireUppercase: true
-
-    CognitoUserPoolClient:
-      Type: AWS::Cognito::UserPoolClient
-      Properties:
-        ClientName: ${self:provider.stage}-UserPoolClient
-        UserPoolId: 
-          Ref: CognitoUserPool
-        GenerateSecret: false
-        ExplicitAuthFlows:
-          - ALLOW_USER_SRP_AUTH
-          - ALLOW_REFRESH_TOKEN_AUTH
-
-    PrismixImageBucket:
-      Type: AWS::S3::Bucket
-      Properties:
-        BucketName: ${self:custom.bucketName}
-        BucketEncryption:
-          ServerSideEncryptionConfiguration:
-            - ServerSideEncryptionByDefault:
-                SSEAlgorithm: AES256
-
-    ApiGatewayAuthorizer:
-      Type: AWS::ApiGateway::Authorizer
-      Properties:
-        Name: CognitoAuthorizer
-        Type: COGNITO_USER_POOLS
-        IdentitySource: method.request.header.Authorization
-        RestApiId: 
-          Ref: ApiGatewayRestApi
-        ProviderARNs:
-          - Fn::GetAtt: [CognitoUserPool, Arn]
-
-    EligibleImageQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: ${self:custom.queueName}
-        RedrivePolicy:
-          deadLetterTargetArn:
-            Fn::GetAtt: [ImageDeadLetterQueue, Arn]
-          maxReceiveCount: 3
-
-    ImageDeadLetterQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: ${self:custom.deadLetterQueueName}
-
-    ProjectsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-Projects
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: projectId
-            AttributeType: S
-          - AttributeName: createdAt
-            AttributeType: S
-          - AttributeName: updatedAt
-            AttributeType: S
-          - AttributeName: userId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: projectId
-            KeyType: HASH
-          - AttributeName: createdAt
-            KeyType: RANGE
-        # LSI - Additional sort key
-        LocalSecondaryIndexes:
-        - IndexName: ProjectUpdatedAtIndex
-          KeySchema:
-            - AttributeName: projectId
-              KeyType: HASH
-            - AttributeName: updatedAt
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        # GSI - Additional table allow to have 2nd partition key & sort key
-        GlobalSecondaryIndexes:
-          - IndexName: UserProjectIndex
-            KeySchema:
-              - AttributeName: userId
-                KeyType: HASH
-              - AttributeName: projectId
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-        # PointInTimeRecoverySpecification:
-        #   PointInTimeRecoveryEnabled: true
-
-    JobsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-Jobs
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: jobId
-            AttributeType: S
-          - AttributeName: projectId
-            AttributeType: S
-          - AttributeName: createdAt
-            AttributeType: S
-        KeySchema:
-          - AttributeName: jobId
-            KeyType: HASH
-          - AttributeName: createdAt
-            KeyType: RANGE
-        GlobalSecondaryIndexes:
-          - IndexName: ProjectJobIndex
-            KeySchema:
-              - AttributeName: projectId
-                KeyType: HASH
-              - AttributeName: jobId
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-
-    ImagesTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-Images
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: imageId
-            AttributeType: S
-          - AttributeName: jobId
-            AttributeType: S
-          - AttributeName: createdAt
-            AttributeType: S
-        KeySchema:
-          - AttributeName: imageId
-            KeyType: HASH
-        GlobalSecondaryIndexes:
-          - IndexName: JobImageIndex
-            KeySchema:
-              - AttributeName: jobId
-                KeyType: HASH
-              - AttributeName: createdAt
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-
-    ProcessedResultsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-ProcessedResults
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: resultId
-            AttributeType: S
-          - AttributeName: imageId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: resultId
-            KeyType: HASH
-        GlobalSecondaryIndexes:
-          - IndexName: ImageResultIndex
-            KeySchema:
-              - AttributeName: imageId
-                KeyType: HASH
-              - AttributeName: resultId
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-
-  Outputs:
-    UserPoolId:
-      Description: Cognito User Pool ID
-      Value: 
-        Ref: CognitoUserPool
-    UserPoolClientId:
-      Description: Cognito User Pool Client ID
-      Value: 
-        Ref: CognitoUserPoolClient
-    S3BucketName:
-      Description: User uploaded images
-      Value: 
-        Ref: PrismixImageBucket
-    ProjectsTableName:
-      Description: DynamoDB Projects Table Name
-      Value: 
-        Ref: ProjectsTable
-    ProjectsTableArn:
-      Description: DynamoDB Projects Table ARN
-      Value:
-        Fn::GetAtt: [ProjectsTable, Arn]
-    JobsTableName:
-      Description: DynamoDB Jobs Table Name
-      Value: 
-        Ref: JobsTable
-    JobsTableArn:
-      Description: DynamoDB Jobs Table ARN
-      Value:
-        Fn::GetAtt: [JobsTable, Arn]
-    ImagesTableName:
-      Description: DynamoDB Images Table Name
-      Value: 
-        Ref: ImagesTable
-    ImagesTableArn:
-      Description: DynamoDB Images Table ARN
-      Value:
-        Fn::GetAtt: [ImagesTable, Arn]
-    ProcessedResultsTableName:
-      Description: DynamoDB Processed Results Table Name
-      Value: 
-        Ref: ProcessedResultsTable
-    ProcessedResultsTableArn:
-      Description: DynamoDB Processed Results Table ARN
-      Value:
-        Fn::GetAtt: [ProcessedResultsTable, Arn]
-    SQSQueueUrl:
-      Description: SQS Queue URL
-      Value:
-        Ref: EligibleImageQueue
-    SQSQueueArn:
-      Description: SQS Queue ARN
-      Value:
-        Fn::GetAtt: [EligibleImageQueue, Arn]
-    DeadLetterQueueUrl:
-      Description: Dead Letter Queue URL
-      Value:
-        Ref: ImageDeadLetterQueue
-    DeadLetterQueueArn:
-      Description: Dead Letter Queue ARN
-      Value:
-        Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+    Outputs:
+      S3BucketName:
+        Description: User uploaded images
+        Value: 
+          Ref: PrismixImageBucket
+      SQSQueueUrl:
+        Description: SQS Queue URL
+        Value:
+          Ref: EligibleImageQueue
+      SQSQueueArn:
+        Description: SQS Queue ARN
+        Value:
+          Fn::GetAtt: [EligibleImageQueue, Arn]
+      DeadLetterQueueUrl:
+        Description: Dead Letter Queue URL
+        Value:
+          Ref: ImageDeadLetterQueue
+      DeadLetterQueueArn:
+        Description: Dead Letter Queue ARN
+        Value:
+          Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+      TasksTableName:
+        Description: DynamoDB Tasks Table Name
+        Value: 
+          Ref: TasksTable
+      TasksTableArn:
+        Description: DynamoDB Tasks Table ARN
+        Value:
+          Fn::GetAtt: [TasksTable, Arn]
+      ServerlessDeploymentBucketName:
+        Value: 
+          Ref: LayersDeploymentBucket
+        Export:
+          Name: ${self:service}-${self:provider.stage}-ServerlessDeploymentBucketName

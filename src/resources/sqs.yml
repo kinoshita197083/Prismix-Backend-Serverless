@@ -1,0 +1,311 @@
+Resources:
+  EligibleImageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.queueName}
+      VisibilityTimeout: 120  # Updated for worker function (60s timeout)
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+        maxReceiveCount: 3
+
+  ImageDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.deadLetterQueueName}
+
+  ImageProcessingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:service}-${self:provider.stage}-image-processing-topic
+
+  ImageProcessingTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref ImageProcessingTopic
+      Topics:
+        - !Ref ImageProcessingTopic
+
+  EligibleImageQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref EligibleImageQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt EligibleImageQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref ImageProcessingTopic
+
+  ImageProcessingTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref ImageProcessingTopic
+      Protocol: sqs
+      Endpoint: !GetAtt EligibleImageQueue.Arn
+
+# POST PROCESSING
+  JobCompletionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:service}-${self:provider.stage}-job-completion-topic.fifo
+      FifoTopic: true
+      ContentBasedDeduplication: true
+
+  DeliveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-delivery-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+      VisibilityTimeout: 1800  # Updated for deliveryProcessor (900s timeout)
+
+  NotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-notification-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+      VisibilityTimeout: 1800  # Updated for notificationProcessor (900s timeout)
+
+  DeliveryQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref DeliveryQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt DeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  NotificationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref NotificationQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt NotificationQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  JobCompletionTopicDeliverySubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt DeliveryQueue.Arn
+
+  JobCompletionTopicNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt NotificationQueue.Arn
+
+# Processing from External Google Drive
+  ImageUploadQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-queue
+      VisibilityTimeout: 900  # Updated for imageUploadProcessor (300s timeout)
+
+  ImageUploadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ImageUploadQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt ImageUploadQueue.Arn
+
+# Processing from External S3
+  ImageUploadFromS3Queue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-queue
+      VisibilityTimeout: 7200  # Updated for ECS (2 hours)
+      # RedrivePolicy:
+      #   deadLetterTargetArn:
+      #     Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
+      #   maxReceiveCount: 3
+
+  ImageUploadFromS3QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ImageUploadFromS3Queue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !GetAtt ImageUploadFromS3Queue.Arn
+
+  JobProgressQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-job-progress-queue
+      VisibilityTimeout: 1800  # Reduced to 5 minutes
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt JobProgressDLQ.Arn
+        maxReceiveCount: 1     # Reduced to prevent unnecessary retries
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Enable long polling
+
+  JobProgressDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-job-progress-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  JobProgressQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref JobProgressQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt JobProgressQueue.Arn
+
+  ZipDeliveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-zip-delivery-queue
+      VisibilityTimeout: 7200  # Updated for ECS (2 hours)
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ZipDeliveryDLQ, Arn]
+        maxReceiveCount: 3
+
+  ZipDeliveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-zip-delivery-dlq
+
+  ZipDeliveryQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ZipDeliveryQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - sns.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !GetAtt ZipDeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  ZipDeliveryTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt ZipDeliveryQueue.Arn
+
+  S3DeliveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-s3-delivery-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+      VisibilityTimeout: 1800  # Updated for s3DeliveryProcessor (900s timeout)
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [S3DeliveryDLQ, Arn]
+        maxReceiveCount: 3
+
+  S3DeliveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-s3-delivery-dlq.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+
+  S3DeliveryQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref S3DeliveryQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt S3DeliveryQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref JobCompletionTopic
+
+  S3DeliveryTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref JobCompletionTopic
+      Protocol: sqs
+      Endpoint: !GetAtt S3DeliveryQueue.Arn

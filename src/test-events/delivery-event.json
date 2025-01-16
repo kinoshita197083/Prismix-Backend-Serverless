@@ -1,0 +1,21 @@
+{
+    "Records": [
+        {
+            "messageId": "e95331c4-8789-404c-814d-6ee936e92fc9",
+            "receiptHandle": "AQEBVwYVDppvK3FPhWSkPISE8uV6arVSI//yG9LtVkmCNJdbFABXG1x26gnjjw97I+RGfoj+Vp0keCB3sfMnopcPrbI4OuL18ziWoRhFQznCkfK4ozAI8OVyvL+tP7I1SjidYgmjDyJdv7OcI8peSLppT6do4zFl2YOPuOgj31FR6zlN81I2oG2olnQivNqEygT8lNp8E6Sz5Er83O3GAhVLGEF9Y0cxf1m/IDXyuYGNqcIxh93y2VDP8MCPc6dbUqdTjCUlzPFQiN5tiom3DRe1MsiZNLpSRXYn+Z0nVVD4ZF0Vi44VPzzyaxrjIwUZsvYcy0hUXTAkE9YKYnmBC8sJkP0D0WUPVCUWupsaWYZ1aTGhFyEqIeGNvlbSUIrM+p79wqTuzdFX6QDmc0NwxqhW2162UvaQe6SgQFpxMkGwSmw=",
+            "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"c3a14748-55e9-5062-87b6-18dc7a6b4425\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic\",\n  \"Message\" : \"{\\\"jobId\\\":\\\"64032550-4016-4927-ba9f-6a467bcceb33\\\"}\",\n  \"Timestamp\" : \"2024-10-24T11:19:30.364Z\",\n  \"SignatureVersion\" : \"1\",\n  \"Signature\" : \"ceXRhwz2GUYNelVkuEq6nNb1ok/PjZHAlxmvMRSYMQlKe/fe0dN4u8jD9V9JzTq6d24jMUFvvBcv5PzLWGkML1mt4ExXaxpVKsU5ba3W0k+r7V2nRV4CIOchgn6/BpVUwZt2EUVmh+c3aPcbbslA6V0tZlGMQvt7R/pw31eSK0YZFBri2WjjUvYAzc+WJHfCV5eIzNEdgiVaLJc+DCddX88dblgiMnAcej3PM/KIc08gRRPF8MnIG3oRJ28Al9Ku9xCIriSrfyUpbaLgCl9oXV9YO6paduxsBi84hv/qOf4MQLozMTEdn3ec6sbw0vxo0kF6OlFVTIAFzjkQTg22cQ==\",\n  \"SigningCertURL\" : \"https://sns.us-east-1.amazonaws.com/SimpleNotificationService-60eadc530605d63b8e62a523676ef735.pem\",\n  \"UnsubscribeURL\" : \"https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:980352750282:prismix-serverless-dev-job-completion-topic:7538a784-5ad6-469d-913b-3e56090639b8\"\n}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "AWSTraceHeader": "Root=1-671a2d40-194e5aa40f4028f20d467d39;Parent=0c99d1663b0188e6;Sampled=1;Lineage=1:4132df87:0",
+                "SentTimestamp": "1729768770391",
+                "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+                "ApproximateFirstReceiveTimestamp": "1729768770392"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "269036b03936c2c61a12ca73b3431d07",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-delivery-queue",
+            "awsRegion": "us-east-1"
+        }
+    ]
+}

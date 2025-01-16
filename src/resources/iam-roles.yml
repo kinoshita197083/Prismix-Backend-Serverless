@@ -1,0 +1,778 @@
+Resources:
+  # Basic IAM Role - used by Lambda functions
+  BaseCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-base-cloudwatch-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: lambda-layer-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
+
+  # S3 & SQS access IAM Role - used by Lambda functions
+  EnqueueImageFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-enqueue-image-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: s3-sns-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
+              - Effect: Allow
+                Action:
+                  - s3:HeadObject
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListObjectVersions
+                  - s3:GetObjectVersion
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  Ref: ImageProcessingTopic
+
+  # CloudWatch Write access Role - used by API Gateway
+  IamRoleApiGatewayCloudWatchLogs:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: lambda-layer-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
+
+  # SQS & DynamoDB access Role - used by worker functions
+  WorkerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-worker-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: dynamodb-sqs-s3-rekognition-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:PutObjectTagging
+                  - s3:PutObjectMetadata
+                  - s3:GetObjectMetadata
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: 
+                  - Fn::GetAtt: [TasksTable, Arn]
+                  - Fn::GetAtt: [ImageHashesTable, Arn]
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:SendMessage
+                Resource:
+                  - Fn::GetAtt: [EligibleImageQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - rekognition:DetectLabels
+                  - rekognition:GetImageProperties
+                  - rekognition:DetectModerationLabels
+                  - rekognition:DetectText
+                  - rekognition:DetectFaces
+                  - rekognition:DetectProtectiveEquipment
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:service}-${sls:stage}-blurDetection
+
+  # SQS & DynamoDB access Role - used by deadLetterQueueProcessor functions
+  DeadLetterQueueProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-dead-letter-queue-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: dlq-dynamodb-sqs-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: 
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:SendMessage
+                Resource:
+                  - Fn::GetAtt: [ImageDeadLetterQueue, Arn]
+                  - Fn::GetAtt: [EligibleImageQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - "arn:aws:s3:::prismix-lambda-layers/*"
+
+  JobProgressCheckerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-job-progress-checker-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: job-progress-checker-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem 
+                  - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: 
+                  Ref: JobCompletionTopic
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:DeleteMessage
+                  - sqs:ReceiveMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - Fn::GetAtt: [JobProgressQueue, Arn]
+                  - Fn::GetAtt: [JobProgressDLQ, Arn]
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:DeleteRule
+                  - events:DisableRule
+                  - events:RemoveTargets
+                  - events:ListTargetsByRule
+                  - events:DescribeRule
+                  - events:ListRules
+                Resource:
+                  - Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobTimeout-*
+                  - Fn::Sub: arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
+
+  DeliveryProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-delivery-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: delivery-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::GetAtt: [DeliveryQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+
+  NotificationProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-notification-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: notification-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::GetAtt: [NotificationQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: 
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+
+  
+  ImageUploaderFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-image-uploader-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: image-uploader-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::GetAtt: [ImageUploadQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                  - s3:PutObjectMetadata
+                  - s3:GetObjectMetadata
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+
+  # From External S3
+  ImageUploadFromS3ProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-image-uploader-from-s3-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: image-uploader-from-s3-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:Query
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                  - s3:PutObjectMetadata
+                  - s3:GetObjectMetadata
+                  - s3:GetAccelerateConfiguration
+                  - s3:UseAccelerateEndpoint
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref PrismixUserCredentials
+
+  JobProgressDLQProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-job-progress-dlq-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: job-progress-dlq-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  Ref: JobCompletionTopic
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:DeleteMessage
+                  - sqs:ReceiveMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - Fn::GetAtt: [JobProgressQueue, Arn]
+                  - Fn::GetAtt: [JobProgressDLQ, Arn]
+
+  ZipArchiveProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-zip-archive-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: zip-archive-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: 
+                  - Fn::GetAtt: [TasksTable, Arn]
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: 
+                  - Fn::GetAtt: [ZipDeliveryQueue, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
+                Resource: 
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [ZipArchiveProgressTable, Arn]
+
+  # Cross-account access role for S3
+  PrismixS3AccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-s3-access-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: s3-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - 'arn:aws:s3:::*'
+                  - 'arn:aws:s3:::*/*'
+
+  S3DeliveryProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${self:provider.stage}-s3-delivery-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: s3-delivery-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - Fn::GetAtt: [S3DeliveryQueue, Arn]
+                  - Fn::GetAtt: [S3DeliveryDLQ, Arn]
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource:
+                  - Fn::GetAtt: [TasksTable, Arn]
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref PrismixUserCredentials
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+
+  # ECS Task Execution Role
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${sls:stage}-ecs-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+
+  # Upload Processor Task Role
+  UploadProcessorTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${sls:stage}-upload-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ${self:service}-${sls:stage}-upload-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ImageUploadFromS3Queue.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${self:custom.bucketName}
+                  - !Sub arn:aws:s3:::${self:custom.bucketName}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt TasksTable.Arn
+                  - !GetAtt JobProgressTable.Arn
+
+  # Archive Processor Task Role
+  ArchiveProcessorTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${sls:stage}-archive-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ${self:service}-${sls:stage}-archive-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ZipDeliveryQueue.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${self:custom.bucketName}
+                  - !Sub arn:aws:s3:::${self:custom.bucketName}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt TasksTable.Arn
+                  - !GetAtt JobProgressTable.Arn
+
+  # Auto Scaling Role
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${sls:stage}-autoscaling-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole

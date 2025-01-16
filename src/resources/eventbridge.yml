@@ -1,0 +1,16 @@
+Resources:
+  JobProgressCheckerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt JobProgressCheckerLambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobProgressCheck-*
+
+  JobTimeoutCheckerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt JobProgressCheckerLambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/JobTimeout-*

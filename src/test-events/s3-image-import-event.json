@@ -1,0 +1,28 @@
+{
+    "Records": [
+        {
+            "messageId": "411b11cc-8e98-449a-8ad0-7095bd1026a6",
+            "receiptHandle": "AQEB7kc9PruyFrCJUmjY2R8KP7UUZbJlr97W90eCwg0wMvMM/q1NziYq3G+UvyI65vLlVf94tcoMOF+5/uUjslRVnckfpYYhWKjc0u403I3srP3NPgtIM/uXsE+2nKixcuxX0whgFCUDuRmpLHYBW4pOnDy8vlspHIZ9I8czp4I0jSDv7IdNucj8MYWChIeCkOjxU6eEUaZFo1Z2IMpFEBMe56pdHdS3WP0H1Un2opmxs8DcvBnwmxilmh+qAJwFz9lY7c43tYhdrblGdppEXHl7peY/trks+WXrXLix/cWc+HS8ymdvw/OquGmKQ4YspxwN6GXUWe8QAAteMBlbUrHOBk4sPvKDrZ43IA+eGaLIp0EYPoX4HgWdcOKDXnM7aEmyGcrI+L2JxX1UZ0jaSuQk2HFPIQ6T/oj2TOguUZE7ik5ap8YOLQdKOulFjj1Kh0Hg",
+            "body": "{\"provider\":\"s3\",\"userId\":\"f900f7ef-f026-4767-b780-71899bbecca7\",\"projectId\":\"0c2b56d5-801d-41f4-90eb-3b9a9aab7e93\",\"jobId\":\"c972c83f-da0d-4ac5-ae55-6885eca69f08\",\"projectSettingId\":\"c91f8521-bc3e-4075-919c-a8d677e8bbc4\",\"bucketName\":\"prismix-test-bucket\",\"region\":\"ap-southeast-2\",\"importAll\":false,\"folderPaths\":[\"/\"],\"projectSetting\":{\"id\":\"c91f8521-bc3e-4075-919c-a8d677e8bbc4\",\"projectId\":\"0c2b56d5-801d-41f4-90eb-3b9a9aab7e93\",\"settingValue\":{\"maxWidth\":1920,\"textTags\":[],\"maxHeight\":1080,\"resizeMode\":\"fill\",\"contentTags\":[],\"outputFormat\":\"original\",\"detectDuplicates\":false,\"minimumResolution\":\"hd 1280x720\",\"compressionQuality\":80,\"removeBlurryImages\":false,\"detectionConfidence\":\"0.7\",\"removeLowResolution\":false,\"duplicateDetectionMethod\":\"hash\"},\"createdAt\":\"2024-11-21T03:59:32.493Z\",\"updatedAt\":\"2024-11-21T04:07:05.707Z\",\"settingDescription\":null,\"settingName\":\"Chilly Cicada\"},\"expressProcessing\":false}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1732321807591",
+                "SenderId": "AIDA6IQMT2LFDMPRCRD7O",
+                "ApproximateFirstReceiveTimestamp": "1732321807596"
+            },
+            "messageAttributes": {
+                "MessageType": {
+                    "stringValue": "S3Import",
+                    "stringListValues": [],
+                    "binaryListValues": [],
+                    "dataType": "String"
+                }
+            },
+            "md5OfMessageAttributes": "5c4b3ec1733b5b50ddaedd5d9cf7677a",
+            "md5OfBody": "30eb4b444814f8a1ae32e61193b2da30",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-1:980352750282:prismix-serverless-dev-image-upload-from-s3-queue",
+            "awsRegion": "us-east-1"
+        }
+    ]
+}
