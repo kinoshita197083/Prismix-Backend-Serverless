@@ -66,7 +66,7 @@ jobs:
         }
         
         # Create repositories
-        create_repo "$SERVICE_NAME-upload-processor"
+        create_repo "$SERVICE_NAME-s3-upload-processor"
         create_repo "$SERVICE_NAME-archive-processor"
 
     # Then login to ECR
@@ -85,9 +85,9 @@ jobs:
         STAGE=${GITHUB_REF##*/}
         
         # Build and push upload processor
-        docker build -t $ECR_REGISTRY/$SERVICE_NAME-upload-processor:$STAGE \
-          -f src/containers/upload-processor/Dockerfile .
-        docker push $ECR_REGISTRY/$SERVICE_NAME-upload-processor:$STAGE
+        docker build -t $ECR_REGISTRY/$SERVICE_NAME-s3-upload-processor:$STAGE \
+          -f src/containers/s3-upload-processor/Dockerfile .
+        docker push $ECR_REGISTRY/$SERVICE_NAME-s3-upload-processor:$STAGE
         
         # Build and push archive processor
         docker build -t $ECR_REGISTRY/$SERVICE_NAME-archive-processor:$STAGE \

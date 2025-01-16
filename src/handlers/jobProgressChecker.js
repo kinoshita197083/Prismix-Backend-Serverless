@@ -365,11 +365,11 @@ const determineIfJobIsCorrupted = (stats, jobProgress) => {
 
     // Progress thresholds
     const PROGRESS_CHECKPOINTS = [
-        { threshold: 0.1, timeLimit: MINUTE * 8 },    // 10% within 8 minutes
-        { threshold: 0.3, timeLimit: MINUTE * 15 },   // 30% within 15 minutes
-        { threshold: 0.5, timeLimit: MINUTE * 25 },   // 50% within 25 minutes
-        { threshold: 0.7, timeLimit: MINUTE * 35 },   // 70% within 35 minutes
-        { threshold: 0.9, timeLimit: MINUTE * 45 },   // 90% within 45 minutes
+        { threshold: 0.1, timeLimit: MINUTE * 15 },   // 10% within 15 minutes
+        { threshold: 0.3, timeLimit: MINUTE * 30 },   // 30% within 30 minutes
+        { threshold: 0.5, timeLimit: MINUTE * 45 },   // 50% within 45 minutes
+        { threshold: 0.7, timeLimit: MINUTE * 60 },   // 70% within 60 minutes
+        { threshold: 0.9, timeLimit: MINUTE * 75 },   // 90% within 75 minutes
     ];
 
     // Basic checks

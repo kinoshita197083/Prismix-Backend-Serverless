@@ -146,12 +146,12 @@ imageUploadFromS3Processor:
   handler: src/handlers/imageUploadFromS3Processor.handler
   memorySize: 2048
   timeout: 900 # 15 minutes
-  # events:  # Commented out to disable SQS trigger
-  #   - sqs:
-  #       arn:
-  #         Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
-  #       batchSize: 1
-  #       functionResponseType: ReportBatchItemFailures
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
   environment:
     IMAGE_BUCKET: ${self:custom.bucketName}
   role: ImageUploadFromS3ProcessorRole
@@ -191,8 +191,8 @@ zipArchiveProcessor:
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     SOURCE_BUCKET: ${self:custom.bucketName}
-    DELIVERY_BUCKET: ${self:service}-${self:provider.stage}-delivery-bucket
-    ZIP_ARCHIVE_PROGRESS_TABLE: ${self:service}-${self:provider.stage}-zip-archive-progress
+    DELIVERY_BUCKET: ${self:custom.deliveryBucketName}
+    ZIP_ARCHIVE_PROGRESS_TABLE: ${self:custom.zipArchiveProgressTableName}
     ZIP_DELIVERY_QUEUE_URL: !Ref ZipDeliveryQueue
   role: !GetAtt ZipArchiveProcessorRole.Arn
   layers:

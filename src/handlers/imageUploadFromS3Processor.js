@@ -24,7 +24,7 @@ const jobProgressService = new JobProgressService(docClient, null, {
     jobProgressTable: process.env.JOB_PROGRESS_TABLE
 });
 
-exports.uploadProcessor = async (event) => {
+exports.handler = async (event) => {
     logger.info('S3 Image upload processor started', {
         event,
         recordsCount: event.Records?.length || 0,
@@ -403,6 +403,7 @@ async function processImageBatch(sourceS3Client, destS3Client, images, config) {
                     success = true;
 
                 } catch (error) {
+                    console.log(`[processImageBatch] error`, error);
                     if (attempt === MAX_RETRIES) {
                         const failedUpload = {
                             fileName: image.Key,

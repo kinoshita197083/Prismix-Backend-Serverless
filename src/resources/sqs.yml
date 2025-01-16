@@ -162,7 +162,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-queue
-      VisibilityTimeout: 7200  # Updated for ECS (2 hours)
+      VisibilityTimeout: 900
       # RedrivePolicy:
       #   deadLetterTargetArn:
       #     Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
@@ -180,13 +180,43 @@ Resources:
             Principal:
               Service: 
                 - lambda.amazonaws.com
-                - ecs-tasks.amazonaws.com
             Action:
               - sqs:ReceiveMessage
               - sqs:DeleteMessage
               - sqs:GetQueueAttributes
               - sqs:ChangeMessageVisibility
             Resource: !GetAtt ImageUploadFromS3Queue.Arn
+
+  ImageUploadFromS3ProcessByECSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-process-by-ecs-queue
+      VisibilityTimeout: 4800  # Updated for ECS (2 hours)
+      # RedrivePolicy:
+      #   deadLetterTargetArn:
+      #     Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
+      #   maxReceiveCount: 3
+
+  
+  ImageUploadFromS3ProcessByECSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ImageUploadFromS3ProcessByECSQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ecs-tasks.amazonaws.com
+                - lambda.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
 
   JobProgressQueue:
     Type: AWS::SQS::Queue
@@ -223,7 +253,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-zip-delivery-queue
-      VisibilityTimeout: 7200  # Updated for ECS (2 hours)
+      VisibilityTimeout: 4800  # Updated for ECS (2 hours)
       RedrivePolicy:
         deadLetterTargetArn:
           Fn::GetAtt: [ZipDeliveryDLQ, Arn]

@@ -454,6 +454,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
                 Resource:
                   Fn::GetAtt: [ImageUploadFromS3Queue, Arn]
               - Effect: Allow
@@ -593,8 +594,7 @@ Resources:
           - Effect: Allow
             Principal:
               AWS: 
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-image-uploader-from-s3-role'
-                # - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${self:service}-${self:provider.stage}-s3-delivery-processor-role'
+                - !GetAtt UploadProcessorTaskRole.Arn
                 - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
       Policies:
@@ -680,21 +680,8 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
-
-  # Upload Processor Task Role
-  UploadProcessorTaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: ${self:service}-${sls:stage}-upload-processor-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
       Policies:
-        - PolicyName: ${self:service}-${sls:stage}-upload-processor-policy
+        - PolicyName: sqs-access-policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -703,7 +690,60 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt ImageUploadFromS3Queue.Arn
+                  - sqs:ChangeMessageVisibility
+                Resource:
+                  - Fn::GetAtt: [ImageUploadFromS3ProcessByECSQueue, Arn]
+        - PolicyName: s3-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: 
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
+        - PolicyName: dynamodb-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - Fn::GetAtt: [JobProgressTable, Arn]
+                  - Fn::GetAtt: [TasksTable, Arn]
+
+  # Upload Processor Task Role
+  UploadProcessorTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${sls:stage}-s3-upload-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ${self:service}-${sls:stage}-s3-upload-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -721,6 +761,11 @@ Resources:
                 Resource:
                   - !GetAtt TasksTable.Arn
                   - !GetAtt JobProgressTable.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: 
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${self:service}/${sls:stage}/prismix-user-credentials-*
 
   # Archive Processor Task Role
   ArchiveProcessorTaskRole:
@@ -761,6 +806,7 @@ Resources:
                 Resource:
                   - !GetAtt TasksTable.Arn
                   - !GetAtt JobProgressTable.Arn
+                  - !GetAtt ZipArchiveProgressTable.Arn
 
   # Auto Scaling Role
   AutoScalingRole:
@@ -776,3 +822,29 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+      Policies:
+        - PolicyName: ${self:service}-${sls:stage}-autoscaling-sqs-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:SetAlarmState
+                  - cloudwatch:DeleteAlarms
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                Resource: 
+                  - !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
+                  - !GetAtt ZipDeliveryQueue.Arn
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DescribeServices
+                  - application-autoscaling:*
+                Resource: "*"
