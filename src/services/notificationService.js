@@ -23,7 +23,7 @@ class NotificationService {
             MessageAttributes: {
                 outputConnection: {
                     DataType: 'String',
-                    StringValue: additionalData.outputConnection
+                    StringValue: additionalData.outputConnection || 'unknown'
                 }
             }
         };

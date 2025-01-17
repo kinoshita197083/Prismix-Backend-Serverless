@@ -22,7 +22,8 @@ class JobProgressService {
     async updateJobStatusAndNotify(jobId, status, outputConnection) {
         console.log('[JobProgressService.updateJobStatusAndNotify] Updating job status and notifying:', {
             jobId,
-            status
+            status,
+            outputConnection
         });
 
         try {
