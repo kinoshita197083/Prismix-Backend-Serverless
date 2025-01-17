@@ -803,6 +803,9 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
                 Resource:
                   - !GetAtt TasksTable.Arn
                   - !GetAtt JobProgressTable.Arn
