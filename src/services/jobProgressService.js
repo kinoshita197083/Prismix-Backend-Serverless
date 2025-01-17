@@ -19,7 +19,7 @@ class JobProgressService {
         this.notificationService = notificationService;
     }
 
-    async updateJobStatusAndNotify(jobId, status) {
+    async updateJobStatusAndNotify(jobId, status, outputConnection) {
         console.log('[JobProgressService.updateJobStatusAndNotify] Updating job status and notifying:', {
             jobId,
             status
@@ -29,7 +29,8 @@ class JobProgressService {
             await Promise.all([
                 this.notificationService.publishJobStatus(jobId, status, {
                     completedAt: Date.now().toString(),
-                    status: status
+                    status: status,
+                    outputConnection: outputConnection
                 }),
                 this.updateJobStatusRDS(jobId, status)
             ]);

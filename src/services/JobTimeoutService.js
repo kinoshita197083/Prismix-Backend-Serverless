@@ -191,7 +191,8 @@ const createJobTimeoutService = (jobProgressService, notificationService, jobSch
                 await notificationService.publishJobStatus(jobId, 'COMPLETED', {
                     finalStatistics: adjustedStats,
                     autoReviewed: 0,
-                    MessageGroupId: `${jobId}-COMPLETED`
+                    MessageGroupId: `${jobId}-COMPLETED`,
+                    outputConnection: jobProgress.outputConnection
                 });
             }
 

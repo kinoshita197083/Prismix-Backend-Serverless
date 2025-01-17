@@ -125,6 +125,8 @@ Resources:
       TopicArn: !Ref JobCompletionTopic
       Protocol: sqs
       Endpoint: !GetAtt DeliveryQueue.Arn
+      FilterPolicy:
+        outputConnection: ["google-drive"]
 
   JobCompletionTopicNotificationSubscription:
     Type: AWS::SNS::Subscription
@@ -294,6 +296,8 @@ Resources:
       TopicArn: !Ref JobCompletionTopic
       Protocol: sqs
       Endpoint: !GetAtt ZipDeliveryQueue.Arn
+      FilterPolicy:
+        outputConnection: ["local"]
 
   S3DeliveryQueue:
     Type: AWS::SQS::Queue
@@ -339,3 +343,5 @@ Resources:
       TopicArn: !Ref JobCompletionTopic
       Protocol: sqs
       Endpoint: !GetAtt S3DeliveryQueue.Arn
+      FilterPolicy:
+        outputConnection: ["s3"]

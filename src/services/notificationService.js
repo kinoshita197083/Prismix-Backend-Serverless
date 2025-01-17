@@ -19,7 +19,13 @@ class NotificationService {
             Message: JSON.stringify({ jobId, status, additionalData }),
             TopicArn: this.topicArn,
             MessageGroupId: messageGroupId,
-            MessageDeduplicationId: `${messageGroupId}-${timestamp}`
+            MessageDeduplicationId: `${messageGroupId}-${timestamp}`,
+            MessageAttributes: {
+                outputConnection: {
+                    DataType: 'String',
+                    StringValue: additionalData.outputConnection
+                }
+            }
         };
 
         try {

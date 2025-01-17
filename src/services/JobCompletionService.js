@@ -34,7 +34,9 @@ const createJobCompletionService = (
                 await jobSchedulingService.cleanupScheduledChecks(jobId);
 
                 // Step 2: Update status and notify in parallel
-                await jobProgressService.updateJobStatusAndNotify(jobId, newStatus);
+                await jobProgressService.updateJobStatusAndNotify(jobId, newStatus, {
+                    outputConnection: currentJob.outputConnection
+                });
                 console.log('[handleJobCompletion] Job status updated and notified');
 
                 // Step 3: Record completion metrics
