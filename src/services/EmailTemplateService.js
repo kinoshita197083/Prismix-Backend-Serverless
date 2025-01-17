@@ -173,11 +173,11 @@ const generateCompletedEmailHtml = (name, jobId, projectId) => `
 const generateCompletedEmailText = (name, jobId) => `
 Dear ${name},
 
-Your job has been completed successfully.
+Your job has been processed successfully.
 
 Job ID: ${jobId}
 
-You can now access and review the results of your job through our platform.
+You can now access and review the results of your job through our platform. Please note that the results will be delivered to the specified platform soon.
 
 Best regards,
 The Prismix Team
