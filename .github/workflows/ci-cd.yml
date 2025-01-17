@@ -68,6 +68,7 @@ jobs:
         # Create repositories
         create_repo "$SERVICE_NAME-s3-upload-processor"
         create_repo "$SERVICE_NAME-archive-processor"
+        create_repo "$SERVICE_NAME-s3-delivery-processor"
 
     # Then login to ECR
     - name: Login to Amazon ECR
@@ -93,6 +94,11 @@ jobs:
         docker build -t $ECR_REGISTRY/$SERVICE_NAME-archive-processor:$STAGE \
           -f src/containers/archive-processor/Dockerfile .
         docker push $ECR_REGISTRY/$SERVICE_NAME-archive-processor:$STAGE
+
+        # Build and push s3 delivery processor
+        docker build -t $ECR_REGISTRY/$SERVICE_NAME-s3-delivery-processor:$STAGE \
+          -f src/containers/s3-delivery-processor/Dockerfile .
+        docker push $ECR_REGISTRY/$SERVICE_NAME-s3-delivery-processor:$STAGE
 
     # Set DATABASE_URL based on branch update
     - name: Set DATABASE_URL based on branch

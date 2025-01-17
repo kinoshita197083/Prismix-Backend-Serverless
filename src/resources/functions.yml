@@ -204,12 +204,12 @@ s3DeliveryProcessor:
   handler: src/handlers/s3DeliveryProcessor.handler
   timeout: 900
   memorySize: 3008
-  events:
-    - sqs:
-        arn:
-          Fn::GetAtt: [S3DeliveryQueue, Arn]
-        batchSize: 1
-        functionResponseType: ReportBatchItemFailures
+  # events:
+  #   - sqs:
+  #       arn:
+  #         Fn::GetAtt: [S3DeliveryQueue, Arn]
+  #       batchSize: 1
+  #       functionResponseType: ReportBatchItemFailures
   environment:
     TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
     JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}

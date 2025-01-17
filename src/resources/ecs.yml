@@ -5,7 +5,6 @@ Resources:
       ClusterName: ${self:service}-${sls:stage}-s3-upload-processing-cluster
       CapacityProviders:
         - FARGATE
-        - FARGATE_SPOT
       DefaultCapacityProviderStrategy:
         - CapacityProvider: FARGATE
           Weight: 1
@@ -421,3 +420,205 @@ Resources:
       Tags:
         - Key: Name
           Value: ${self:service}-${sls:stage}-processing-sg
+
+# S3 Delivery Processor
+  S3DeliveryProcessingCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ${self:service}-${sls:stage}-s3-delivery-processing-cluster
+      CapacityProviders:
+        - FARGATE
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      Tags:
+        - Key: Name
+          Value: ${self:service}-${sls:stage}-s3-delivery-processing-cluster
+
+  S3DeliveryProcessorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: ${self:service}-${sls:stage}-s3-delivery-processor
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: 2048    # 2 vCPU
+      Memory: 4096 # 4GB
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt S3DeliveryProcessorTaskRole.Arn
+      ContainerDefinitions:
+        - Name: s3-delivery-processor
+          Image: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/${self:service}-s3-delivery-processor:${sls:stage}
+          Essential: true
+          Environment:
+            - Name: NODE_ENV
+              Value: ${sls:stage}
+            - Name: QUEUE_URL
+              Value: !Ref S3DeliveryQueue
+            - Name: AWS_REGION
+              Value: ${aws:region}
+            - Name: TASKS_TABLE
+              Value: ${self:provider.environment.TASKS_TABLE}
+            - Name: JOB_PROGRESS_TABLE
+              Value: ${self:provider.environment.JOB_PROGRESS_TABLE}
+            - Name: SOURCE_BUCKET
+              Value: ${self:custom.bucketName}
+            - Name: BUCKET_NAME
+              Value: ${self:custom.bucketName}
+            - Name: CONCURRENT_DELIVERIES
+              Value: "40"
+            - Name: MAX_RETRIES
+              Value: "3"
+            - Name: RETRY_DELAY
+              Value: "1000"
+            - Name: SUPABASE_URL
+              Value: ${env:SUPABASE_URL}
+            - Name: SUPABASE_API_KEY
+              Value: ${env:SUPABASE_API_KEY}
+            - Name: SERVICE_NAME
+              Value: ${self:service}
+            - Name: STAGE
+              Value: ${sls:stage}
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - echo "Health check passed"
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: 'true'
+              awslogs-group: /ecs/${self:service}-${sls:stage}-s3-delivery-processor
+              awslogs-region: ${aws:region}
+              awslogs-stream-prefix: ecs
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+
+      Volumes: []
+      Tags:
+        - Key: Environment
+          Value: ${sls:stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Name
+          Value: s3-delivery-processor
+
+  # ECS Services to handle SQS messages
+  S3DeliveryProcessorService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: ${self:service}-${sls:stage}-s3-delivery-processor
+      Cluster: !Ref S3DeliveryProcessingCluster
+      TaskDefinition: !Ref S3DeliveryProcessorTaskDefinition
+      DesiredCount: 0
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 0  # Allow faster scaling
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ProcessingSecurityGroup
+          Subnets: 
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+      EnableExecuteCommand: true
+
+  # Auto-scaling for s3 delivery processor
+  S3DeliveryProcessorAutoScaling:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: S3DeliveryProcessorService
+    Properties:
+      MaxCapacity: 10  # Maximum number of tasks
+      MinCapacity: 0   # Scale to zero when no messages
+      ResourceId: !Sub 
+        - service/${ClusterName}/${ServiceName}
+        - ClusterName: ${self:service}-${sls:stage}-s3-delivery-processing-cluster
+          ServiceName: ${self:service}-${sls:stage}-s3-delivery-processor
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  # Step scaling policy with multiple steps
+  S3DeliveryProcessorScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ${self:service}-${sls:stage}-s3-delivery-step
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref S3DeliveryProcessorAutoScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        MetricAggregationType: Average
+        Cooldown: 0
+        StepAdjustments:
+          # 1-2 messages: 1 task
+          - MetricIntervalLowerBound: 0
+            MetricIntervalUpperBound: 2
+            ScalingAdjustment: 1
+          # 3-5 messages: 2 tasks
+          - MetricIntervalLowerBound: 2
+            MetricIntervalUpperBound: 5
+            ScalingAdjustment: 2
+          # 6+ messages: 3 tasks
+          - MetricIntervalLowerBound: 5
+            ScalingAdjustment: 3
+
+  # CloudWatch alarm for scaling
+  S3DeliveryProcessorScalingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ${self:service}-${sls:stage}-sqs-delivery-messages-visible
+      AlarmDescription: Scale based on number of messages visible
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt S3DeliveryQueue.QueueName
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref S3DeliveryProcessorScalingPolicy
+
+  # Scale-in alarm
+  S3DeliveryProcessorScaleInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ${self:service}-${sls:stage}-sqs-delivery-scale-in
+      AlarmDescription: Scale in when no messages
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt S3DeliveryQueue.QueueName
+      Statistic: Average
+      Period: 300  # Check every 5 minutes for scale-in
+      EvaluationPeriods: 2  # Must be empty for 2 periods
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref S3DeliveryProcessorScaleInPolicy
+
+  # Scale-in policy
+  S3DeliveryProcessorScaleInPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ${self:service}-${sls:stage}-s3-delivery-scale-in
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref S3DeliveryProcessorAutoScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ExactCapacity
+        MetricAggregationType: Average
+        Cooldown: 300
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: 0
