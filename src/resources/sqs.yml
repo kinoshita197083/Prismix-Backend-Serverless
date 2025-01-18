@@ -135,12 +135,16 @@ Resources:
       Protocol: sqs
       Endpoint: !GetAtt NotificationQueue.Arn
 
-# Processing from External Google Drive
+# Processing from External Google Drive using Lambda
   ImageUploadQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-queue
       VisibilityTimeout: 900  # Updated for imageUploadProcessor (300s timeout)
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ImageUploadQueueDLQ, Arn]
+        maxReceiveCount: 3
 
   ImageUploadQueuePolicy:
     Type: AWS::SQS::QueuePolicy
@@ -159,16 +163,56 @@ Resources:
               - sqs:GetQueueAttributes
             Resource: !GetAtt ImageUploadQueue.Arn
 
+  ImageUploadQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-queue-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
+# Processing from External Google Drive using ECS
+  ImageUploadFromGoogleDriveWithECSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-from-google-drive-with-ecs-queue
+      VisibilityTimeout: 900  # Updated for imageUploadProcessor (300s timeout)
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ImageUploadFromGoogleDriveWithECSQueueDLQ, Arn]
+        maxReceiveCount: 3
+
+  ImageUploadFromGoogleDriveWithECSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ImageUploadFromGoogleDriveWithECSQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt ImageUploadFromGoogleDriveWithECSQueue.Arn
+
+  ImageUploadFromGoogleDriveWithECSQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-from-google-drive-with-ecs-queue-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
 # Processing from External S3
   ImageUploadFromS3Queue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-queue
       VisibilityTimeout: 900
-      # RedrivePolicy:
-      #   deadLetterTargetArn:
-      #     Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
-      #   maxReceiveCount: 3
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
+        maxReceiveCount: 3
 
   ImageUploadFromS3QueuePolicy:
     Type: AWS::SQS::QueuePolicy
@@ -189,15 +233,21 @@ Resources:
               - sqs:ChangeMessageVisibility
             Resource: !GetAtt ImageUploadFromS3Queue.Arn
 
+  ImageUploadFromS3DLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
   ImageUploadFromS3ProcessByECSQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-process-by-ecs-queue
       VisibilityTimeout: 4800  # Updated for ECS (2 hours)
-      # RedrivePolicy:
-      #   deadLetterTargetArn:
-      #     Fn::GetAtt: [ImageUploadFromS3DLQ, Arn]
-      #   maxReceiveCount: 3
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt: [ImageUploadFromS3ProcessByECSDLQ, Arn]
+        maxReceiveCount: 3
 
   
   ImageUploadFromS3ProcessByECSQueuePolicy:
@@ -219,6 +269,12 @@ Resources:
               - sqs:GetQueueAttributes
               - sqs:ChangeMessageVisibility
             Resource: !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
+
+  ImageUploadFromS3ProcessByECSDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-image-upload-from-s3-process-by-ecs-queue-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
 
   JobProgressQueue:
     Type: AWS::SQS::Queue
