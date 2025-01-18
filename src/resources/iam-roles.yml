@@ -721,7 +721,7 @@ Resources:
                   - Fn::GetAtt: [JobProgressTable, Arn]
                   - Fn::GetAtt: [TasksTable, Arn]
 
-  # Upload Processor Task Role
+  # S3 Upload Processor Task Role
   UploadProcessorTaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -753,6 +753,55 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${self:custom.bucketName}
                   - !Sub arn:aws:s3:::${self:custom.bucketName}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt TasksTable.Arn
+                  - !GetAtt JobProgressTable.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: 
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${self:service}/${sls:stage}/prismix-user-credentials-*
+
+  # Google Drive Upload Processor Task Role
+  GoogleDriveUploadProcessorTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-${sls:stage}-google-drive-upload-processor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ${self:service}-${sls:stage}-google-drive-upload-processor-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ImageUploadFromGoogleDriveWithECSQueue.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                  - s3:PutObjectMetadata
+                  - s3:GetObjectMetadata
+                Resource:
+                  - Fn::Join:
+                    - ""
+                    - - "arn:aws:s3:::"
+                      - ${self:custom.bucketName}
+                      - "/*"
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
