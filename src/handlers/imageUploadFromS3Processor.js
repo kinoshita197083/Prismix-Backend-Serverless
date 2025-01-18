@@ -41,6 +41,21 @@ exports.handler = async (event) => {
 
     logger.info('Processing complete', { summary });
 
+    // Prepare failed messages for DLQ
+    const batchItemFailures = results
+        .map((result, index) => ({
+            result,
+            record: event.Records[index]
+        }))
+        .filter(({ result }) => result.status === 'rejected')
+        .map(({ record }) => ({
+            itemIdentifier: record.messageId
+        }));
+
+    return {
+        batchItemFailures
+    };
+
     async function processRecord(record) {
         try {
             logger.info('Starting to process record', {

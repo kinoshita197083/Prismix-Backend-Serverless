@@ -40,6 +40,8 @@ Resources:
               Value: ${self:provider.environment.JOB_PROGRESS_TABLE}
             - Name: IMAGE_BUCKET
               Value: ${self:custom.bucketName}
+            - Name: DEAD_LETTER_QUEUE_URL
+              Value: !Ref ImageUploadFromS3ProcessByECSDLQ
             - Name: BATCH_SIZE
               Value: "150"
             - Name: CONCURRENT_UPLOADS

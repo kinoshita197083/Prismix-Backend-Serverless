@@ -1,22 +1,49 @@
 const { Consumer } = require('sqs-consumer');
+const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { handler: uploadProcessor } = require('./src/handlers/imageUploadFromS3Processor');
 const logger = require('./src/utils/logger');
-// const http = require('http');
 
-// // Create HTTP server for health checks
-// const server = http.createServer((req, res) => {
-//     if (req.url === '/health') {
-//         res.writeHead(200);
-//         res.end('OK');
-//     } else {
-//         res.writeHead(404);
-//         res.end();
-//     }
-// });
+const sqs = new SQSClient();
 
-// server.listen(80, () => {
-//     logger.info('Health check server started on port 80');
-// });
+// Helper function to send message to DLQ
+const sendToDLQ = async (message, error) => {
+    try {
+        const dlqMessage = {
+            originalMessage: JSON.stringify(message),
+            error: {
+                message: error.message,
+                stack: error.stack,
+                timestamp: new Date().toISOString()
+            }
+        };
+
+        await sqs.send(new SendMessageCommand({
+            QueueUrl: process.env.DEAD_LETTER_QUEUE_URL,
+            MessageBody: JSON.stringify(dlqMessage),
+            MessageAttributes: {
+                ErrorType: {
+                    DataType: 'String',
+                    StringValue: error.name || 'ProcessingError'
+                },
+                OriginalMessageId: {
+                    DataType: 'String',
+                    StringValue: message.MessageId
+                }
+            }
+        }));
+
+        logger.info('Message sent to DLQ', {
+            messageId: message.MessageId,
+            error: error.message
+        });
+    } catch (dlqError) {
+        logger.error('Failed to send message to DLQ', {
+            originalError: error.message,
+            dlqError: dlqError.message,
+            messageId: message.MessageId
+        });
+    }
+};
 
 // Create SQS consumer
 const app = Consumer.create({
@@ -31,9 +58,6 @@ const app = Consumer.create({
 
             // Transform the message into Lambda-style event
             const event = {
-                // Records: [{
-                //     ...message,
-                // }]
                 Records: [{
                     messageId: message.MessageId,
                     body: message.Body,
@@ -46,7 +70,16 @@ const app = Consumer.create({
                 }]
             };
 
-            await uploadProcessor(event);
+            const { batchItemFailures } = await uploadProcessor(event);
+
+            if (batchItemFailures.length > 0) {
+                logger.error('Failed messages', { batchItemFailures });
+
+                // Send failed messages to DLQ
+                const error = new Error('Processing failed');
+                await sendToDLQ(message, error);
+                throw error; // Throw error to prevent message deletion from source queue
+            }
 
             logger.info('Message processing completed', {
                 messageId: message.MessageId,
@@ -60,7 +93,10 @@ const app = Consumer.create({
                 messageId: message.MessageId,
                 timestamp: new Date().toISOString()
             });
-            throw error;
+
+            // Send failed message to DLQ
+            await sendToDLQ(message, error);
+            throw error; // Rethrow to prevent message deletion from source queue
         }
     },
     batchSize: 1,  // Process one message at a time initially

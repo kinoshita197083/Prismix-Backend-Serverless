@@ -743,7 +743,11 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt ImageUploadFromS3ProcessByECSQueue.Arn
+                  - sqs:ChangeMessageVisibility
+                  - sqs:SendMessage
+                Resource: 
+                  - Fn::GetAtt: [ImageUploadFromS3ProcessByECSQueue, Arn]
+                  - Fn::GetAtt: [ImageUploadFromS3ProcessByECSDLQ, Arn]
               - Effect: Allow
                 Action:
                   - s3:GetObject
