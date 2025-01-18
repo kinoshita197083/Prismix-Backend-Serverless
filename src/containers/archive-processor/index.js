@@ -2,6 +2,9 @@ const { Consumer } = require('sqs-consumer');
 const { zipArchiveProcessor } = require('./src/handlers/zipArchiveProcessor');
 const logger = require('./src/utils/logger');
 
+// Helper function to send message to DLQ
+const { sendToDLQ } = require('./src/utils/DLQ/helper');
+
 // Create SQS consumer
 const app = Consumer.create({
     queueUrl: process.env.ARCHIVE_QUEUE_URL,
@@ -34,7 +37,17 @@ const app = Consumer.create({
                 timestamp: new Date().toISOString()
             });
 
-            await zipArchiveProcessor(event);
+            const { batchItemFailures } = await zipArchiveProcessor(event);
+
+            // Send failed messages to DLQ
+            if (batchItemFailures.length > 0) {
+                await sendToDLQ({
+                    queueUrl: process.env.DEAD_LETTER_QUEUE_URL,
+                    message,
+                    error: new Error('Processing failed'),
+                    logger
+                });
+            }
 
             logger.info('Successfully processed archive message', {
                 messageId: message.MessageId,
@@ -51,7 +64,7 @@ const app = Consumer.create({
             throw error;
         }
     },
-    batchSize: 1, // Process one archive job at a time
+    batchSize: 2, // Process one archive job at a time
     visibilityTimeout: 7200, // 2 hours
     messageAttributeNames: ['All']
 });

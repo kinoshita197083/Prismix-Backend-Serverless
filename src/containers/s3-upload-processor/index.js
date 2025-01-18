@@ -1,49 +1,9 @@
 const { Consumer } = require('sqs-consumer');
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { handler: uploadProcessor } = require('./src/handlers/imageUploadFromS3Processor');
 const logger = require('./src/utils/logger');
 
-const sqs = new SQSClient();
-
 // Helper function to send message to DLQ
-const sendToDLQ = async (message, error) => {
-    try {
-        const dlqMessage = {
-            originalMessage: JSON.stringify(message),
-            error: {
-                message: error.message,
-                stack: error.stack,
-                timestamp: new Date().toISOString()
-            }
-        };
-
-        await sqs.send(new SendMessageCommand({
-            QueueUrl: process.env.DEAD_LETTER_QUEUE_URL,
-            MessageBody: JSON.stringify(dlqMessage),
-            MessageAttributes: {
-                ErrorType: {
-                    DataType: 'String',
-                    StringValue: error.name || 'ProcessingError'
-                },
-                OriginalMessageId: {
-                    DataType: 'String',
-                    StringValue: message.MessageId
-                }
-            }
-        }));
-
-        logger.info('Message sent to DLQ', {
-            messageId: message.MessageId,
-            error: error.message
-        });
-    } catch (dlqError) {
-        logger.error('Failed to send message to DLQ', {
-            originalError: error.message,
-            dlqError: dlqError.message,
-            messageId: message.MessageId
-        });
-    }
-};
+const { sendToDLQ } = require('./src/utils/DLQ/helper');
 
 // Create SQS consumer
 const app = Consumer.create({
@@ -77,7 +37,12 @@ const app = Consumer.create({
 
                 // Send failed messages to DLQ
                 const error = new Error('Processing failed');
-                await sendToDLQ(message, error);
+                await sendToDLQ({
+                    queueUrl: process.env.DEAD_LETTER_QUEUE_URL,
+                    message,
+                    error,
+                    logger
+                });
                 throw error; // Throw error to prevent message deletion from source queue
             }
 

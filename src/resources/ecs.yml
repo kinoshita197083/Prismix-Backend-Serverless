@@ -574,6 +574,8 @@ Resources:
               Value: ${self:custom.bucketName}
             - Name: DELIVERY_BUCKET
               Value: ${self:custom.deliveryBucketName}
+            - Name: DEAD_LETTER_QUEUE_URL
+              Value: !Ref ZipDeliveryDLQ
             - Name: CHUNK_SIZE
               Value: "1000"  # Number of files per ZIP chunk
             - Name: CONCURRENT_S3_OPERATIONS

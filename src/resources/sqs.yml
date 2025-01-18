@@ -321,6 +321,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-zip-delivery-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
 
   ZipDeliveryQueuePolicy:
     Type: AWS::SQS::QueuePolicy

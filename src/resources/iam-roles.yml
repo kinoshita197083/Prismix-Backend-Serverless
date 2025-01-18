@@ -842,7 +842,9 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt ZipDeliveryQueue.Arn
+                Resource: 
+                  - !GetAtt ZipDeliveryQueue.Arn
+                  - !GetAtt ZipDeliveryDLQ.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -851,6 +853,14 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${self:custom.bucketName}
                   - !Sub arn:aws:s3:::${self:custom.bucketName}/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub arn:aws:s3:::${self:custom.deliveryBucketName}
+                  - !Sub arn:aws:s3:::${self:custom.deliveryBucketName}/*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
