@@ -12,7 +12,8 @@ exports.handler = async (event, context) => {
     const { Records } = event;
     logger.info('Processing image batch', { recordCount: Records.length, awsRequestId: context.awsRequestId });
 
-    await Promise.all(Records.map(async (record) => {
+    // await Promise.all(Records.map(async (record) => {
+    for (const record of Records) {
         const body = JSON.parse(record.body);
         const message = JSON.parse(body.Message);
         // const message = record.body.Message; // FOR TESTING
@@ -175,7 +176,8 @@ exports.handler = async (event, context) => {
                 logger.error('Error updating task status to FAILED in TASK_TABLE', { error: retryUpdateError.message, jobId, taskId: imageId });
             }
         }
-    }));
+    };
+    // }));
 };
 
 async function fetchProjectSettingRules(jobId) {
