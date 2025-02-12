@@ -83,7 +83,7 @@ const createJobCompletionService = (
 
                         if (failedTasks) {
                             const projectSettings = currentJob.projectSetting;
-                            const job = currentJob.job;
+                            const job = currentJob;
                             const imageCount = failedTasks;
                             const cost = calculateJobCost({ imageCount, projectSettings, job });
                             await supabaseService.refundUserCreditBalance(currentJob.userId, cost, 'Job completed with failed tasks', jobId);
