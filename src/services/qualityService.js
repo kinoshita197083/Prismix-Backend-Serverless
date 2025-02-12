@@ -8,7 +8,6 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const lambdaClient = new LambdaClient();
 
 // Adjusted constants to match new Lambda concurrency
-const CONCURRENT_QUALITY_CHECKS = 75;   // Reduced from 100
 const BASE_DELAY = 1000;
 const MAX_RETRIES = 6;
 const MAX_BACKOFF = 20000;
@@ -26,6 +25,11 @@ const requestWindow = {
  * @returns {Promise<number>} Blur score (lower means more blurry)
  */
 async function detectBlurriness(imageBuffer, retryCount = 0) {
+    // Configure delay range (in seconds)
+    // Reduce the burst concurrency for the lambda to be invoked
+    const MIN_DELAY_SECONDS = 1;
+    const MAX_DELAY_SECONDS = 480;
+
     try {
         // Check and update rate limiting window
         await checkRateLimit();
@@ -41,6 +45,11 @@ async function detectBlurriness(imageBuffer, retryCount = 0) {
             InvocationType: 'RequestResponse',
             Payload: JSON.stringify(payload)
         });
+
+        // Add random delay between MIN_DELAY_SECONDS and MAX_DELAY_SECONDS
+        const delaySeconds = Math.floor(Math.random() * (MAX_DELAY_SECONDS - MIN_DELAY_SECONDS + 1) + MIN_DELAY_SECONDS);
+        console.log(`Waiting for ${delaySeconds} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
 
         const response = await lambdaClient.send(command);
         const result = JSON.parse(Buffer.from(response.Payload).toString());
@@ -106,7 +115,6 @@ exports.validateImageQuality = async ({ bucket, key, settings }) => {
     try {
         const imageBuffer = await s3Service.getFileBuffer(bucket, key);
         const metadata = await sharp(imageBuffer).metadata();
-        const qualityChecks = [];
 
         // Group quality checks to minimize concurrent Lambda invocations
         const checks = {
