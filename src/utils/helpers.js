@@ -259,6 +259,7 @@ function parseRecordBody(record) {
 }
 
 function calculateJobCost({ imageCount, projectSettings, job }) {
+    const { PricingTable } = require('./src/utils/config.js')
     if (!projectSettings || !job) throw new Error("Project settings or job not found");
 
     const baseCredits = imageCount;
