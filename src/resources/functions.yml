@@ -16,7 +16,7 @@ enqueueImage:
 worker:
   handler: src/handlers/worker.handler
   memorySize: 2048
-  timeout: 60 #1 minutes (1 * 60 = 60 seconds)
+  timeout: 120 #1 minutes (1 * 60 = 60 seconds)
   events:
     - sqs:
         arn:

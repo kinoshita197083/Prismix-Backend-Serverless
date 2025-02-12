@@ -9,9 +9,9 @@ const lambdaClient = new LambdaClient();
 
 // Adjusted constants to match new Lambda concurrency
 const CONCURRENT_QUALITY_CHECKS = 75;   // Reduced from 100
-const BASE_DELAY = 25;
-const MAX_RETRIES = 3;
-const MAX_BACKOFF = 500;
+const BASE_DELAY = 1000;
+const MAX_RETRIES = 6;
+const MAX_BACKOFF = 20000;
 
 // Adjusted rate limiting window
 const requestWindow = {
@@ -56,7 +56,7 @@ async function detectBlurriness(imageBuffer, retryCount = 0) {
         if (error.message.includes('Rate Exceeded') && retryCount < MAX_RETRIES) {
             // Calculate dynamic backoff with jitter
             const backoff = Math.min(
-                BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 100,
+                BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 1000,
                 MAX_BACKOFF
             );
 
