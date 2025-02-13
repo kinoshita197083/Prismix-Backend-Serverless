@@ -8,9 +8,9 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const lambdaClient = new LambdaClient();
 
 // Adjusted constants to match new Lambda concurrency
-const BASE_DELAY = 1000;
+const BASE_DELAY = 25;
 const MAX_RETRIES = 6;
-const MAX_BACKOFF = 20000;
+const MAX_BACKOFF = 500;
 
 // Adjusted rate limiting window
 const requestWindow = {
@@ -28,7 +28,7 @@ async function detectBlurriness(imageBuffer, retryCount = 0) {
     // Configure delay range (in seconds)
     // Reduce the burst concurrency for the lambda to be invoked
     const MIN_DELAY_SECONDS = 1;
-    const MAX_DELAY_SECONDS = 480;
+    const MAX_DELAY_SECONDS = 60;
 
     try {
         // Check and update rate limiting window
