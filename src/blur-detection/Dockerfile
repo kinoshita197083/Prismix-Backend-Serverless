@@ -11,6 +11,6 @@ ENV JOB_PROGRESS_TABLE=${JOB_PROGRESS_TABLE}
 ENV TASKS_TABLE=${TASKS_TABLE}
 
 # Copy function code
-COPY index.py ${LAMBDA_TASK_ROOT}
+COPY src/blur-detection/index.py ${LAMBDA_TASK_ROOT}
 
 CMD [ "index.handler" ]
