@@ -83,7 +83,7 @@ const createJobStatisticsService = (dynamoDBDocumentClient, cloudWatchService) =
     const updateStatsFromItems = (stats, items) => {
         console.log('Updating stats from items:', items);
         for (const item of items) {
-            stats.totalProcessed++;
+            if (item.TaskStatus !== 'PENDING') stats.totalProcessed++;
 
             // Update stats based on evaluation
             switch (item.Evaluation) {

@@ -1,6 +1,7 @@
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const s3Service = require('../services/s3Service');
 const logger = require('../utils/logger');
+const dynamoService = require('../services/dynamoService');
 
 // Initialize SNS client outside the handler for reuse
 const sns = new SNSClient();
@@ -38,6 +39,9 @@ exports.handler = async (event) => {
                         throw new Error(`Invalid key format: ${object.key}`);
                     }
 
+                    const projectSetting = await fetchProjectSettingRules(jobId);
+                    const removeBlurryImages = projectSetting?.removeBlurryImages ?? false;
+
                     // Prepare SNS message
                     const message = {
                         bucket: bucket.name,
@@ -51,6 +55,12 @@ exports.handler = async (event) => {
                     const publishCommand = new PublishCommand({
                         TopicArn: process.env.SNS_TOPIC_ARN,
                         Message: JSON.stringify(message),
+                        MessageAttributes: {
+                            blurDetectionRequired: {
+                                DataType: 'String',
+                                StringValue: removeBlurryImages ? 'true' : 'false'
+                            }
+                        }
                     });
 
                     await sns.send(publishCommand);
@@ -115,4 +125,14 @@ function summarizeResults(results) {
         else if (result.error) acc.failed++;
         return acc;
     }, { successful: 0, skipped: 0, failed: 0 });
+}
+
+async function fetchProjectSettingRules(jobId) {
+    console.log('Fetching project setting rules...', { jobId });
+    try {
+        return await dynamoService.getItem(process.env.JOB_PROGRESS_TABLE, { JobId: jobId });
+    } catch (error) {
+        console.log('dynamoService.getItem() failed', { error, jobId });
+        throw error;
+    }
 }

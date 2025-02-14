@@ -82,6 +82,13 @@ Resources:
                       - "/*"
               - Effect: Allow
                 Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  Ref: 
+                    - Fn::GetAtt: [JobProgressTable, Arn]
+              - Effect: Allow
+                Action:
                   - sns:Publish
                 Resource:
                   Ref: ImageProcessingTopic

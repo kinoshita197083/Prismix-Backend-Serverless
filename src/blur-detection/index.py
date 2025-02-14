@@ -9,6 +9,7 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
+import asyncio
 from datetime import datetime
 import time
 from typing import Dict, Union, Any, Optional
@@ -191,7 +192,7 @@ def extract_image_id(path_string):
 async def insert_to_task_table(job_id, task_id, evaluation, key):
     # Initialize DynamoDB client
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ['TASKS_TABLE'])  # Assuming 'Task' is your table name
+    table = dynamodb.Table(os.environ['TASKS_TABLE'])
     
     # Get current timestamp in milliseconds
     current_time = str(int(time.time() * 1000))
@@ -229,7 +230,7 @@ async def insert_to_task_table(job_id, task_id, evaluation, key):
                 'JobID': job_id,
                 'TaskID': task_id,
                 'Evaluation': evaluation,
-                'TaskStatus': 'COMPLETED',
+                'TaskStatus': 'COMPLETED' if evaluation == 'INELIGIBLE' else 'PENDING',
                 'Reason': 'Resolution below fhd standard',
                 'ImageS3Key': key,
                 'UpdatedAt': current_time
@@ -333,7 +334,10 @@ async def get_file_buffer(bucket: str, key: str) -> bytes:
                     extra={'error': str(error), 'bucket': bucket, 'key': key})
         raise ClientError
 
-async def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler (event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    return asyncio.run(handler(event, context))
+
+async def main(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for blur detection triggered by SQS.
     

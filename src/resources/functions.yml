@@ -8,6 +8,7 @@ enqueueImage:
         existing: true
   environment:
     BUCKET_NAME: ${self:custom.bucketName}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
     SNS_TOPIC_ARN: 
       Ref: ImageProcessingTopic
   role: EnqueueImageFunctionRole

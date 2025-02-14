@@ -88,6 +88,8 @@ Resources:
       TopicArn: !Ref ImageProcessingTopic
       Protocol: sqs
       Endpoint: !GetAtt BlurDetectionQueue.Arn
+      FilterPolicy:
+        blurDetectionRequired: ["true"]
 
 # POST PROCESSING
   JobCompletionTopic:

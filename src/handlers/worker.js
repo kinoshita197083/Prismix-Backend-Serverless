@@ -129,6 +129,12 @@ exports.handler = async (event, context) => {
                 }
             }
 
+            // Worker completed its work
+            // Awaits blurriness detection (another queue)
+            if (projectSettings?.removeBlurryImages) {
+                status = 'PENDING';
+            }
+
             // If manual review is required and the evaluation would be EXCLUDED,
             // change status to WAITING_FOR_REVIEW instead
             if (manualReviewRequired && finalEvaluation === EXCLUDED) {
