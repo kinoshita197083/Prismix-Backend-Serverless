@@ -5,6 +5,11 @@ RUN pip install --no-cache-dir \
     opencv-python-headless \
     numpy
 
+# Set environment variables
+ENV NODE_ENV=production
+ENV JOB_PROGRESS_TABLE=${JOB_PROGRESS_TABLE}
+ENV TASKS_TABLE=${TASKS_TABLE}
+
 # Copy function code
 COPY index.py ${LAMBDA_TASK_ROOT}
 

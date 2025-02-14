@@ -221,11 +221,20 @@ s3DeliveryProcessor:
 
 blurDetection:
   name: ${self:service}-${sls:stage}-blurDetection
+  events:
+    - sqs:
+        arn:
+          Fn::GetAtt: [BlurDetectionQueue, Arn]
+        batchSize: 1
+        functionResponseType: ReportBatchItemFailures
   image:
-    uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/prismix-blur-detection:${sls:stage}
+    uri: ${aws:accountId}.dkr.ecr.${aws:region}.amazonaws.com/${self:service}-blur-detection-processor:${sls:stage}
     command: ["index.handler"]
   memorySize: 3008
   timeout: 60
   architecture: x86_64
+  role: BlurDetectionProcessorRole
   environment:
     NODE_ENV: ${sls:stage}
+    TASKS_TABLE: ${self:provider.environment.TASKS_TABLE}
+    JOB_PROGRESS_TABLE: ${self:provider.environment.JOB_PROGRESS_TABLE}
