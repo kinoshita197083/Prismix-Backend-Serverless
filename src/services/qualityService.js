@@ -3,105 +3,105 @@ const s3Service = require('./s3Service');
 const { RESOLUTION_THRESHOLDS } = require('../utils/config');
 const { calculateSNR } = require('../utils/helpers');
 const logger = require('../utils/logger');
-const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+// const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
-const lambdaClient = new LambdaClient();
+// const lambdaClient = new LambdaClient();
 
 // Adjusted constants to match new Lambda concurrency
-const BASE_DELAY = 25;
-const MAX_RETRIES = 6;
-const MAX_BACKOFF = 500;
+// const BASE_DELAY = 25;
+// const MAX_RETRIES = 6;
+// const MAX_BACKOFF = 500;
 
 // Adjusted rate limiting window
-const requestWindow = {
-    timestamps: [],
-    windowSize: 1000,    // 1 second window
-    maxRequests: 100     // Reduced from 200 to match new reservedConcurrency
-};
+// const requestWindow = {
+//     timestamps: [],
+//     windowSize: 1000,    // 1 second window
+//     maxRequests: 100     // Reduced from 200 to match new reservedConcurrency
+// };
 
 /**
  * Detects image blurriness using the blur detection Lambda
  * @param {Buffer} imageBuffer - Raw image buffer
  * @returns {Promise<number>} Blur score (lower means more blurry)
  */
-async function detectBlurriness(imageBuffer, retryCount = 0) {
-    // Configure delay range (in seconds)
-    // Reduce the burst concurrency for the lambda to be invoked
-    const MIN_DELAY_SECONDS = 1;
-    const MAX_DELAY_SECONDS = 60;
+// async function detectBlurriness(imageBuffer, retryCount = 0) {
+//     // Configure delay range (in seconds)
+//     // Reduce the burst concurrency for the lambda to be invoked
+//     const MIN_DELAY_SECONDS = 1;
+//     const MAX_DELAY_SECONDS = 60;
 
-    try {
-        // Check and update rate limiting window
-        await checkRateLimit();
+//     try {
+//         // Check and update rate limiting window
+//         await checkRateLimit();
 
-        const payload = {
-            body: {
-                imageBuffer: imageBuffer.toString('base64')
-            }
-        };
+//         const payload = {
+//             body: {
+//                 imageBuffer: imageBuffer.toString('base64')
+//             }
+//         };
 
-        const command = new InvokeCommand({
-            FunctionName: process.env.BLUR_DETECTION_FUNCTION_NAME,
-            InvocationType: 'RequestResponse',
-            Payload: JSON.stringify(payload)
-        });
+//         const command = new InvokeCommand({
+//             FunctionName: process.env.BLUR_DETECTION_FUNCTION_NAME,
+//             InvocationType: 'RequestResponse',
+//             Payload: JSON.stringify(payload)
+//         });
 
-        // Add random delay between MIN_DELAY_SECONDS and MAX_DELAY_SECONDS
-        const delaySeconds = Math.floor(Math.random() * (MAX_DELAY_SECONDS - MIN_DELAY_SECONDS + 1) + MIN_DELAY_SECONDS);
-        console.log(`Waiting for ${delaySeconds} seconds...`);
-        await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+//         // Add random delay between MIN_DELAY_SECONDS and MAX_DELAY_SECONDS
+//         const delaySeconds = Math.floor(Math.random() * (MAX_DELAY_SECONDS - MIN_DELAY_SECONDS + 1) + MIN_DELAY_SECONDS);
+//         console.log(`Waiting for ${delaySeconds} seconds...`);
+//         await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
 
-        const response = await lambdaClient.send(command);
-        const result = JSON.parse(Buffer.from(response.Payload).toString());
+//         const response = await lambdaClient.send(command);
+//         const result = JSON.parse(Buffer.from(response.Payload).toString());
 
-        if (result.statusCode === 200) {
-            const { combinedScore } = JSON.parse(result.body);
-            return combinedScore;
-        } else {
-            const error = JSON.parse(result.body);
-            throw new Error(`Blur detection failed: ${error.details || error.error}`);
-        }
-    } catch (error) {
-        if (error.message.includes('Rate Exceeded') && retryCount < MAX_RETRIES) {
-            // Calculate dynamic backoff with jitter
-            const backoff = Math.min(
-                BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 1000,
-                MAX_BACKOFF
-            );
+//         if (result.statusCode === 200) {
+//             const { combinedScore } = JSON.parse(result.body);
+//             return combinedScore;
+//         } else {
+//             const error = JSON.parse(result.body);
+//             throw new Error(`Blur detection failed: ${error.details || error.error}`);
+//         }
+//     } catch (error) {
+//         if (error.message.includes('Rate Exceeded') && retryCount < MAX_RETRIES) {
+//             // Calculate dynamic backoff with jitter
+//             const backoff = Math.min(
+//                 BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 1000,
+//                 MAX_BACKOFF
+//             );
 
-            logger.warn('[detectBlurriness] Rate limit hit, retrying...', {
-                retryCount: retryCount + 1,
-                backoff
-            });
+//             logger.warn('[detectBlurriness] Rate limit hit, retrying...', {
+//                 retryCount: retryCount + 1,
+//                 backoff
+//             });
 
-            await new Promise(resolve => setTimeout(resolve, backoff));
-            return detectBlurriness(imageBuffer, retryCount + 1);
-        }
-        throw error;
-    }
-}
+//             await new Promise(resolve => setTimeout(resolve, backoff));
+//             return detectBlurriness(imageBuffer, retryCount + 1);
+//         }
+//         throw error;
+//     }
+// }
 
 // Rate limiting helper function
-async function checkRateLimit() {
-    const now = Date.now();
+// async function checkRateLimit() {
+//     const now = Date.now();
 
-    // Remove old timestamps
-    requestWindow.timestamps = requestWindow.timestamps.filter(
-        timestamp => now - timestamp < requestWindow.windowSize
-    );
+//     // Remove old timestamps
+//     requestWindow.timestamps = requestWindow.timestamps.filter(
+//         timestamp => now - timestamp < requestWindow.windowSize
+//     );
 
-    // Check if we're at the limit
-    if (requestWindow.timestamps.length >= requestWindow.maxRequests) {
-        const oldestTimestamp = requestWindow.timestamps[0];
-        const waitTime = requestWindow.windowSize - (now - oldestTimestamp);
-        if (waitTime > 0) {
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-    }
+//     // Check if we're at the limit
+//     if (requestWindow.timestamps.length >= requestWindow.maxRequests) {
+//         const oldestTimestamp = requestWindow.timestamps[0];
+//         const waitTime = requestWindow.windowSize - (now - oldestTimestamp);
+//         if (waitTime > 0) {
+//             await new Promise(resolve => setTimeout(resolve, waitTime));
+//         }
+//     }
 
-    // Add current timestamp
-    requestWindow.timestamps.push(now);
-}
+//     // Add current timestamp
+//     requestWindow.timestamps.push(now);
+// }
 
 /**
  * Validates image quality based on specified settings
@@ -124,11 +124,11 @@ exports.validateImageQuality = async ({ bucket, key, settings }) => {
                     `Resolution below ${settings.minResolution} standard` : null;
             }),
 
-            blurriness: settings.checkBlurriness && (async () => {
-                const blurScore = await detectBlurriness(imageBuffer);
-                return blurScore < settings.blurThreshold ?
-                    `Image is likely blurry (score: ${blurScore.toFixed(2)}, threshold: ${settings.blurThreshold})` : null;
-            }),
+            // blurriness: settings.checkBlurriness && (async () => {
+            //     const blurScore = await detectBlurriness(imageBuffer);
+            //     return blurScore < settings.blurThreshold ?
+            //         `Image is likely blurry (score: ${blurScore.toFixed(2)}, threshold: ${settings.blurThreshold})` : null;
+            // }),
 
             noise: settings.checkNoise && (async () => {
                 const snr = await calculateSNR(imageBuffer);

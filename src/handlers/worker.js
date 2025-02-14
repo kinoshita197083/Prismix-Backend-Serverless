@@ -62,7 +62,8 @@ exports.handler = async (event, context) => {
             console.log('999 Image properties processed. Validating image quality...');
 
             // Step 3: Validate image quality if enabled
-            if (projectSettings.removeLowResolution || projectSettings.removeNoisyImages || projectSettings.removeBlurryImages) {
+            // if (projectSettings.removeLowResolution || projectSettings.removeNoisyImages || projectSettings.removeBlurryImages) {
+            if (projectSettings.removeLowResolution || projectSettings.removeNoisyImages) {
                 const qualityResult = await validateImageQuality({
                     bucket,
                     key: processedImageKey,

@@ -9,6 +9,12 @@ Resources:
           Fn::GetAtt: [ImageDeadLetterQueue, Arn]
         maxReceiveCount: 3
 
+  BlurDetectionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-blur-detection-queue
+      VisibilityTimeout: 120  # Updated for worker function (60s timeout)
+
   ImageDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -46,6 +52,23 @@ Resources:
               Service: sns.amazonaws.com
             Action: sqs:SendMessage
             Resource: !GetAtt EligibleImageQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref ImageProcessingTopic
+
+  BlurDetectionQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref BlurDetectionQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt BlurDetectionQueue.Arn
             Condition:
               ArnEquals:
                 aws:SourceArn: !Ref ImageProcessingTopic
