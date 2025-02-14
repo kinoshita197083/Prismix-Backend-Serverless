@@ -13,7 +13,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: ${self:service}-${self:provider.stage}-blur-detection-queue
-      VisibilityTimeout: 120  # Updated for worker function (60s timeout)
+      VisibilityTimeout: 120 
 
   ImageDeadLetterQueue:
     Type: AWS::SQS::Queue
@@ -73,12 +73,21 @@ Resources:
               ArnEquals:
                 aws:SourceArn: !Ref ImageProcessingTopic
 
+  # Worker Queue subscribed to the Image processing Topic
   ImageProcessingTopicSubscription:
     Type: AWS::SNS::Subscription
     Properties:
       TopicArn: !Ref ImageProcessingTopic
       Protocol: sqs
       Endpoint: !GetAtt EligibleImageQueue.Arn
+
+  # Blur Detection Queue subscribed to the Image processing Topic
+  ImageProcessingForBlurDetectionTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref ImageProcessingTopic
+      Protocol: sqs
+      Endpoint: !GetAtt BlurDetectionQueue.Arn
 
 # POST PROCESSING
   JobCompletionTopic:
