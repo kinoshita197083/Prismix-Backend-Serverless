@@ -8,7 +8,7 @@ const ddbClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(ddbClient);
 
 const MAX_RETRIES = 3;
-const INITIAL_BACKOFF = 1000; // 1 second
+const INITIAL_BACKOFF = 1000; // 1 second backoff time
 
 exports.handler = async (event) => {
     logger.info('Processing Dead Letter Queue messages', { messageCount: event.Records.length });
