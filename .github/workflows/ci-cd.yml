@@ -36,7 +36,12 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: '20.x'
-    - run: npm ci
+    # Clean install dependencies
+    - name: Clean npm cache and install dependencies
+      run: |
+        npm cache clean --force
+        rm -rf node_modules
+        npm ci
 
     # Configure AWS Credentials first
     - name: Configure AWS credentials
@@ -144,15 +149,11 @@ jobs:
           exit 1
         fi
 
-    # Install Serverless
-    - name: Install Serverless Framework
-      run: npm install -g serverless@latest
-
     # Deploy to Serverless with logging to Github Actions
-    # TODO: Add a step to check if the deployment is successful
+    # Use npx to run the locally installed serverless to avoid version conflicts
     - name: Serverless Deploy
       run: |
-        serverless deploy --stage ${GITHUB_REF##*/} --verbose
+        npx serverless deploy --stage ${GITHUB_REF##*/} --verbose
         if [ $? -ne 0 ]; then
           echo "Deployment failed. Fetching CloudFormation events:"
           aws cloudformation describe-stack-events --stack-name prismix-serverless-${GITHUB_REF##*/} --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table
